@@ -55,15 +55,37 @@ class ComplianceAssessment extends Model
         return $this->hasMany(Gap::class, 'assessment_id');
     }
 
+    /** Results can be recorded while planned (recording the first one starts the assessment) or in progress. */
+    public function isEditable(): bool
+    {
+        return in_array($this->status, ['planned', 'in_progress'], true);
+    }
+
+    /**
+     * Leaf requirements of a framework — the assessable items. Domain headings (requirements
+     * with children, e.g. ISO "A.5" or NDPA "NDPA-1") are structure, not something to assess.
+     */
+    public static function assessableRequirements(int $frameworkId)
+    {
+        return FrameworkRequirement::where('framework_id', $frameworkId)
+            ->whereDoesntHave('children')
+            ->orderBy('parent_id')->orderBy('sort_order')->orderBy('id')
+            ->get();
+    }
+
+    /**
+     * Score = (compliant + ½ partial) / assessed applicable requirements. Not-assessed items are
+     * excluded so an in-progress score reflects what has been tested; progress is reported separately.
+     */
     public function recalculateScore(): void
     {
-        $results = $this->results()->get();
+        $results = $this->results()->get(['status']);
         $total = $results->count();
         $compliant = $results->where('status', 'compliant')->count();
         $partial = $results->where('status', 'partially_compliant')->count();
         $nonCompliant = $results->where('status', 'non_compliant')->count();
         $na = $results->where('status', 'not_applicable')->count();
-        $applicable = $total - $na;
+        $assessedApplicable = $compliant + $partial + $nonCompliant;
 
         $this->update([
             'total_requirements' => $total,
@@ -71,8 +93,13 @@ class ComplianceAssessment extends Model
             'partial_count' => $partial,
             'non_compliant_count' => $nonCompliant,
             'not_applicable_count' => $na,
-            'overall_score' => $applicable > 0 ? round((($compliant + ($partial * 0.5)) / $applicable) * 100, 2) : 0,
+            'overall_score' => $assessedApplicable > 0 ? round((($compliant + ($partial * 0.5)) / $assessedApplicable) * 100, 2) : null,
         ]);
+    }
+
+    public function notAssessedCount(): int
+    {
+        return $this->results()->where('status', 'not_assessed')->count();
     }
 
     public function getActivitylogOptions(): LogOptions

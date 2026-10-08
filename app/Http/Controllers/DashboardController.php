@@ -8,6 +8,7 @@ use App\Models\BoardPackTemplate;
 use App\Models\CcmTenantTest;
 use App\Models\ComplianceAssessment;
 use App\Models\Control;
+use App\Models\Gap;
 use App\Models\Incident;
 use App\Models\Kri;
 use App\Models\Obligation;
@@ -18,6 +19,7 @@ use App\Models\Vendor;
 use App\Models\Vulnerability;
 use App\Modules\CBNCSAT\Models\CsatAssessment;
 use App\Modules\CBNCSAT\Models\CsatMaStatement;
+use App\Services\ComplianceScoreService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -50,10 +52,18 @@ class DashboardController extends Controller
             ->take(12)
             ->get();
 
-        // Control effectiveness donut
-        $ctrlEff = Control::when($orgId, fn ($q) => $q->where('organization_id', $orgId))
+        // Control effectiveness donut — operational controls, in a fixed order so the colours match
+        // (effective, partially effective, ineffective, not assessed).
+        $effRaw = Control::when($orgId, fn ($q) => $q->where('organization_id', $orgId))
+            ->operational()
             ->select('effectiveness', DB::raw('count(*) as c'))
             ->groupBy('effectiveness')->pluck('c', 'effectiveness');
+        $ctrlEff = [
+            'effective' => (int) ($effRaw['effective'] ?? 0),
+            'partially_effective' => (int) ($effRaw['partially_effective'] ?? 0),
+            'ineffective' => (int) ($effRaw['ineffective'] ?? 0),
+            'not_assessed' => (int) (($effRaw['not_assessed'] ?? 0) + ($effRaw[''] ?? 0)),
+        ];
 
         // CCM pass/fail
         $ccmByStatus = CcmTenantTest::select('last_status', DB::raw('count(*) as c'))
@@ -74,22 +84,15 @@ class DashboardController extends Controller
             ->groupBy('severity')->pluck('c', 'severity');
 
         // Obligations calendar — next 90 days (drop by review_cycle_days modulo effective_date)
-        $obligations = Obligation::orderBy('regulator_code')->take(50)->get()->map(function ($o) {
-            $next = $o->effective_date ? $o->effective_date->copy()->addDays($o->review_cycle_days) : now()->addDays(30);
-            while ($next->lt(now())) {
-                $next->addDays($o->review_cycle_days ?: 365);
-            }
-
-            return [
-                'id' => $o->id,
-                'regulator' => $o->regulator_code,
-                'reference' => $o->reference_code,
-                'title' => $o->title,
-                'owner_role' => $o->owner_role,
-                'next_due' => $next->toDateString(),
-                'days_to_due' => (int) now()->diffInDays($next, false),
-            ];
-        })->sortBy('next_due')->values()->take(15);
+        $obligations = Obligation::orderBy('regulator_code')->get()->map(fn ($o) => [
+            'id' => $o->id,
+            'regulator' => $o->regulator_code,
+            'reference' => $o->reference_code,
+            'title' => $o->title,
+            'owner_role' => $o->owner_role,
+            'next_due' => $o->nextDue()->toDateString(),
+            'days_to_due' => (int) today()->diffInDays($o->nextDue(), false),
+        ])->sortBy('next_due')->values()->take(15);
 
         // Vendor scoreboard — top 10 vendors with latest ratings
         $vendorScoreboard = Vendor::when($orgId, fn ($q) => $q->where('organization_id', $orgId))
@@ -159,6 +162,8 @@ class DashboardController extends Controller
             'incidents' => Incident::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'vulns' => Vulnerability::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'compliance_assessments' => ComplianceAssessment::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
+            'compliance_score' => $orgId ? app(ComplianceScoreService::class)->getOverallComplianceScore((int) $orgId) : null,
+            'open_gaps' => Gap::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->open()->count(),
         ];
 
         return Inertia::render('Dashboard', [

@@ -10,6 +10,7 @@ use App\Models\ComplianceAssessment;
 use App\Models\Control;
 use App\Models\ControlFramework;
 use App\Models\DataBreach;
+use App\Models\Gap;
 use App\Models\Incident;
 use App\Models\Issue;
 use App\Models\Organization;
@@ -1013,28 +1014,28 @@ class FirstBankDemoSeeder extends Seeder
         DB::table('gaps')->where('organization_id', $this->orgId)->delete();
         $uids = $this->uids();
         $gapData = [
-            ['A.5.1', 'major', 'open', 'Policy suite review cycle overdue'],
-            ['A.5.7', 'minor', 'in_progress', 'Threat-intel integration with ngCERT partially manual'],
-            ['A.5.24', 'critical', 'open', 'NDPC 72h breach workflow not fully automated'],
-            ['A.5.30', 'major', 'in_progress', 'SWIFT DR test cycle extended beyond target'],
-            ['A.6.3', 'minor', 'open', 'Awareness training coverage 89% vs target 95%'],
-            ['A.7.4', 'minor', 'open', 'Marina DC CCTV retention 60 days vs 90-day target'],
-            ['A.8.2', 'major', 'open', 'Privileged AD accounts without MFA — 18 identified'],
-            ['A.8.5', 'major', 'open', 'Entra legacy authentication protocols still enabled'],
+            ['A.5.1', 'high', 'identified', 'Policy suite review cycle overdue'],
+            ['A.5.7', 'low', 'in_progress', 'Threat-intel integration with ngCERT partially manual'],
+            ['A.5.24', 'critical', 'identified', 'NDPC 72h breach workflow not fully automated'],
+            ['A.5.30', 'high', 'in_progress', 'SWIFT DR test cycle extended beyond target'],
+            ['A.6.3', 'low', 'identified', 'Awareness training coverage 89% vs target 95%'],
+            ['A.7.4', 'low', 'identified', 'Marina DC CCTV retention 60 days vs 90-day target'],
+            ['A.8.2', 'high', 'identified', 'Privileged AD accounts without MFA — 18 identified'],
+            ['A.8.5', 'high', 'identified', 'Entra legacy authentication protocols still enabled'],
             ['A.8.8', 'critical', 'in_progress', 'Critical patches > 72h on 11 systems'],
-            ['A.8.9', 'minor', 'resolved', 'Windows baseline drift remediated 2026-03-20'],
-            ['A.8.15', 'minor', 'open', 'Log forwarding gaps on 5 legacy AIX systems'],
-            ['A.8.24', 'major', 'in_progress', 'TLS 1.0 still enabled on internal admin portal'],
-            ['A.8.28', 'minor', 'open', 'SAST coverage missing for 3 legacy repos'],
-            ['A.5.34', 'minor', 'open', 'PII DPIA not completed for new mobile feature'],
-            ['A.6.7', 'minor', 'in_progress', 'Remote-working policy not fully attested by contractors'],
-            ['A.8.12', 'major', 'in_progress', 'DLP false-negative rate on outbound email'],
-            ['A.8.16', 'minor', 'open', 'Monitoring coverage gap on payments microservices'],
-            ['A.8.22', 'critical', 'open', 'Network segmentation gap between CDE and corporate'],
-            ['A.8.32', 'major', 'in_progress', 'Change management bypass incidents — 3 YTD'],
-            ['A.5.37', 'minor', 'open', 'Operating procedures documentation 82% complete'],
+            ['A.8.9', 'low', 'remediated', 'Windows baseline drift remediated 2026-03-20'],
+            ['A.8.15', 'low', 'identified', 'Log forwarding gaps on 5 legacy AIX systems'],
+            ['A.8.24', 'high', 'in_progress', 'TLS 1.0 still enabled on internal admin portal'],
+            ['A.8.28', 'low', 'identified', 'SAST coverage missing for 3 legacy repos'],
+            ['A.5.34', 'low', 'identified', 'PII DPIA not completed for new mobile feature'],
+            ['A.6.7', 'low', 'in_progress', 'Remote-working policy not fully attested by contractors'],
+            ['A.8.12', 'high', 'in_progress', 'DLP false-negative rate on outbound email'],
+            ['A.8.16', 'low', 'identified', 'Monitoring coverage gap on payments microservices'],
+            ['A.8.22', 'critical', 'identified', 'Network segmentation gap between CDE and corporate'],
+            ['A.8.32', 'high', 'in_progress', 'Change management bypass incidents — 3 YTD'],
+            ['A.5.37', 'low', 'identified', 'Operating procedures documentation 82% complete'],
         ];
-        $sevToPri = ['critical' => 1, 'major' => 2, 'moderate' => 3, 'minor' => 4];
+        $sevToPri = Gap::SEVERITY_PRIORITY;
         $reqs = $leaf->pluck('id', 'requirement_code');
         foreach ($gapData as $i => [$code, $sev, $status, $title]) {
             DB::table('gaps')->insert([

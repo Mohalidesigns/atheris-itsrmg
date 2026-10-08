@@ -36,6 +36,25 @@ class Evidence extends Model
 
     public const STATUSES = ['pending', 'approved', 'rejected', 'expired'];
 
+    /** What evidence can be attached to — the only morph types accepted from a request. */
+    public const SUBJECTS = [
+        'control' => Control::class,
+        'compliance_result' => ComplianceResult::class,
+        'gap' => Gap::class,
+    ];
+
+    protected $appends = ['is_expired', 'subject_key'];
+
+    public function getIsExpiredAttribute(): bool
+    {
+        return $this->isExpired();
+    }
+
+    public function getSubjectKeyAttribute(): ?string
+    {
+        return array_search($this->evidenceable_type, self::SUBJECTS, true) ?: null;
+    }
+
     public function evidenceable(): MorphTo
     {
         return $this->morphTo();
@@ -53,6 +72,7 @@ class Evidence extends Model
 
     public function isExpired(): bool
     {
-        return $this->valid_until && $this->valid_until->isPast();
+        return $this->status === 'expired'
+            || ($this->valid_until !== null && $this->valid_until->isPast() && ! $this->valid_until->isToday());
     }
 }

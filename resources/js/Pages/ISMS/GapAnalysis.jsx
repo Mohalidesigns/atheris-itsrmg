@@ -4,8 +4,10 @@ import StatusBadge from '@/Components/StatusBadge';
 import KpiCard from '@/Components/KpiCard';
 import { Head } from '@inertiajs/react';
 
-const severities = ['critical', 'major', 'moderate', 'minor'];
-const severityTone = (s) => ({ critical: 'critical', major: 'high', moderate: 'moderate', minor: 'low' })[s] || 'moderate';
+// Gaps use the platform severity scale; ISMS shows it in ISO audit non-conformity terms.
+const severities = ['critical', 'high', 'medium', 'low'];
+const NC_LABEL = { critical: 'Critical', high: 'Major', medium: 'Moderate', low: 'Minor' };
+const severityTone = (s) => ({ critical: 'critical', high: 'high', medium: 'moderate', low: 'low' })[s] || 'moderate';
 
 export default function IsmsGapAnalysis({ gaps = [], severityBuckets = {}, statusBuckets = {}, heat = {} }) {
     const themes = ['A.5', 'A.6', 'A.7', 'A.8'];
@@ -22,9 +24,9 @@ export default function IsmsGapAnalysis({ gaps = [], severityBuckets = {}, statu
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
                 <KpiCard label="Total gaps" value={gaps.length} tone="navy" />
                 <KpiCard label="Critical" value={severityBuckets.critical || 0} tone="red" />
-                <KpiCard label="Major" value={severityBuckets.major || 0} tone="amber" />
-                <KpiCard label="Moderate" value={severityBuckets.moderate || 0} tone="navy" />
-                <KpiCard label="Minor" value={severityBuckets.minor || 0} tone="white" />
+                <KpiCard label="Major" value={severityBuckets.high || 0} tone="amber" />
+                <KpiCard label="Moderate" value={severityBuckets.medium || 0} tone="navy" />
+                <KpiCard label="Minor" value={severityBuckets.low || 0} tone="white" />
             </div>
 
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-4 overflow-x-auto">
@@ -33,19 +35,18 @@ export default function IsmsGapAnalysis({ gaps = [], severityBuckets = {}, statu
                     <thead>
                         <tr>
                             <th className="p-2"></th>
-                            {severities.map((s) => <th key={s} className="p-2 capitalize text-[#718096]">{s}</th>)}
+                            {severities.map((s) => <th key={s} className="p-2 text-[#718096]">{NC_LABEL[s]}</th>)}
                             <th className="p-2 text-[#718096]">Total</th>
                         </tr>
                     </thead>
                     <tbody>
                         {themes.map((t) => {
-                            const total = severities.reduce((a, s) => a + (heat[t]?.[s === 'major' ? 'high' : s === 'moderate' ? 'medium' : s === 'minor' ? 'low' : s] || 0), 0);
+                            const total = severities.reduce((a, s) => a + (heat[t]?.[s] || 0), 0);
                             return (
                                 <tr key={t}>
                                     <td className="p-2 font-mono font-semibold text-[#0A1F44]">{t}</td>
                                     {severities.map((s) => {
-                                        const key = s === 'major' ? 'high' : s === 'moderate' ? 'medium' : s === 'minor' ? 'low' : s;
-                                        const n = heat[t]?.[key] || 0;
+                                        const n = heat[t]?.[s] || 0;
                                         return <td key={s} className={`p-3 text-center font-semibold text-[#0A1F44] ${cellColor(n)}`}>{n}</td>;
                                     })}
                                     <td className="p-2 text-right font-semibold text-[#0A1F44]">{total}</td>
@@ -76,7 +77,7 @@ export default function IsmsGapAnalysis({ gaps = [], severityBuckets = {}, statu
                                 <td className="px-3 py-2 font-mono text-xs text-[#0A1F44]">{g.gap_code}</td>
                                 <td className="px-3 py-2 font-mono text-xs text-[#C9A86A]">{g.requirement_code || '—'}</td>
                                 <td className="px-3 py-2 text-[#2D3748]">{g.title}</td>
-                                <td className="px-3 py-2"><StatusBadge status={severityTone(g.severity)} label={g.severity} /></td>
+                                <td className="px-3 py-2"><StatusBadge status={severityTone(g.severity)} label={NC_LABEL[g.severity] || g.severity} /></td>
                                 <td className="px-3 py-2"><StatusBadge status={g.status} /></td>
                                 <td className="px-3 py-2 text-xs text-[#718096]">{g.assignee_name || '—'}</td>
                                 <td className="px-3 py-2 text-xs text-[#718096]">{g.due_date}</td>

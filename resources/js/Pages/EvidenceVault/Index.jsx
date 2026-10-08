@@ -4,6 +4,7 @@ import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head } from '@inertiajs/react';
 import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { formatDate } from '@/Utils/risk';
 
 const mb = (b) => (Number(b) / 1024 / 1024).toFixed(2) + ' MB';
 
@@ -40,7 +41,7 @@ export default function EvidenceVaultIndex({ evidence = [], stats = {} }) {
                                 <td className="px-3 py-2 text-xs text-[#718096]">{e.category}</td>
                                 <td className="px-3 py-2 text-xs">{mb(e.bytes)}</td>
                                 <td className="px-3 py-2 font-mono text-[10px] text-[#718096] truncate max-w-[160px]">{e.sha256}</td>
-                                <td className="px-3 py-2 text-xs text-[#718096]">{e.retention_until}</td>
+                                <td className="px-3 py-2 text-xs text-[#718096]">{formatDate(e.retention_until)}</td>
                                 <td className="px-3 py-2">{e.worm_locked ? <StatusBadge status="active" label="Locked" /> : <StatusBadge status="draft" label="Unlocked" />}</td>
                             </tr>
                         ))}

@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Control;
 use App\Models\ControlFramework;
+use App\Models\Gap;
 use App\Models\Organization;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -263,24 +264,24 @@ class IsmsPciMonitoringSeeder extends Seeder
             ->where('level', 1)->pluck('id', 'requirement_code');
 
         $gaps = [
-            ['A.5.1', 'major', 'open', 'Policy suite review cycle exceeded 12 months — schedule annual review'],
-            ['A.5.7', 'minor', 'in_progress', 'Threat-intel ingestion currently manual for ngCERT — automate via API'],
-            ['A.5.30', 'major', 'in_progress', 'USSD failover DR runbook last tested > 180 days ago'],
-            ['A.6.3', 'minor', 'open', 'Security awareness training coverage at 87% (target 95%)'],
-            ['A.7.4', 'minor', 'open', 'Lagos DR CCTV retention only 60 days (target 90 days)'],
-            ['A.8.2', 'major', 'open', 'Privileged AD accounts without MFA — 12 identified'],
-            ['A.8.3', 'minor', 'in_progress', 'Role-based access not fully implemented on Finacle direct SQL'],
-            ['A.8.8', 'major', 'in_progress', 'Critical patches > 72h on 6 systems'],
-            ['A.8.9', 'minor', 'resolved', 'Configuration baselines drift on Windows servers — remediated 2026-03-15'],
-            ['A.8.15', 'minor', 'open', 'Log forwarding gaps on 3 legacy AIX systems'],
-            ['A.8.24', 'major', 'in_progress', 'TLS 1.0 still enabled on internal admin portal'],
-            ['A.8.28', 'minor', 'open', 'SAST coverage missing for 2 legacy repos'],
-            ['A.5.24', 'critical', 'open', 'NDPC 72h breach form not automatically populated — manual process'],
-            ['A.5.34', 'minor', 'open', 'PII impact assessment not completed for new USSD feature'],
-            ['A.6.7', 'minor', 'in_progress', 'Remote-working policy signed by only 82% of contractors'],
+            ['A.5.1', 'high', 'identified', 'Policy suite review cycle exceeded 12 months — schedule annual review'],
+            ['A.5.7', 'low', 'in_progress', 'Threat-intel ingestion currently manual for ngCERT — automate via API'],
+            ['A.5.30', 'high', 'in_progress', 'USSD failover DR runbook last tested > 180 days ago'],
+            ['A.6.3', 'low', 'identified', 'Security awareness training coverage at 87% (target 95%)'],
+            ['A.7.4', 'low', 'identified', 'Lagos DR CCTV retention only 60 days (target 90 days)'],
+            ['A.8.2', 'high', 'identified', 'Privileged AD accounts without MFA — 12 identified'],
+            ['A.8.3', 'low', 'in_progress', 'Role-based access not fully implemented on Finacle direct SQL'],
+            ['A.8.8', 'high', 'in_progress', 'Critical patches > 72h on 6 systems'],
+            ['A.8.9', 'low', 'remediated', 'Configuration baselines drift on Windows servers — remediated 2026-03-15'],
+            ['A.8.15', 'low', 'identified', 'Log forwarding gaps on 3 legacy AIX systems'],
+            ['A.8.24', 'high', 'in_progress', 'TLS 1.0 still enabled on internal admin portal'],
+            ['A.8.28', 'low', 'identified', 'SAST coverage missing for 2 legacy repos'],
+            ['A.5.24', 'critical', 'identified', 'NDPC 72h breach form not automatically populated — manual process'],
+            ['A.5.34', 'low', 'identified', 'PII impact assessment not completed for new USSD feature'],
+            ['A.6.7', 'low', 'in_progress', 'Remote-working policy signed by only 82% of contractors'],
         ];
 
-        $severityToPriority = ['critical' => 1, 'major' => 2, 'moderate' => 3, 'minor' => 4];
+        $severityToPriority = Gap::SEVERITY_PRIORITY;
 
         foreach ($gaps as $i => [$code, $severity, $status, $title]) {
             $reqId = $reqs[$code] ?? null;

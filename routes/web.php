@@ -21,6 +21,8 @@ use App\Http\Controllers\Ea\StewardshipController;
 use App\Http\Controllers\Ea\SurveyController;
 use App\Http\Controllers\Ea\WedgeController;
 use App\Http\Controllers\EaController;
+use App\Http\Controllers\EvidenceController;
+use App\Http\Controllers\GapController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\IsmsController;
@@ -145,11 +147,16 @@ Route::middleware('auth')->group(function () {
         ->middlewareFor(['create', 'store'], 'permission:create controls')
         ->middlewareFor(['edit', 'update'], 'permission:edit controls')
         ->middlewareFor('destroy', 'permission:delete controls');
+    Route::post('/controls/{control}/mappings', [ControlController::class, 'storeMapping'])
+        ->middleware('permission:edit controls')->name('controls.mappings.store');
+    Route::delete('/controls/{control}/mappings/{requirement}', [ControlController::class, 'destroyMapping'])
+        ->middleware('permission:edit controls')->name('controls.mappings.destroy');
 
     // Regulatory Frameworks
     Route::middleware('permission:view frameworks')->group(function () {
         Route::get('/frameworks', [ComplianceController::class, 'frameworkIndex'])->name('frameworks.index');
         Route::get('/frameworks/{framework}', [ComplianceController::class, 'frameworkShow'])->name('frameworks.show');
+        Route::get('/frameworks/{framework}/requirements', [ControlController::class, 'requirementOptions'])->name('frameworks.requirements');
     });
 
     // Compliance Assessments
@@ -160,19 +167,38 @@ Route::middleware('auth')->group(function () {
         Route::post('/compliance-assessments', [ComplianceController::class, 'assessmentStore'])
             ->middleware('permission:create compliance-assessments')->name('compliance-assessments.store');
         Route::get('/compliance-assessments/{complianceAssessment}', [ComplianceController::class, 'assessmentShow'])->name('compliance-assessments.show');
+        Route::put('/compliance-assessments/{complianceAssessment}', [ComplianceController::class, 'assessmentUpdate'])
+            ->middleware('permission:edit compliance-assessments')->name('compliance-assessments.update');
+        Route::post('/compliance-assessments/{complianceAssessment}/transition', [ComplianceController::class, 'assessmentTransition'])
+            ->middleware('permission:edit compliance-assessments')->name('compliance-assessments.transition');
+        Route::delete('/compliance-assessments/{complianceAssessment}', [ComplianceController::class, 'assessmentDestroy'])
+            ->middleware('permission:delete compliance-assessments')->name('compliance-assessments.destroy');
         Route::patch('/compliance-results/{result}', [ComplianceController::class, 'updateResult'])
             ->middleware('permission:edit compliance-assessments')->name('compliance-results.update');
     });
 
     // Evidence
-    Route::get('/evidence', [ComplianceController::class, 'evidenceIndex'])
-        ->middleware('permission:view evidence')->name('evidence.index');
-    Route::post('/evidence', [ComplianceController::class, 'evidenceStore'])
-        ->middleware('permission:create evidence')->name('evidence.store');
+    Route::middleware('permission:view evidence')->group(function () {
+        Route::get('/evidence', [EvidenceController::class, 'index'])->name('evidence.index');
+        Route::post('/evidence', [EvidenceController::class, 'store'])
+            ->middleware('permission:create evidence')->name('evidence.store');
+        Route::get('/evidence/{evidence}/download', [EvidenceController::class, 'download'])->name('evidence.download');
+        Route::patch('/evidence/{evidence}/review', [EvidenceController::class, 'review'])
+            ->middleware('permission:approve evidence')->name('evidence.review');
+        Route::delete('/evidence/{evidence}', [EvidenceController::class, 'destroy'])
+            ->middleware('permission:delete evidence')->name('evidence.destroy');
+    });
 
     // Gap Analysis
-    Route::get('/gap-analysis', [ComplianceController::class, 'gapIndex'])
-        ->middleware('permission:view gap-analysis')->name('gap-analysis.index');
+    Route::middleware('permission:view gap-analysis')->group(function () {
+        Route::get('/gap-analysis', [GapController::class, 'index'])->name('gap-analysis.index');
+        Route::post('/gap-analysis', [GapController::class, 'store'])
+            ->middleware('permission:create gap-analysis')->name('gap-analysis.store');
+        Route::put('/gap-analysis/{gap}', [GapController::class, 'update'])
+            ->middleware('permission:edit gap-analysis')->name('gap-analysis.update');
+        Route::delete('/gap-analysis/{gap}', [GapController::class, 'destroy'])
+            ->middleware('permission:delete gap-analysis')->name('gap-analysis.destroy');
+    });
 
     // Security Operations
     Route::get('/security-ops/dashboard', [VulnerabilityController::class, 'dashboard'])

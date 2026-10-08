@@ -36,6 +36,24 @@ class Control extends Model
         ];
     }
 
+    public const STATUSES = ['draft', 'active', 'under_review', 'inactive', 'deprecated'];
+
+    public const EFFECTIVENESS = ['effective', 'partially_effective', 'ineffective', 'not_assessed'];
+
+    public const TYPES = ['preventive', 'detective', 'corrective', 'deterrent'];
+
+    public const NATURES = ['technical', 'administrative', 'physical'];
+
+    public const FREQUENCIES = ['continuous', 'daily', 'weekly', 'monthly', 'quarterly', 'annual'];
+
+    public const COVERAGE = ['full', 'partial', 'planned'];
+
+    /** Controls in operation — drafts, retired and deprecated controls are excluded from effectiveness stats. */
+    public function scopeOperational($query)
+    {
+        return $query->whereIn('status', ['active', 'under_review']);
+    }
+
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Control::class, 'parent_id');

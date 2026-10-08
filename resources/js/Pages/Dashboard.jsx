@@ -147,13 +147,13 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
                 <Link href={route('risks.dashboard')}><KpiCard label="Open Risks" value={counts.risks || 0} sublabel={counts.risks_above_appetite ? `${counts.risks_above_appetite} above appetite` : null} tone="navy" icon={ExclamationTriangleIcon} /></Link>
-                <KpiCard label="Controls" value={counts.controls || 0} tone="gold" icon={ClipboardDocumentCheckIcon} />
+                <Link href={route('controls.index')}><KpiCard label="Controls" value={counts.controls || 0} tone="gold" icon={ClipboardDocumentCheckIcon} /></Link>
                 <KpiCard label="Assets" value={counts.assets || 0} tone="white" icon={ServerStackIcon} />
                 <KpiCard label="Vendors" value={counts.vendors || 0} tone="white" icon={BuildingOfficeIcon} />
                 <KpiCard label="Policies" value={counts.policies || 0} tone="white" icon={DocumentTextIcon} />
                 <KpiCard label="Vulnerabilities" value={counts.vulns || 0} tone="red" icon={BugAntIcon} />
                 <KpiCard label="Incidents (90d)" value={incidents.length} tone="white" icon={ShieldExclamationIcon} />
-                <KpiCard label="Compliance Assmts" value={counts.compliance_assessments || 0} tone="white" />
+                <Link href={route('compliance.dashboard')}><KpiCard label="Compliance" value={counts.compliance_score != null ? `${Math.round(counts.compliance_score)}%` : '--'} sublabel={counts.open_gaps ? `${counts.open_gaps} open gaps` : null} tone="white" /></Link>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">

@@ -4,11 +4,13 @@ import StatusBadge from '@/Components/StatusBadge';
 import KpiCard from '@/Components/KpiCard';
 import { Head } from '@inertiajs/react';
 
-const severityTone = (s) => ({ critical: 'critical', major: 'high', moderate: 'moderate', minor: 'low' })[s] || 'moderate';
+const severityTone = (s) => ({ critical: 'critical', high: 'high', medium: 'moderate', low: 'low' })[s] || 'moderate';
+const NC_LABEL = { critical: 'Critical', high: 'Major', medium: 'Moderate', low: 'Minor' };
+const RESOLVED = ['remediated', 'accepted', 'closed'];
 
 export default function IsmsAudit({ audits = [], nonConformities = [] }) {
-    const openNC = nonConformities.filter((n) => ['open', 'in_progress'].includes(n.status)).length;
-    const resolvedNC = nonConformities.filter((n) => n.status === 'resolved').length;
+    const openNC = nonConformities.filter((n) => !RESOLVED.includes(n.status)).length;
+    const resolvedNC = nonConformities.filter((n) => RESOLVED.includes(n.status)).length;
     return (
         <AuthenticatedLayout header="ISMS Audit">
             <Head title="ISMS Audit" />
@@ -74,7 +76,7 @@ export default function IsmsAudit({ audits = [], nonConformities = [] }) {
                             <tr key={n.id}>
                                 <td className="px-3 py-2 font-mono text-xs text-[#0A1F44]">{n.gap_code}</td>
                                 <td className="px-3 py-2 text-[#2D3748]">{n.title}</td>
-                                <td className="px-3 py-2"><StatusBadge status={severityTone(n.severity)} label={n.severity} /></td>
+                                <td className="px-3 py-2"><StatusBadge status={severityTone(n.severity)} label={NC_LABEL[n.severity] || n.severity} /></td>
                                 <td className="px-3 py-2"><StatusBadge status={n.status} /></td>
                                 <td className="px-3 py-2 text-xs text-[#718096]">{n.assignee_name || '—'}</td>
                                 <td className="px-3 py-2 text-xs text-[#718096]">{n.due_date}</td>

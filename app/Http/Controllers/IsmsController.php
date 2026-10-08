@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\ComplianceAssessment;
-use App\Models\ControlFramework;
 use App\Models\Control;
+use App\Models\ControlFramework;
+use App\Models\Gap;
 use App\Models\Risk;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -45,8 +45,8 @@ class IsmsController extends Controller
         $ismsRisks = Risk::where('organization_id', $orgId)
             ->whereIn('source', ['self-assessment', 'audit'])->count();
 
-        $openGaps = DB::table('gaps')->where('organization_id', $orgId)
-            ->whereIn('status', ['open', 'in_progress'])->count();
+        $openGaps = $this->isoGaps($orgId, $fwId)
+            ->whereNotIn('g.status', Gap::RESOLVED_STATUSES)->count();
 
         $latestAudit = ComplianceAssessment::where('organization_id', $orgId)
             ->where('framework_id', $fwId)
@@ -110,6 +110,7 @@ class IsmsController extends Controller
             'medium' => $risks->where('residual_rating', 'medium')->count(),
             'low' => $risks->where('residual_rating', 'low')->count(),
         ];
+
         return Inertia::render('ISMS/Risks', compact('risks', 'distribution'));
     }
 
@@ -154,8 +155,7 @@ class IsmsController extends Controller
             ->take(20)
             ->get();
 
-        $gapRows = DB::table('gaps as g')
-            ->where('g.organization_id', $orgId)
+        $gapRows = $this->isoGaps($orgId, $fwId)
             ->leftJoin('users as u', 'u.id', '=', 'g.assigned_to')
             ->select('g.*', 'u.name as assignee_name')
             ->orderByDesc('g.created_at')
@@ -200,10 +200,8 @@ class IsmsController extends Controller
         $orgId = $this->orgId();
         $fwId = $this->isoFrameworkId();
 
-        $gaps = DB::table('gaps as g')
-            ->where('g.organization_id', $orgId)
+        $gaps = $this->isoGaps($orgId, $fwId)
             ->leftJoin('users as u', 'u.id', '=', 'g.assigned_to')
-            ->leftJoin('framework_requirements as r', 'r.id', '=', 'g.requirement_id')
             ->select('g.*', 'u.name as assignee_name', 'r.requirement_code', 'r.title as requirement_title')
             ->orderBy('g.severity')
             ->orderByDesc('g.created_at')
@@ -230,5 +228,14 @@ class IsmsController extends Controller
             'statusBuckets' => $statusBuckets,
             'heat' => $heat,
         ]);
+    }
+
+    /** Gaps against ISO 27001 requirements, plus audit non-conformities not tied to any framework. */
+    private function isoGaps(int $orgId, ?int $fwId)
+    {
+        return DB::table('gaps as g')
+            ->where('g.organization_id', $orgId)
+            ->leftJoin('framework_requirements as r', 'r.id', '=', 'g.requirement_id')
+            ->where(fn ($q) => $q->whereNull('g.requirement_id')->orWhere('r.framework_id', $fwId));
     }
 }

@@ -138,9 +138,18 @@ class PlatformController extends Controller
         $obligations = Obligation::query()
             ->when($r->query('regulator'), fn ($q, $reg) => $q->where('regulator_code', $reg))
             ->orderBy('regulator_code')
-            ->get();
+            ->get()
+            ->map(fn ($o) => $o->toArray() + [
+                'next_due' => $o->nextDue()->toDateString(),
+                'days_to_due' => (int) today()->diffInDays($o->nextDue(), false),
+            ])
+            ->sortBy('next_due')->values();
 
-        return Inertia::render('Obligations/Index', ['obligations' => $obligations]);
+        return Inertia::render('Obligations/Index', [
+            'obligations' => $obligations,
+            'regulators' => Obligation::query()->distinct()->orderBy('regulator_code')->pluck('regulator_code'),
+            'regulator' => $r->query('regulator'),
+        ]);
     }
 
     /* ------------------------------- AUCS ------------------------------- */
