@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, Link } from '@inertiajs/react';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
+import { ratingColor } from '@/Utils/risk';
 import PrimaryButton from '@/Components/PrimaryButton';
 import { useState } from 'react';
 
@@ -107,7 +108,7 @@ export default function CreateAssessment({ risk, risks, likelihoodLabels, impact
                                         <div className="mt-1 h-[42px] flex items-center">
                                             {score ? (
                                                 <span className="font-mono-data text-xl font-bold" style={{
-                                                    color: score >= 20 ? '#C53030' : score >= 15 ? '#DD6B20' : score >= 8 ? '#D4AF37' : score >= 4 ? '#2D7D46' : '#319795'
+                                                    color: ratingColor(score)
                                                 }}>{score}</span>
                                             ) : <span className="text-gray-400 text-sm">--</span>}
                                         </div>
@@ -182,6 +183,14 @@ export default function CreateAssessment({ risk, risks, likelihoodLabels, impact
                             <textarea value={data.justification} onChange={e => setData('justification', e.target.value)} rows={3}
                                 className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm"
                                 placeholder="Provide reasoning for the assessment scores..." />
+                            <InputError message={errors.justification} className="mt-1" />
+                        </div>
+
+                        <div className="max-w-xs">
+                            <InputLabel htmlFor="next_review_date" value="Next Review Date" />
+                            <input id="next_review_date" type="date" value={data.next_review_date} onChange={e => setData('next_review_date', e.target.value)}
+                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm" />
+                            <InputError message={errors.next_review_date} className="mt-1" />
                         </div>
 
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">

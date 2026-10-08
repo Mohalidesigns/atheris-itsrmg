@@ -1,57 +1,59 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import {
     ExclamationTriangleIcon,
     PlusIcon,
     ArrowRightIcon,
 } from '@heroicons/react/24/outline';
-import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import RiskHeatMap from '@/Components/Risk/RiskHeatMap';
 import { RatingBadge, StatusBadge, ScoreDisplay } from '@/Components/Risk/RiskBadge';
+import { humanize } from '@/Utils/risk';
 
-function StatCard({ title, value, color, subtitle }) {
+function StatCard({ title, value, color, subtitle, href }) {
     const bgMap = {
         red: 'bg-[#C53030]', orange: 'bg-[#DD6B20]', gold: 'bg-[#D4AF37]',
         green: 'bg-[#2D7D46]', navy: 'bg-[#1A365D]', teal: 'bg-[#319795]',
     };
+    const Wrapper = href ? Link : 'div';
     return (
-        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+        <Wrapper href={href} className={`block bg-white rounded-xl border border-gray-100 p-4 shadow-sm ${href ? 'hover:border-[#C9A86A] transition-colors' : ''}`}>
             <p className="text-xs text-[#718096] uppercase font-medium">{title}</p>
             <div className="flex items-end gap-2 mt-1">
                 <span className="text-2xl font-bold font-mono-data text-[#2D3748]">{value}</span>
                 {color && <span className={`w-2 h-2 rounded-full mb-1.5 ${bgMap[color]}`} />}
             </div>
             {subtitle && <p className="text-xs text-[#718096] mt-0.5">{subtitle}</p>}
-        </div>
+        </Wrapper>
     );
 }
 
-export default function RiskDashboard({ stats, heatMapData, distribution, recentRisks, topRisks }) {
+export default function RiskDashboard({ stats, heatMapData, distribution, statusBreakdown = [], recentRisks, topRisks }) {
     const [heatMapType, setHeatMapType] = useState('inherent');
 
     const pieData = Object.entries(distribution).map(([key, val]) => ({
-        name: val.label, value: val.count, color: val.color,
+        key, name: val.label, value: val.count, color: val.color,
     })).filter(d => d.value > 0);
 
-    const statusData = [
-        { name: 'Identified', value: stats.total - stats.treating - stats.accepted },
-        { name: 'Treating', value: stats.treating },
-        { name: 'Accepted', value: stats.accepted },
-    ].filter(d => d.value > 0);
+    const ratingHref = (rating) => route('risks.index', { status: 'active', rating });
+    const drillDown = (cell) => router.visit(route('risks.index', {
+        basis: heatMapType, likelihood: cell.likelihood, impact: cell.impact,
+    }));
 
     return (
         <AuthenticatedLayout header="IT Risk Management">
             <Head title="Risk Dashboard" />
 
-            {/* Stats Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-                <StatCard title="Total Risks" value={stats.total} color="navy" />
-                <StatCard title="Critical" value={stats.critical} color="red" />
-                <StatCard title="High" value={stats.high} color="orange" />
-                <StatCard title="Medium" value={stats.medium} color="gold" />
-                <StatCard title="Low" value={stats.low} color="green" />
-                <StatCard title="Open" value={stats.open} color="teal" subtitle="Active risks" />
+            {/* Stats Row — rating tiles count active (not closed/archived) risks so they reconcile with the heat map */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+                <StatCard title="Total Risks" value={stats.total} color="navy" subtitle={`${stats.closed} closed / archived`} href={route('risks.index')} />
+                <StatCard title="Open" value={stats.open} color="teal" subtitle={`${stats.above_appetite} above appetite`} href={route('risks.index', { status: 'active' })} />
+                <StatCard title="Critical" value={stats.critical} color="red" subtitle="Open, inherent" href={ratingHref('critical')} />
+                <StatCard title="High" value={stats.high} color="orange" subtitle="Open, inherent" href={ratingHref('high')} />
+                <StatCard title="Medium" value={stats.medium} color="gold" subtitle="Open, inherent" href={ratingHref('medium')} />
+                <StatCard title="Low" value={stats.low} color="green" subtitle="Open, inherent" href={ratingHref('low')} />
+                <StatCard title="Very Low" value={stats.very_low} color="teal" subtitle={stats.unscored ? `${stats.unscored} not yet scored` : 'Open, inherent'} href={ratingHref('very_low')} />
             </div>
 
             {/* Actions */}
@@ -81,8 +83,8 @@ export default function RiskDashboard({ stats, heatMapData, distribution, recent
                             ))}
                         </div>
                     </div>
-                    {stats.total > 0 ? (
-                        <RiskHeatMap data={heatMapData} type={heatMapType} />
+                    {stats.open > 0 ? (
+                        <RiskHeatMap data={heatMapData[heatMapType]} type={heatMapType} onCellClick={drillDown} />
                     ) : (
                         <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
                             <div className="text-center">
@@ -95,12 +97,14 @@ export default function RiskDashboard({ stats, heatMapData, distribution, recent
 
                 {/* Distribution Pie */}
                 <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-                    <h3 className="text-base font-semibold text-[#2D3748] mb-4">Risk Distribution</h3>
+                    <h3 className="text-base font-semibold text-[#2D3748]">Risk Distribution</h3>
+                    <p className="text-xs text-[#718096] mb-2">Open risks by inherent rating</p>
                     {pieData.length > 0 ? (
                         <div>
                             <ResponsiveContainer width="100%" height={200}>
                                 <PieChart>
-                                    <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={45} outerRadius={80} dataKey="value" nameKey="name" isAnimationActive={false}
+                                        onClick={(d) => router.visit(ratingHref(d.key))} className="cursor-pointer">
                                         {pieData.map((entry, i) => (
                                             <Cell key={i} fill={entry.color} />
                                         ))}
@@ -110,15 +114,28 @@ export default function RiskDashboard({ stats, heatMapData, distribution, recent
                             </ResponsiveContainer>
                             <div className="space-y-1 mt-2">
                                 {pieData.map(d => (
-                                    <div key={d.name} className="flex items-center justify-between text-xs">
+                                    <Link key={d.name} href={ratingHref(d.key)} className="flex items-center justify-between text-xs hover:bg-gray-50 rounded px-1">
                                         <div className="flex items-center gap-2">
                                             <span className="w-3 h-3 rounded" style={{ backgroundColor: d.color }} />
                                             <span className="text-[#718096]">{d.name}</span>
                                         </div>
                                         <span className="font-mono-data font-semibold text-[#2D3748]">{d.value}</span>
-                                    </div>
+                                    </Link>
                                 ))}
                             </div>
+                            {statusBreakdown.length > 0 && (
+                                <div className="mt-4 pt-3 border-t border-gray-100">
+                                    <p className="text-xs text-[#718096] uppercase font-medium mb-2">By status (all risks)</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {statusBreakdown.map(s => (
+                                            <Link key={s.status} href={route('risks.index', { status: s.status })} className="inline-flex items-center gap-1 hover:opacity-80">
+                                                <StatusBadge status={s.status} />
+                                                <span className="text-xs font-mono-data text-[#2D3748]">{s.count}</span>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="flex items-center justify-center h-48 text-sm text-[#718096]">

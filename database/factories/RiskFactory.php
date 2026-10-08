@@ -4,8 +4,8 @@ namespace Database\Factories;
 
 use App\Models\Organization;
 use App\Models\Risk;
-use App\Models\User;
 use App\Models\RiskCategory;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class RiskFactory extends Factory
@@ -17,11 +17,11 @@ class RiskFactory extends Factory
         $likelihood = $this->faker->numberBetween(1, 5);
         $impact = $this->faker->numberBetween(1, 5);
         $score = $likelihood * $impact;
-        $rating = $score >= 20 ? 'critical' : ($score >= 12 ? 'high' : ($score >= 6 ? 'medium' : 'low'));
+        $rating = Risk::calculateRating($score);
         $residualL = max(1, $likelihood - $this->faker->numberBetween(0, 2));
         $residualI = max(1, $impact - $this->faker->numberBetween(0, 2));
         $residualScore = $residualL * $residualI;
-        $residualRating = $residualScore >= 20 ? 'critical' : ($residualScore >= 12 ? 'high' : ($residualScore >= 6 ? 'medium' : 'low'));
+        $residualRating = Risk::calculateRating($residualScore);
 
         return [
             'organization_id' => Organization::factory(),
@@ -31,7 +31,7 @@ class RiskFactory extends Factory
             'category_id' => RiskCategory::factory(),
             'risk_owner_id' => User::factory(),
             'created_by' => User::factory(),
-            'status' => $this->faker->randomElement(['identified', 'assessed', 'mitigated', 'accepted', 'in_progress', 'under_review', 'closed']),
+            'status' => $this->faker->randomElement(['identified', 'assessed', 'mitigated', 'accepted', 'treating', 'under_review', 'closed']),
             'inherent_likelihood' => $likelihood,
             'inherent_impact' => $impact,
             'inherent_score' => $score,

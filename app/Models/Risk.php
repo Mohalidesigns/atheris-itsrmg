@@ -41,19 +41,38 @@ class Risk extends Model
         ];
     }
 
+    /** Lifecycle order matters: the register filter and edit form list them in this order. */
     public const STATUSES = [
-        'identified', 'assessed', 'treating', 'accepted', 'closed', 'archived',
+        'identified', 'assessed', 'treating', 'mitigated', 'accepted', 'under_review', 'closed', 'archived',
     ];
 
+    /** Statuses that take a risk off the active register (heat maps, KPIs, top-N). */
+    public const INACTIVE_STATUSES = ['closed', 'archived'];
+
+    /**
+     * The single 5×5 rating scale used everywhere (backend, seeders, dashboards).
+     * Mirrored in resources/js/Utils/risk.js — keep the two in sync.
+     */
     public const RATINGS = [
         'critical' => ['min' => 20, 'color' => '#C53030'],
-        'high' => ['min' => 15, 'color' => '#DD6B20'],
-        'medium' => ['min' => 8, 'color' => '#D4AF37'],
-        'low' => ['min' => 4, 'color' => '#2D7D46'],
+        'high' => ['min' => 12, 'color' => '#DD6B20'],
+        'medium' => ['min' => 6, 'color' => '#D4AF37'],
+        'low' => ['min' => 3, 'color' => '#2D7D46'],
         'very_low' => ['min' => 1, 'color' => '#319795'],
     ];
 
     public const TREATMENT_STRATEGIES = ['accept', 'mitigate', 'transfer', 'avoid'];
+
+    /** Position of the risk relative to the board-approved appetite. */
+    public const APPETITES = ['within', 'above', 'below'];
+
+    /** Where the risk was identified. 'ea.obsolescence' is raised by the EA module (OpenObsolescenceRisk). */
+    public const SOURCES = ['audit', 'self-assessment', 'incident', 'regulator', 'external', 'ea.obsolescence'];
+
+    public function scopeActive($query)
+    {
+        return $query->whereNotIn('status', self::INACTIVE_STATUSES);
+    }
 
     // Relationships
     public function category(): BelongsTo
@@ -96,6 +115,17 @@ class Risk extends Model
         return $this->hasMany(ThreatAssessment::class);
     }
 
+    /** Remediation issues raised against this risk (issues.source_type = 'risk'). */
+    public function issues(): HasMany
+    {
+        return $this->hasMany(Issue::class, 'source_id')->where('source_type', 'risk');
+    }
+
+    public function fairScenarios(): HasMany
+    {
+        return $this->hasMany(FairScenario::class);
+    }
+
     /**
      * Controls mitigating this risk (inverse of Control::risks()).
      */
@@ -128,20 +158,29 @@ class Risk extends Model
         return 'very_low';
     }
 
+    /**
+     * Next register code, keeping the tenant's existing prefix and padding
+     * (e.g. KHB-RSK-040 → KHB-RSK-041). Includes soft-deleted rows so a code
+     * is never reused.
+     */
     public static function generateNextCode(int $organizationId): string
     {
-        $last = static::withoutGlobalScopes()
+        $codes = static::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
-            ->orderByDesc('id')
-            ->value('risk_id_code');
+            ->pluck('risk_id_code');
 
-        if ($last && preg_match('/RSK-(\d+)/', $last, $matches)) {
-            $next = (int) $matches[1] + 1;
-        } else {
-            $next = 1;
+        $prefix = 'RSK-';
+        $width = 4;
+        $max = 0;
+        foreach ($codes as $code) {
+            if (preg_match('/^(.*RSK-)(\d+)$/', (string) $code, $m) && (int) $m[2] >= $max) {
+                $max = (int) $m[2];
+                $prefix = $m[1];
+                $width = strlen($m[2]);
+            }
         }
 
-        return 'RSK-'.str_pad($next, 4, '0', STR_PAD_LEFT);
+        return $prefix.str_pad($max + 1, $width, '0', STR_PAD_LEFT);
     }
 
     public function getActivitylogOptions(): LogOptions

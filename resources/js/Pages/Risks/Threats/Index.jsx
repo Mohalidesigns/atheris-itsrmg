@@ -5,7 +5,9 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { PlusIcon, MagnifyingGlassIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+import { formatDate, threatLabel } from '@/Utils/risk';
+
+const cap = threatLabel;
 
 export default function ThreatsIndex({ threats, filters = {}, categories = [], severities = [], sources = [] }) {
     const [search, setSearch] = useState(filters.search || '');
@@ -100,10 +102,10 @@ export default function ThreatsIndex({ threats, filters = {}, categories = [], s
                                             {threat.name}
                                         </Link>
                                     </td>
-                                    <td className="px-4 py-3 text-[#718096] capitalize">{threat.category || '--'}</td>
-                                    <td className="px-4 py-3 text-[#718096] capitalize">{threat.source || '--'}</td>
+                                    <td className="px-4 py-3 text-[#718096]">{threat.category ? cap(threat.category) : '--'}</td>
+                                    <td className="px-4 py-3 text-[#718096]">{threat.source ? cap(threat.source) : '--'}</td>
                                     <td className="px-4 py-3 text-center font-mono-data">{threat.likelihood ?? '--'}</td>
-                                    <td className="px-4 py-3">{threat.severity ? <StatusBadge status={threat.severity} /> : '--'}</td>
+                                    <td className="px-4 py-3">{threat.severity ? <StatusBadge status={threat.severity} label={cap(threat.severity)} /> : '--'}</td>
                                     <td className="px-4 py-3 text-center text-[#718096]">{threat.assessments_count}</td>
                                     <td className="px-4 py-3">
                                         <StatusBadge status={threat.is_active ? 'active' : 'disabled'} label={threat.is_active ? 'Active' : 'Inactive'} />

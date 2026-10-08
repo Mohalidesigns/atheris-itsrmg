@@ -518,10 +518,10 @@ class KanoHeritageDemoSeeder extends Seeder
             $residualL = max(1, $likelihood - rand(0, 2));
             $residualI = max(1, $impact - rand(0, 2));
             $residual = $residualL * $residualI;
-            $rating = fn ($s) => $s >= 20 ? 'critical' : ($s >= 12 ? 'high' : ($s >= 6 ? 'medium' : 'low'));
+            $rating = fn ($s) => Risk::calculateRating($s);
             $status = $this->weighted([
                 'identified' => 20, 'assessed' => 20, 'mitigated' => 15, 'accepted' => 10,
-                'in_progress' => 20, 'under_review' => 10, 'closed' => 5,
+                'treating' => 20, 'under_review' => 10, 'closed' => 5,
             ]);
             Risk::create([
                 'organization_id' => $this->orgId,
@@ -544,7 +544,7 @@ class KanoHeritageDemoSeeder extends Seeder
                 'fair_single_loss_expectancy' => rand(2_000_000, 100_000_000),
                 'treatment_strategy' => ['mitigate', 'accept', 'transfer', 'avoid'][rand(0, 3)],
                 'treatment_due_date' => now()->addDays(rand(-30, 180)),
-                'risk_appetite' => ['within', 'above', 'below'][rand(0, 2)],
+                'risk_appetite' => $residual >= 12 ? 'above' : ($residual >= 4 ? 'within' : 'below'),
                 'source' => ['self-assessment', 'audit', 'incident', 'regulator'][rand(0, 3)],
                 'review_date' => now()->addMonths(rand(1, 6)),
                 'created_at' => $this->ts18m(), 'updated_at' => now()->subDays(rand(0, 30)),

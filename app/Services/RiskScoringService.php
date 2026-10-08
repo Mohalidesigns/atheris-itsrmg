@@ -23,20 +23,21 @@ class RiskScoringService
         5 => 'Catastrophic',
     ];
 
+    /** Lower bound of each rating band — derived from Risk::RATINGS (single source of truth). */
     public const RATING_THRESHOLDS = [
-        'critical' => 20,
-        'high' => 15,
-        'medium' => 8,
-        'low' => 4,
-        'very_low' => 1,
+        'critical' => Risk::RATINGS['critical']['min'],
+        'high' => Risk::RATINGS['high']['min'],
+        'medium' => Risk::RATINGS['medium']['min'],
+        'low' => Risk::RATINGS['low']['min'],
+        'very_low' => Risk::RATINGS['very_low']['min'],
     ];
 
     public const RATING_COLORS = [
-        'critical' => '#C53030',
-        'high' => '#DD6B20',
-        'medium' => '#D4AF37',
-        'low' => '#2D7D46',
-        'very_low' => '#319795',
+        'critical' => Risk::RATINGS['critical']['color'],
+        'high' => Risk::RATINGS['high']['color'],
+        'medium' => Risk::RATINGS['medium']['color'],
+        'low' => Risk::RATINGS['low']['color'],
+        'very_low' => Risk::RATINGS['very_low']['color'],
     ];
 
     public function calculateScore(int $likelihood, int $impact): int
@@ -46,12 +47,7 @@ class RiskScoringService
 
     public function calculateRating(int $score): string
     {
-        foreach (self::RATING_THRESHOLDS as $rating => $threshold) {
-            if ($score >= $threshold) {
-                return $rating;
-            }
-        }
-        return 'very_low';
+        return Risk::calculateRating($score);
     }
 
     public function scoreRisk(Risk $risk, string $type, int $likelihood, int $impact, ?string $reason = null): Risk
@@ -72,8 +68,18 @@ class RiskScoringService
             $risk->update(['status' => 'assessed']);
         }
 
-        // Record history
-        RiskScoreHistory::create([
+        $this->recordHistory($risk, $reason ?? "{$type} score updated");
+
+        return $risk->fresh();
+    }
+
+    /**
+     * Snapshot the risk's current inherent/residual position into the score
+     * history that feeds the "History" tab and trend reporting.
+     */
+    public function recordHistory(Risk $risk, string $reason): RiskScoreHistory
+    {
+        return RiskScoreHistory::create([
             'risk_id' => $risk->id,
             'organization_id' => $risk->organization_id,
             'inherent_likelihood' => $risk->inherent_likelihood,
@@ -84,12 +90,10 @@ class RiskScoringService
             'residual_impact' => $risk->residual_impact,
             'residual_score' => $risk->residual_score,
             'residual_rating' => $risk->residual_rating,
-            'change_reason' => $reason ?? "{$type} score updated",
+            'change_reason' => $reason,
             'changed_by' => auth()->id(),
             'recorded_at' => now(),
         ]);
-
-        return $risk->fresh();
     }
 
     public function getHeatMapData(int $organizationId, string $type = 'inherent'): array
@@ -99,7 +103,7 @@ class RiskScoringService
             ->where('organization_id', $organizationId)
             ->whereNotNull("{$prefix}_likelihood")
             ->whereNotNull("{$prefix}_impact")
-            ->whereNotIn('status', ['closed', 'archived'])
+            ->whereNotIn('status', Risk::INACTIVE_STATUSES)
             ->get([
                 'id', 'title', 'risk_id_code',
                 "{$prefix}_likelihood as likelihood",
@@ -136,7 +140,7 @@ class RiskScoringService
     {
         $risks = Risk::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
-            ->whereNotIn('status', ['closed', 'archived'])
+            ->whereNotIn('status', Risk::INACTIVE_STATUSES)
             ->get();
 
         $distribution = [];

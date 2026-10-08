@@ -17,6 +17,7 @@ export default function StatusBadge({ status, label }) {
         critical: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
         high: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
         moderate: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
+        medium: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
         low: 'bg-gray-100 text-gray-700 border-gray-300',
         open: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
         in_progress: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',

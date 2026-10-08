@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
+import { IMPACT_LABELS, LIKELIHOOD_LABELS, ratingColor } from '@/Utils/risk';
 import { Head, Link, router } from '@inertiajs/react';
 import {
     ShieldExclamationIcon,
@@ -19,39 +20,31 @@ import {
 const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : '—';
 
 /* ============================== Heat Map (5×5) ============================== */
+// Same orientation and rating scale as the IT Risk dashboard: rows = likelihood, columns = impact.
 function RiskHeatMap({ risks = [] }) {
     const matrix = Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => []));
     risks.forEach((r) => {
-        const l = Math.min(5, Math.max(1, r.inherent_likelihood || 3));
-        const i = Math.min(5, Math.max(1, r.inherent_impact || 3));
-        matrix[5 - i][l - 1].push(r);
+        if (!r.inherent_likelihood || !r.inherent_impact) return;
+        matrix[5 - r.inherent_likelihood][r.inherent_impact - 1].push(r);
     });
-    const cellColor = (l, i) => {
-        const score = l * i;
-        if (score >= 20) return 'bg-[#B3261E]/90';
-        if (score >= 12) return 'bg-[#E5A100]/85';
-        if (score >= 6) return 'bg-[#FFCD3C]/70';
-        return 'bg-[#2D7D46]/75';
-    };
     return (
         <div>
             <div className="grid grid-cols-[auto_1fr] gap-1 text-[10px] text-[#718096]">
-                <div></div>
-                <div className="grid grid-cols-5 gap-1 text-center">
-                    {['1 Rare', '2 Unlikely', '3 Possible', '4 Likely', '5 Certain'].map((l) => <div key={l}>{l}</div>)}
-                </div>
-                {[5, 4, 3, 2, 1].map((impact, rowIdx) => (
-                    <div key={impact} className="contents">
-                        <div className="flex items-center justify-end pr-1 text-[10px] text-[#718096]">{impact} {['Extreme','Major','Moderate','Minor','Insignificant'][5 - impact]}</div>
+                {[5, 4, 3, 2, 1].map((likelihood, rowIdx) => (
+                    <div key={likelihood} className="contents">
+                        <div className="flex items-center justify-end pr-1 text-[10px] text-[#718096]">{likelihood} {LIKELIHOOD_LABELS[likelihood]}</div>
                         <div className="grid grid-cols-5 gap-1">
-                            {[1, 2, 3, 4, 5].map((l) => {
-                                const items = matrix[rowIdx][l - 1];
+                            {[1, 2, 3, 4, 5].map((impact) => {
+                                const items = matrix[rowIdx][impact - 1];
                                 return (
-                                    <div key={l} className={`rounded-md h-16 text-white p-1 text-[10px] ${cellColor(l, impact)} relative overflow-hidden`}>
-                                        <span className="absolute top-1 right-1 font-bold text-white/80">{items.length}</span>
+                                    <div key={impact}
+                                        onClick={() => items.length && router.visit(route('risks.index', { likelihood, impact }))}
+                                        className={`rounded-md h-16 text-white p-1 text-[10px] relative overflow-hidden ${items.length ? 'cursor-pointer hover:ring-2 hover:ring-[#0A1F44]' : ''}`}
+                                        style={{ backgroundColor: ratingColor(likelihood * impact) + (items.length ? 'E6' : '55') }}>
+                                        <span className="absolute top-1 right-1 font-bold text-white/90">{items.length || ''}</span>
                                         <div className="flex flex-wrap gap-0.5 mt-4">
-                                            {items.slice(0, 5).map((r) => (
-                                                <Link key={r.id} href={route('risks.show', r.id)}
+                                            {items.slice(0, 8).map((r) => (
+                                                <Link key={r.id} href={route('risks.show', r.id)} onClick={(e) => e.stopPropagation()}
                                                     title={`${r.risk_id_code} — ${r.title}`}
                                                     className="w-2 h-2 rounded-full bg-white/80 hover:bg-white" />
                                             ))}
@@ -62,8 +55,12 @@ function RiskHeatMap({ risks = [] }) {
                         </div>
                     </div>
                 ))}
+                <div></div>
+                <div className="grid grid-cols-5 gap-1 text-center">
+                    {[1, 2, 3, 4, 5].map((i) => <div key={i}>{i} {IMPACT_LABELS[i]}</div>)}
+                </div>
             </div>
-            <p className="text-[10px] text-[#718096] text-center mt-2">Likelihood →</p>
+            <p className="text-[10px] text-[#718096] text-center mt-2">Impact → · Likelihood ↑</p>
         </div>
     );
 }
@@ -148,7 +145,7 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
             />
 
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-                <KpiCard label="Risks" value={counts.risks || 0} tone="navy" icon={ExclamationTriangleIcon} />
+                <Link href={route('risks.dashboard')}><KpiCard label="Open Risks" value={counts.risks || 0} sublabel={counts.risks_above_appetite ? `${counts.risks_above_appetite} above appetite` : null} tone="navy" icon={ExclamationTriangleIcon} /></Link>
                 <KpiCard label="Controls" value={counts.controls || 0} tone="gold" icon={ClipboardDocumentCheckIcon} />
                 <KpiCard label="Assets" value={counts.assets || 0} tone="white" icon={ServerStackIcon} />
                 <KpiCard label="Vendors" value={counts.vendors || 0} tone="white" icon={BuildingOfficeIcon} />
@@ -163,14 +160,14 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                     <div className="flex items-start justify-between mb-3">
                         <div>
                             <h3 className="text-sm font-semibold text-[#2D3748]">Enterprise Risk Heat Map</h3>
-                            <p className="text-xs text-[#718096]">All {heatmapRisks.length} risks plotted on the 5×5 matrix (inherent). Click a dot for detail.</p>
+                            <p className="text-xs text-[#718096]">{heatmapRisks.length} open risks plotted on the 5×5 matrix (inherent). Click a dot for the risk, or a cell to filter the register.</p>
                         </div>
                         <Link href={route('risks.index')} className="text-xs text-[#0A1F44] underline">View register →</Link>
                     </div>
                     <RiskHeatMap risks={heatmapRisks} />
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                    <h3 className="text-sm font-semibold text-[#2D3748]">Top 10 Risks (Inherent)</h3>
+                    <h3 className="text-sm font-semibold text-[#2D3748]">Top 10 Open Risks (Inherent)</h3>
                     <ul className="mt-3 divide-y divide-gray-100">
                         {top10Risks.map((r) => (
                             <li key={r.id} className="py-2">
@@ -181,8 +178,8 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                                         <p className="text-[10px] text-[#718096]">Owner: {r.owner?.name || '—'}</p>
                                     </div>
                                     <div className="text-right">
-                                        <StatusBadge status={r.inherent_rating || 'medium'} label={`I:${r.inherent_score}`} />
-                                        <p className="text-[10px] text-[#718096] mt-0.5">R:{r.residual_score}</p>
+                                        <StatusBadge status={r.inherent_rating === 'medium' ? 'moderate' : (r.inherent_rating || 'low')} label={`I:${r.inherent_score ?? '—'}`} />
+                                        <p className="text-[10px] text-[#718096] mt-0.5">R:{r.residual_score ?? '—'}</p>
                                     </div>
                                 </Link>
                             </li>

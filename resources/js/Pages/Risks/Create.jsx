@@ -4,8 +4,9 @@ import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
+import { APPETITE_LABELS, RATING_COLORS, SOURCE_LABELS, humanize, ratingFor } from '@/Utils/risk';
 
-export default function CreateRisk({ categories, users, assets = [], nextCode, likelihoodLabels, impactLabels }) {
+export default function CreateRisk({ categories, users, assets = [], nextCode, likelihoodLabels, impactLabels, appetites = [], sources = [] }) {
     const { data, setData, post, processing, errors } = useForm({
         title: '',
         description: '',
@@ -29,18 +30,8 @@ export default function CreateRisk({ categories, users, assets = [], nextCode, l
         ? data.inherent_likelihood * data.inherent_impact
         : null;
 
-    const getRating = (s) => {
-        if (!s) return null;
-        if (s >= 20) return 'critical';
-        if (s >= 15) return 'high';
-        if (s >= 8) return 'medium';
-        if (s >= 4) return 'low';
-        return 'very_low';
-    };
-
-    const ratingColors = {
-        critical: '#C53030', high: '#DD6B20', medium: '#D4AF37', low: '#2D7D46', very_low: '#319795',
-    };
+    const getRating = ratingFor;
+    const ratingColors = RATING_COLORS;
 
     const submit = (e) => {
         e.preventDefault();
@@ -101,6 +92,7 @@ export default function CreateRisk({ categories, users, assets = [], nextCode, l
                                         <option key={c.id} value={c.id}>{c.name}</option>
                                     ))}
                                 </select>
+                                <InputError message={errors.category_id} className="mt-1" />
                             </div>
                             <div>
                                 <InputLabel htmlFor="risk_owner_id" value="Risk Owner" />
@@ -115,6 +107,7 @@ export default function CreateRisk({ categories, users, assets = [], nextCode, l
                                         <option key={u.id} value={u.id}>{u.name}</option>
                                     ))}
                                 </select>
+                                <InputError message={errors.risk_owner_id} className="mt-1" />
                             </div>
                         </div>
 
@@ -128,28 +121,22 @@ export default function CreateRisk({ categories, users, assets = [], nextCode, l
                                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm"
                                 >
                                     <option value="">Select source...</option>
-                                    <option value="audit">Audit</option>
-                                    <option value="assessment">Assessment</option>
-                                    <option value="incident">Incident</option>
-                                    <option value="external">External</option>
-                                    <option value="self_identified">Self-Identified</option>
+                                    {sources.map(v => <option key={v} value={v}>{SOURCE_LABELS[v] || humanize(v)}</option>)}
                                 </select>
+                                <InputError message={errors.source} className="mt-1" />
                             </div>
                             <div>
-                                <InputLabel htmlFor="risk_appetite" value="Risk Appetite" />
+                                <InputLabel htmlFor="risk_appetite" value="Position vs. Appetite" />
                                 <select
                                     id="risk_appetite"
                                     value={data.risk_appetite}
                                     onChange={e => setData('risk_appetite', e.target.value)}
                                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm"
                                 >
-                                    <option value="">Select appetite...</option>
-                                    <option value="averse">Averse</option>
-                                    <option value="cautious">Cautious</option>
-                                    <option value="moderate">Moderate</option>
-                                    <option value="open">Open</option>
-                                    <option value="hungry">Hungry</option>
+                                    <option value="">Not yet assessed</option>
+                                    {appetites.map(v => <option key={v} value={v}>{APPETITE_LABELS[v] || humanize(v)}</option>)}
                                 </select>
+                                <InputError message={errors.risk_appetite} className="mt-1" />
                             </div>
                         </div>
 
@@ -171,6 +158,7 @@ export default function CreateRisk({ categories, users, assets = [], nextCode, l
                                             <option key={val} value={val}>{val} - {label}</option>
                                         ))}
                                     </select>
+                                    <InputError message={errors.inherent_likelihood} className="mt-1" />
                                 </div>
                                 <div>
                                     <InputLabel value="Impact" />
@@ -184,6 +172,7 @@ export default function CreateRisk({ categories, users, assets = [], nextCode, l
                                             <option key={val} value={val}>{val} - {label}</option>
                                         ))}
                                     </select>
+                                    <InputError message={errors.inherent_impact} className="mt-1" />
                                 </div>
                                 <div>
                                     <InputLabel value="Score" />

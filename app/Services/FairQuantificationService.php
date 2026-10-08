@@ -45,24 +45,24 @@ class FairQuantificationService
             'USD' => '$',
             'GBP' => "\u{00A3}",
             'EUR' => "\u{20AC}",
-            'GHS' => 'GH\u{20B5}',
+            'GHS' => "GH\u{20B5}",
             'KES' => 'KSh',
             'ZAR' => 'R',
         ];
 
-        $symbol = $symbols[$currency] ?? $currency . ' ';
+        $symbol = $symbols[$currency] ?? $currency.' ';
 
         if ($amount >= 1_000_000_000) {
-            return $symbol . number_format($amount / 1_000_000_000, 1) . 'B';
+            return $symbol.number_format($amount / 1_000_000_000, 1).'B';
         }
         if ($amount >= 1_000_000) {
-            return $symbol . number_format($amount / 1_000_000, 1) . 'M';
+            return $symbol.number_format($amount / 1_000_000, 1).'M';
         }
         if ($amount >= 1_000) {
-            return $symbol . number_format($amount / 1_000, 1) . 'K';
+            return $symbol.number_format($amount / 1_000, 1).'K';
         }
 
-        return $symbol . number_format($amount, 2);
+        return $symbol.number_format($amount, 2);
     }
 
     public function getRiskBand(float $ale, string $currency = 'NGN'): string
@@ -77,10 +77,19 @@ class FairQuantificationService
             'low' => 1_000_000 / $multiplier,
         ];
 
-        if ($ale >= $thresholds['critical']) return 'critical';
-        if ($ale >= $thresholds['high']) return 'high';
-        if ($ale >= $thresholds['medium']) return 'medium';
-        if ($ale >= $thresholds['low']) return 'low';
+        if ($ale >= $thresholds['critical']) {
+            return 'critical';
+        }
+        if ($ale >= $thresholds['high']) {
+            return 'high';
+        }
+        if ($ale >= $thresholds['medium']) {
+            return 'medium';
+        }
+        if ($ale >= $thresholds['low']) {
+            return 'low';
+        }
+
         return 'very_low';
     }
 }

@@ -4,15 +4,20 @@ namespace Database\Seeders;
 
 use App\Models\Asset;
 use App\Models\Control;
+use App\Models\FairScenario;
 use App\Models\IncidentResponseProcedure;
 use App\Models\Organization;
 use App\Models\Risk;
 use App\Models\RiskAssessment;
 use App\Models\RiskTreatment;
+use App\Models\Threat;
+use App\Models\ThreatAssessment;
 use App\Models\User;
 use App\Models\Vulnerability;
 use App\Models\VulnerabilityTicket;
+use App\Services\FairMonteCarloService;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Wires demo records together across modules so relationship views
@@ -83,14 +88,16 @@ class DemoCrossLinkSeeder extends Seeder
             $userId = User::withoutGlobalScopes()->where('organization_id', $orgId)->value('id');
             if ($userId && ! RiskAssessment::withoutGlobalScopes()->where('organization_id', $orgId)->exists()) {
                 foreach ($risks->take(8) as $i => $risk) {
-                    $likelihood = $risk->inherent_likelihood ?: rand(2, 5);
-                    $impact = $risk->inherent_impact ?: rand(2, 5);
+                    // The assessment records the score the register shows for that basis.
+                    $type = $i % 3 === 0 && $risk->residual_likelihood ? 'residual' : 'inherent';
+                    $likelihood = $risk->{"{$type}_likelihood"} ?: rand(2, 5);
+                    $impact = $risk->{"{$type}_impact"} ?: rand(2, 5);
                     RiskAssessment::create([
                         'organization_id' => $orgId,
                         'risk_id' => $risk->id,
                         'assessed_by' => $userId,
                         'methodology' => 'qualitative',
-                        'assessment_type' => $i % 3 === 0 ? 'residual' : 'inherent',
+                        'assessment_type' => $type,
                         'likelihood' => $likelihood,
                         'impact' => $impact,
                         'score' => $likelihood * $impact,
@@ -112,9 +119,9 @@ class DemoCrossLinkSeeder extends Seeder
                         'risk_id' => $risk->id,
                         'title' => 'Treatment plan: '.str($risk->title)->limit(60),
                         'description' => 'Planned actions to bring the risk within appetite.',
-                        'strategy' => $strategies[$i % 4],
+                        'strategy' => $risk->treatment_strategy ?: $strategies[$i % 4],
                         'status' => $status,
-                        'assigned_to' => $userId,
+                        'assigned_to' => $risk->risk_owner_id ?: $userId,
                         'due_date' => now()->addDays(30 + $i * 15)->toDateString(),
                         'priority' => ($i % 5) + 1,
                         'completion_percentage' => $status === 'completed' ? 100 : ($status === 'in_progress' ? rand(20, 80) : 0),
@@ -125,6 +132,8 @@ class DemoCrossLinkSeeder extends Seeder
                     ]);
                 }
             }
+
+            $this->linkRiskContext($orgId, $userId);
 
             // Incident response procedures
             if (! IncidentResponseProcedure::withoutGlobalScopes()->where('organization_id', $orgId)->exists()) {
@@ -183,6 +192,83 @@ class DemoCrossLinkSeeder extends Seeder
                     ]);
                 }
             }
+        }
+    }
+
+    /**
+     * Risk-centric links: threats that realise each risk, remediation issues
+     * raised against risks, and FAIR scenarios quantifying their register risk.
+     */
+    private function linkRiskContext(int $orgId, ?int $userId): void
+    {
+        $risks = Risk::withoutGlobalScopes()->where('organization_id', $orgId)
+            ->with('category:id,name')->orderByDesc('inherent_score')->limit(20)->get();
+        if ($risks->isEmpty()) {
+            return;
+        }
+
+        // Threat → risk, matched on taxonomy (risk category ↔ threat categories).
+        if (! ThreatAssessment::withoutGlobalScopes()->where('organization_id', $orgId)->whereNotNull('risk_id')->exists()) {
+            $threatCategories = [
+                'Cyber' => ['malware', 'phishing', 'credential', 'network', 'execution'],
+                'Fraud' => ['fraud'],
+                'Third-Party' => ['third-party', 'supply-chain'],
+                'Data Protection' => ['data-loss', 'insider'],
+                'Regulatory' => ['regulatory'],
+                'Physical' => ['physical'],
+                'Technology' => ['operational', 'cloud'],
+                'Operational Technology' => ['network', 'operational'],
+            ];
+            foreach ($risks as $i => $risk) {
+                $cats = $threatCategories[$risk->category?->name] ?? [];
+                $threats = Threat::withoutGlobalScopes()->where('organization_id', $orgId)
+                    ->whereIn('category', $cats)->orderBy('id')->skip($i % 3)->limit(2)->get();
+                foreach ($threats as $threat) {
+                    $l = $risk->inherent_likelihood ?: 3;
+                    $im = $risk->inherent_impact ?: 3;
+                    ThreatAssessment::create([
+                        'organization_id' => $orgId,
+                        'threat_id' => $threat->id,
+                        'risk_id' => $risk->id,
+                        'assessed_by' => $userId,
+                        'likelihood' => $l,
+                        'impact' => $im,
+                        'score' => $l * $im,
+                        'analysis' => "{$threat->name} is a credible path to: {$risk->title}.",
+                        'assessment_date' => now()->subDays(20 + $i)->toDateString(),
+                    ]);
+                }
+            }
+        }
+
+        // Risk-sourced issues seeded without a source record get attached to the highest-scored risks.
+        $orphans = DB::table('issues')->where('organization_id', $orgId)
+            ->where('source_type', 'risk')->whereNull('source_id')->pluck('id');
+        foreach ($orphans as $i => $issueId) {
+            DB::table('issues')->where('id', $issueId)->update(['source_id' => $risks[$i % $risks->count()]->id]);
+        }
+
+        // FAIR scenarios quantify their register risk; the register ALE/SLE follow the simulation.
+        $fairLinks = [
+            'Core banking ransomware' => 'Ransomware on Finacle',
+            'NDPA Article 39' => 'NDPA §39',
+            'Vendor compromise' => 'Interswitch',
+        ];
+        $monteCarlo = app(FairMonteCarloService::class);
+        foreach ($fairLinks as $scenarioName => $riskTitle) {
+            $scenario = FairScenario::withoutGlobalScopes()->where('organization_id', $orgId)
+                ->whereNull('risk_id')->where('name', 'like', "%{$scenarioName}%")->first();
+            $risk = Risk::withoutGlobalScopes()->where('organization_id', $orgId)
+                ->where('title', 'like', "%{$riskTitle}%")->first();
+            if (! $scenario || ! $risk) {
+                continue;
+            }
+            $scenario->update(['risk_id' => $risk->id]);
+            $result = $monteCarlo->simulate($scenario, seed: crc32($scenario->name));
+            $risk->update([
+                'fair_annual_loss_expectancy' => $result['ale_mean_ngn'],
+                'fair_single_loss_expectancy' => $result['sle_ngn'],
+            ]);
         }
     }
 }

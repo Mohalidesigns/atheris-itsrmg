@@ -4,14 +4,18 @@ import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
+import { ratingColor, toDateInput } from '@/Utils/risk';
+
+const DIMENSIONS = ['financial', 'operational', 'reputational', 'regulatory', 'safety'];
 
 export default function EditRiskAssessment({ assessment, likelihoodLabels = {}, impactLabels = {} }) {
     const { data, setData, put, processing, errors } = useForm({
         likelihood: assessment.likelihood || '',
         impact: assessment.impact || '',
+        ...Object.fromEntries(DIMENSIONS.map((d) => [`impact_${d}`, assessment[`impact_${d}`] || ''])),
         justification: assessment.justification || '',
         notes: assessment.notes || '',
-        next_review_date: assessment.next_review_date ? String(assessment.next_review_date).slice(0, 10) : '',
+        next_review_date: toDateInput(assessment.next_review_date),
     });
 
     const score = data.likelihood && data.impact ? data.likelihood * data.impact : null;
@@ -63,10 +67,29 @@ export default function EditRiskAssessment({ assessment, likelihoodLabels = {}, 
                                     <InputLabel value="Score" />
                                     <div className="mt-1 h-[42px] flex items-center">
                                         {score ? (
-                                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-lg font-bold font-mono-data text-white text-lg bg-[#0A1F44]">{score}</span>
+                                            <span className="inline-flex items-center justify-center w-10 h-10 rounded-lg font-bold font-mono-data text-white text-lg" style={{ backgroundColor: ratingColor(score) }}>{score}</span>
                                         ) : <span className="text-sm text-gray-400">--</span>}
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {assessment.methodology === 'qualitative' && (
+                            <div>
+                                <h5 className="text-xs font-semibold text-[#718096] uppercase mb-2">Impact Breakdown (Optional)</h5>
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                    {DIMENSIONS.map(dim => (
+                                        <div key={dim}>
+                                            <label className="text-xs text-[#718096] capitalize">{dim}</label>
+                                            <select value={data[`impact_${dim}`]} onChange={e => setData(`impact_${dim}`, parseInt(e.target.value) || '')}
+                                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-xs py-1.5">
+                                                <option value="">--</option>
+                                                {[1, 2, 3, 4, 5].map(v => <option key={v} value={v}>{v}</option>)}
+                                            </select>
+                                        </div>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-[#718096] mt-2">Saving re-scores the risk's {assessment.assessment_type} position if this is its latest {assessment.assessment_type} assessment.</p>
                             </div>
                         )}
 

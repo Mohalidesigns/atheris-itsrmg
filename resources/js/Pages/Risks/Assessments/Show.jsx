@@ -3,6 +3,8 @@ import { Head, Link, router } from '@inertiajs/react';
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { RatingBadge, ScoreDisplay } from '@/Components/Risk/RiskBadge';
 
+import { formatDate } from '@/Utils/risk';
+
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 const ngn = (n) => n == null ? null : new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(n));
 
@@ -17,7 +19,7 @@ function DetailRow({ label, value }) {
 
 export default function ShowRiskAssessment({ assessment, likelihoodLabels = {}, impactLabels = {} }) {
     const destroy = () => {
-        if (confirm('Delete this assessment record? This cannot be undone.')) {
+        if (confirm('Delete this assessment? If it set the risk\'s current score, the risk reverts to its previous assessment.')) {
             router.delete(route('risk-assessments.destroy', assessment.id));
         }
     };
@@ -72,7 +74,7 @@ export default function ShowRiskAssessment({ assessment, likelihoodLabels = {}, 
                 <div className="px-6 py-2">
                     <DetailRow label="Risk" value={assessment.risk ? `${assessment.risk.risk_id_code} — ${assessment.risk.title}` : null} />
                     <DetailRow label="Assessor" value={assessment.assessor?.name} />
-                    <DetailRow label="Assessment Date" value={assessment.assessment_date ? new Date(assessment.assessment_date).toLocaleDateString() : null} />
+                    <DetailRow label="Assessment Date" value={formatDate(assessment.assessment_date)} />
                     {assessment.methodology === 'qualitative' && (
                         <>
                             <DetailRow label="Likelihood" value={assessment.likelihood != null ? `${assessment.likelihood} — ${likelihoodLabels[assessment.likelihood] || ''}` : null} />
@@ -81,6 +83,7 @@ export default function ShowRiskAssessment({ assessment, likelihoodLabels = {}, 
                             <DetailRow label="Operational Impact" value={assessment.impact_operational} />
                             <DetailRow label="Reputational Impact" value={assessment.impact_reputational} />
                             <DetailRow label="Regulatory Impact" value={assessment.impact_regulatory} />
+                            <DetailRow label="Safety Impact" value={assessment.impact_safety} />
                         </>
                     )}
                     {assessment.methodology === 'fair' && (
@@ -93,8 +96,8 @@ export default function ShowRiskAssessment({ assessment, likelihoodLabels = {}, 
                     )}
                     <DetailRow label="Justification" value={assessment.justification} />
                     <DetailRow label="Notes" value={assessment.notes} />
-                    <DetailRow label="Next Review" value={assessment.next_review_date ? new Date(assessment.next_review_date).toLocaleDateString() : null} />
-                    <DetailRow label="Created" value={new Date(assessment.created_at).toLocaleString()} />
+                    <DetailRow label="Next Review" value={formatDate(assessment.next_review_date)} />
+                    <DetailRow label="Created" value={formatDate(assessment.created_at, true)} />
                 </div>
             </div>
         </AuthenticatedLayout>

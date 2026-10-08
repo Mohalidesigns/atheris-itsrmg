@@ -59,6 +59,7 @@ use App\Models\Vendor;
 use App\Models\Workflow;
 use App\Models\WorkflowInstance;
 use App\Models\WorkflowTask;
+use App\Services\FairMonteCarloService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -898,34 +899,31 @@ class AtherisPlatformSeeder extends Seeder
 
     private function fair(): void
     {
-        if (FairScenario::count() > 0) {
-            return;
-        }
-        $scenarios = [
-            ['DDoS against USSD channel', '₦10m - ₦250m impact per hour of downtime'],
-            ['Core banking ransomware event', '₦500m - ₦5bn impact with 72h recovery'],
-            ['NDPA Article 39 breach', '₦10m - ₦1bn regulatory fine plus remediation'],
-            ['Vendor compromise (Interswitch)', '₦50m - ₦2bn cross-channel impact'],
-        ];
-        foreach ($scenarios as [$name, $desc]) {
-            $s = FairScenario::create([
-                'organization_id' => $this->orgId,
-                'name' => $name, 'loss_event_description' => $desc,
-                'frequency_distribution' => ['min' => 0.1, 'most' => 0.5, 'max' => 2],
-                'magnitude_distribution' => ['min' => 10_000_000, 'most' => 100_000_000, 'max' => 1_000_000_000],
-                'control_effectiveness' => ['percent' => rand(40, 80)],
-                'iterations' => 10_000,
-            ]);
-            $mean = rand(50_000_000, 500_000_000);
-            FairRun::create([
-                'scenario_id' => $s->id,
-                'ale_mean_ngn' => $mean,
-                'ale_median_ngn' => $mean * 0.9,
-                'ale_p95_ngn' => $mean * 2.3,
-                'ale_p99_ngn' => $mean * 3.6,
-                'histogram' => collect(range(1, 20))->map(fn () => rand(20, 800))->toArray(),
-                'ran_at' => now()->subDays(rand(0, 30)),
-            ]);
+        if (! FairScenario::where('organization_id', $this->orgId)->exists()) {
+            // [name, description, frequency (events/yr), magnitude (₦), control effectiveness %]
+            // Risk links are made by DemoCrossLinkSeeder once the bank registers exist.
+            $scenarios = [
+                ['DDoS against USSD channel', '₦10m - ₦250m impact per hour of downtime', [0.5, 2, 6], [10_000_000, 60_000_000, 250_000_000], 55],
+                ['Core banking ransomware event', '₦500m - ₦5bn impact with 72h recovery', [0.05, 0.2, 0.6], [500_000_000, 1_500_000_000, 5_000_000_000], 63],
+                ['NDPA Article 39 breach', '₦10m - ₦1bn regulatory fine plus remediation', [0.1, 0.4, 1.5], [10_000_000, 150_000_000, 1_000_000_000], 48],
+                ['Vendor compromise (Interswitch)', '₦50m - ₦2bn cross-channel impact', [0.05, 0.25, 1], [50_000_000, 400_000_000, 2_000_000_000], 52],
+            ];
+            $monteCarlo = app(FairMonteCarloService::class);
+            foreach ($scenarios as $i => [$name, $desc, [$fMin, $fMost, $fMax], [$mMin, $mMost, $mMax], $ctrl]) {
+                $s = FairScenario::create([
+                    'organization_id' => $this->orgId,
+                    'name' => $name, 'loss_event_description' => $desc,
+                    'frequency_distribution' => ['min' => $fMin, 'most' => $fMost, 'max' => $fMax],
+                    'magnitude_distribution' => ['min' => $mMin, 'most' => $mMost, 'max' => $mMax],
+                    'control_effectiveness' => ['percent' => $ctrl],
+                    'iterations' => 10_000,
+                ]);
+                $result = $monteCarlo->simulate($s, seed: 1000 + $i);
+                FairRun::create(collect($result)->only(['ale_mean_ngn', 'ale_median_ngn', 'ale_p95_ngn', 'ale_p99_ngn', 'histogram'])->all() + [
+                    'scenario_id' => $s->id,
+                    'ran_at' => now()->subDays(rand(0, 30)),
+                ]);
+            }
         }
 
         // NDPC fine bands

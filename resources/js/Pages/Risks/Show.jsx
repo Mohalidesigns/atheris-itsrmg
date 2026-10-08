@@ -2,11 +2,13 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import StatusBadge from '@/Components/StatusBadge';
 import KpiCard from '@/Components/KpiCard';
-import { Head, Link } from '@inertiajs/react';
+import Modal from '@/Components/Modal';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState, useMemo } from 'react';
-import { PencilIcon, PlusIcon, ClockIcon, ShieldCheckIcon, BugAntIcon, ServerStackIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
-import { RatingBadge, ScoreDisplay } from '@/Components/Risk/RiskBadge';
+import { PencilIcon, PlusIcon, ClockIcon, TrashIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
+import { ScoreDisplay, TreatmentStatusBadge } from '@/Components/Risk/RiskBadge';
 import AtherisFlow from '@/Components/AtherisFlow';
+import { APPETITE_LABELS, SOURCE_LABELS, formatDate, humanize, ratingFor } from '@/Utils/risk';
 
 const TABS = [
     ['overview', 'Overview'],
@@ -35,54 +37,76 @@ function TabButton({ active, children, onClick, count }) {
     );
 }
 
-const ngn = (n) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(n || 0));
+function Empty({ children }) {
+    return <p className="text-xs text-[#718096] text-center py-8">{children}</p>;
+}
 
-export default function ShowRisk({ risk }) {
+const ngn = (n) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(Number(n || 0));
+const toneFor = (rating) => ({ critical: 'red', high: 'amber', medium: 'gold' }[rating] || 'green');
+const effectivenessTone = (e) => (e === 'effective' ? 'pass' : e === 'partially_effective' ? 'warn' : e ? 'fail' : 'draft');
+
+function LinkThreatForm({ risk, availableThreats, likelihoodLabels, impactLabels }) {
+    const blank = { threat_id: '', risk_id: risk.id, likelihood: '', impact: '', analysis: '' };
+    const { data, setData, post, processing, errors } = useForm(blank);
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('threats.assessments.store', data.threat_id || 0), {
+            preserveScroll: true,
+            onSuccess: () => setData(blank),
+        });
+    };
+    return (
+        <form onSubmit={submit} className="mt-3 grid grid-cols-1 md:grid-cols-5 gap-2 items-start">
+            <div className="md:col-span-2">
+                <select value={data.threat_id} onChange={(e) => setData('threat_id', e.target.value)} required
+                    className="w-full text-sm border-gray-200 rounded-lg">
+                    <option value="">Select a threat…</option>
+                    {availableThreats.map((t) => <option key={t.id} value={t.id}>{t.threat_id_code} — {t.name}</option>)}
+                </select>
+            </div>
+            <select value={data.likelihood} onChange={(e) => setData('likelihood', e.target.value)} className="text-sm border-gray-200 rounded-lg">
+                <option value="">Likelihood…</option>
+                {Object.entries(likelihoodLabels).map(([v, l]) => <option key={v} value={v}>{v} - {l}</option>)}
+            </select>
+            <select value={data.impact} onChange={(e) => setData('impact', e.target.value)} className="text-sm border-gray-200 rounded-lg">
+                <option value="">Impact…</option>
+                {Object.entries(impactLabels).map(([v, l]) => <option key={v} value={v}>{v} - {l}</option>)}
+            </select>
+            <button type="submit" disabled={processing || !data.threat_id}
+                className="px-3 py-2 text-sm rounded-lg bg-[#0A1F44] text-white disabled:opacity-50">Link threat</button>
+            <input type="text" value={data.analysis} onChange={(e) => setData('analysis', e.target.value)}
+                placeholder="Analysis — how this threat realises the risk (optional)"
+                className="md:col-span-5 text-sm border-gray-200 rounded-lg" />
+            {Object.values(errors).length > 0 && (
+                <p className="md:col-span-5 text-xs text-red-600">{Object.values(errors).join(' ')}</p>
+            )}
+        </form>
+    );
+}
+
+export default function ShowRisk({ risk, threats = [], vulnerabilities = [], audit = [], fair = null, availableThreats = [], likelihoodLabels = {}, impactLabels = {} }) {
     const [tab, setTab] = useState('overview');
     const [controlUplift, setControlUplift] = useState(50);
+    const [confirmingDelete, setConfirmingDelete] = useState(false);
+    const can = usePage().props.auth?.user?.permissions || [];
+    const isSuper = (usePage().props.auth?.user?.roles || []).some((r) => r === 'Super Admin');
+    const allowed = (p) => isSuper || can.includes(p);
 
     const recomputedResidual = useMemo(() => {
         const i = Number(risk.inherent_score || 0);
         return Math.max(1, Math.round(i * (1 - controlUplift / 100)));
     }, [controlUplift, risk.inherent_score]);
 
-    // Demo-linked records so every tab has content
-    const linkedControls = (risk.controls || []).length > 0 ? risk.controls : [
-        { id: 1, control_code: 'KHB-CTL-007', title: 'Privileged Access — MFA enforced', effectiveness: 'effective' },
-        { id: 2, control_code: 'KHB-CTL-012', title: 'Endpoint Detection — Defender agent', effectiveness: 'partially_effective' },
-        { id: 3, control_code: 'KHB-CTL-018', title: 'Email gateway DLP', effectiveness: 'effective' },
-    ];
-    const linkedIssues = risk.issues || [
-        { id: 1, title: 'MFA rollout incomplete for 12 admin accounts', status: 'in_progress', severity: 'high', due_date: '2026-05-10' },
-        { id: 2, title: 'DLP rule refresh overdue', status: 'open', severity: 'moderate', due_date: '2026-05-22' },
-    ];
-    const linkedAssets = risk.assets || [
-        { id: 1, asset_id_code: 'KHB-AST-IN-001', name: 'Active Directory — Primary DC', criticality: 'critical' },
-        { id: 2, asset_id_code: 'KHB-AST-CB-001', name: 'Finacle Core Banking (Prod)', criticality: 'critical' },
-    ];
-    const linkedThreats = risk.threats || [
-        { id: 1, threat_id_code: 'KHB-THR-011', name: 'Valid accounts — brute force (T1110.001)', severity: 'high' },
-        { id: 2, threat_id_code: 'KHB-THR-017', name: 'Lateral movement — SMB (T1021.002)', severity: 'high' },
-    ];
-    const linkedVulns = risk.vulnerabilities || [
-        { id: 1, vuln_id_code: 'KHB-VLN-001', title: 'Microsoft Outlook RCE (MonikerLink)', severity: 'critical', cvss: 9.8 },
-    ];
-    const evidence = risk.evidence || [
-        { id: 1, file_path: 'evidence/MFA-coverage-Q1-2026.pdf', sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', bytes: 1024000, retention_until: '2033-04-20' },
-        { id: 2, file_path: 'evidence/AD-privileged-review-Q1-2026.xlsx', sha256: '2fd4e1c67a2d28fced849ee1bb76e7391b93eb12ab99a18a32db3d2e8e7ecf20', bytes: 540000, retention_until: '2033-04-20' },
-    ];
-    const history = risk.score_history || [
-        { id: 1, recorded_at: '2026-01-15', inherent_score: 25, residual_score: 12, change_reason: 'Initial assessment' },
-        { id: 2, recorded_at: '2026-02-28', inherent_score: 25, residual_score: 9, change_reason: 'Deployed MFA on priv accounts' },
-        { id: 3, recorded_at: '2026-04-10', inherent_score: 25, residual_score: 6, change_reason: 'Added DLP rule on priv containers' },
-    ];
-    const auditTrail = risk.audit || [
-        { id: 1, ts: '2026-04-18 09:14', actor: 'Fatima Bello', action: 'update', summary: 'Residual score recalculated (9 → 6)' },
-        { id: 2, ts: '2026-04-15 14:02', actor: 'Adaeze Kunle-Usman', action: 'approve', summary: 'Treatment plan approved' },
-        { id: 3, ts: '2026-04-10 08:33', actor: 'Chidi Okonkwo', action: 'comment', summary: 'Audit note: PIR evidence uploaded' },
-    ];
+    const controls = risk.controls || [];
+    const assets = risk.assets || [];
+    const issues = risk.issues || [];
     const treatments = risk.treatments || [];
     const assessments = risk.assessments || [];
+    const history = risk.score_history || [];
+    const threatAssessments = risk.threat_assessments || [];
+    const run = fair?.run;
+
+    const destroy = () => router.delete(route('risks.destroy', risk.id));
 
     return (
         <AuthenticatedLayout header={`Risk ${risk.risk_id_code}`}>
@@ -97,42 +121,55 @@ export default function ShowRisk({ risk }) {
                     <span className="font-mono text-sm bg-[#0A1F44]/5 text-[#0A1F44] px-2 py-0.5 rounded font-semibold">{risk.risk_id_code}</span>
                     {risk.title}
                 </span>}
-                subtitle={`${risk.category?.name || 'Uncategorised'} · Owner: ${risk.owner?.name || '—'} · Status: ${risk.status}`}
+                subtitle={`${risk.category?.name || 'Uncategorised'} · Owner: ${risk.owner?.name || 'Unassigned'} · Status: ${humanize(risk.status)}`}
                 actions={<>
-                    <Link href={route('risks.edit', risk.id)}
-                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-200 text-sm hover:bg-gray-50">
-                        <PencilIcon className="w-4 h-4" /> Edit
-                    </Link>
-                    <Link href={route('risk-treatments.create', { risk_id: risk.id })}
-                        className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-[#0A1F44] text-white text-sm">
-                        <PlusIcon className="w-4 h-4" /> Add Treatment
-                    </Link>
+                    {allowed('edit risks') && (
+                        <Link href={route('risks.edit', risk.id)}
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-200 text-sm hover:bg-gray-50">
+                            <PencilIcon className="w-4 h-4" /> Edit
+                        </Link>
+                    )}
+                    {allowed('create risk-assessments') && (
+                        <Link href={route('risk-assessments.create', { risk_id: risk.id })}
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-gray-200 text-sm hover:bg-gray-50">
+                            <ClipboardDocumentCheckIcon className="w-4 h-4" /> New Assessment
+                        </Link>
+                    )}
+                    {allowed('create risk-treatments') && (
+                        <Link href={route('risk-treatments.create', { risk_id: risk.id })}
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-[#0A1F44] text-white text-sm">
+                            <PlusIcon className="w-4 h-4" /> Add Treatment
+                        </Link>
+                    )}
+                    {allowed('delete risks') && (
+                        <button onClick={() => setConfirmingDelete(true)}
+                            className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-red-200 text-red-700 text-sm hover:bg-red-50">
+                            <TrashIcon className="w-4 h-4" /> Archive
+                        </button>
+                    )}
                 </>}
             />
 
-            {/* Header cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-                <KpiCard label="Status" value={risk.status} tone="white" />
-                <KpiCard label="Inherent" value={risk.inherent_score || '—'} sublabel={risk.inherent_rating} tone={risk.inherent_rating === 'critical' ? 'red' : risk.inherent_rating === 'high' ? 'amber' : 'navy'} />
-                <KpiCard label="Residual" value={risk.residual_score || '—'} sublabel={risk.residual_rating} tone={risk.residual_rating === 'critical' ? 'red' : risk.residual_rating === 'high' ? 'amber' : 'green'} />
-                <KpiCard label="Treatment" value={risk.treatment_strategy || '—'} tone="white" />
-                <KpiCard label="ALE" value={ngn(risk.fair_annual_loss_expectancy)} tone="gold" />
-                <KpiCard label="SLE" value={ngn(risk.fair_single_loss_expectancy)} tone="white" />
+                <KpiCard label="Status" value={humanize(risk.status)} tone="white" sublabel={risk.review_date ? `Review ${formatDate(risk.review_date)}` : null} />
+                <KpiCard label="Inherent" value={risk.inherent_score || '—'} sublabel={humanize(risk.inherent_rating)} tone={risk.inherent_score ? toneFor(risk.inherent_rating) : 'white'} />
+                <KpiCard label="Residual" value={risk.residual_score || '—'} sublabel={humanize(risk.residual_rating)} tone={risk.residual_score ? toneFor(risk.residual_rating) : 'white'} />
+                <KpiCard label="Treatment" value={humanize(risk.treatment_strategy)} sublabel={risk.treatment_due_date ? `Due ${formatDate(risk.treatment_due_date)}` : null} tone="white" />
+                <KpiCard label="Appetite" value={risk.risk_appetite ? humanize(risk.risk_appetite) : '—'} sublabel={risk.risk_appetite ? APPETITE_LABELS[risk.risk_appetite] : 'Not set'} tone={risk.risk_appetite === 'above' ? 'red' : 'white'} />
+                <KpiCard label="ALE" value={risk.fair_annual_loss_expectancy ? ngn(risk.fair_annual_loss_expectancy) : '—'} sublabel={risk.fair_single_loss_expectancy ? `SLE ${ngn(risk.fair_single_loss_expectancy)}` : 'Not quantified'} tone="gold" />
             </div>
 
-            {/* Tabs */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="border-b border-gray-100 px-2 overflow-x-auto">
                     <div className="flex gap-1 min-w-max">
                         {TABS.map(([k, label]) => {
                             const count = ({
                                 assessment: assessments.length,
-                                controls: linkedControls.length,
+                                controls: controls.length,
                                 treatments: treatments.length,
-                                issues: linkedIssues.length,
-                                evidence: evidence.length,
+                                issues: issues.length,
                                 history: history.length,
-                                audit: auditTrail.length,
+                                audit: audit.length,
                             })[k];
                             return <TabButton key={k} active={tab === k} onClick={() => setTab(k)} count={count}>{label}</TabButton>;
                         })}
@@ -141,26 +178,75 @@ export default function ShowRisk({ risk }) {
 
                 <div className="p-5 text-sm">
                     {tab === 'overview' && (
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                             <div>
                                 <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">Description</h4>
-                                <p className="text-[#2D3748]">{risk.description || '—'}</p>
+                                <p className="text-[#2D3748] whitespace-pre-line">{risk.description || '—'}</p>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div><h4 className="text-xs text-[#718096] uppercase font-medium">Category</h4><p className="text-[#2D3748]">{risk.category?.name || '—'}</p></div>
-                                <div><h4 className="text-xs text-[#718096] uppercase font-medium">Owner</h4><p className="text-[#2D3748]">{risk.owner?.name || '—'}</p></div>
-                                <div><h4 className="text-xs text-[#718096] uppercase font-medium">Source</h4><p className="text-[#2D3748] capitalize">{risk.source || '—'}</p></div>
-                                <div><h4 className="text-xs text-[#718096] uppercase font-medium">Appetite</h4><p className="text-[#2D3748] capitalize">{risk.risk_appetite || '—'}</p></div>
+                                <div><h4 className="text-xs text-[#718096] uppercase font-medium">Owner</h4><p className="text-[#2D3748]">{risk.owner?.name || 'Unassigned'}</p></div>
+                                <div><h4 className="text-xs text-[#718096] uppercase font-medium">Source</h4><p className="text-[#2D3748]">{SOURCE_LABELS[risk.source] || humanize(risk.source)}</p></div>
+                                <div><h4 className="text-xs text-[#718096] uppercase font-medium">Registered</h4><p className="text-[#2D3748]">{formatDate(risk.created_at)} by {risk.creator?.name || '—'}</p></div>
                             </div>
+
                             <div className="bg-gray-50 rounded-lg p-4">
-                                <h4 className="text-xs text-[#718096] uppercase font-medium mb-2">Linked records (summary)</h4>
-                                <div className="flex items-center gap-3 flex-wrap text-xs">
-                                    <span className="px-2 py-1 rounded bg-[#0A1F44]/5 text-[#0A1F44]">{linkedThreats.length} Threats</span>
-                                    <span className="px-2 py-1 rounded bg-[#0A1F44]/5 text-[#0A1F44]">{linkedVulns.length} Vulnerabilities</span>
-                                    <span className="px-2 py-1 rounded bg-[#0A1F44]/5 text-[#0A1F44]">{linkedAssets.length} Assets</span>
-                                    <span className="px-2 py-1 rounded bg-[#0A1F44]/5 text-[#0A1F44]">{linkedControls.length} Controls</span>
-                                    <span className="px-2 py-1 rounded bg-[#0A1F44]/5 text-[#0A1F44]">{linkedIssues.length} Issues</span>
-                                    <span className="px-2 py-1 rounded bg-[#0A1F44]/5 text-[#0A1F44]">{evidence.length} Evidence</span>
+                                <h4 className="text-xs text-[#718096] uppercase font-medium mb-2">Linked records</h4>
+                                <div className="flex items-center gap-2 flex-wrap text-xs">
+                                    {[
+                                        [threats.length, 'Threats', 'graph'],
+                                        [vulnerabilities.length, 'Vulnerabilities', 'graph'],
+                                        [assets.length, 'Assets', 'graph'],
+                                        [controls.length, 'Controls', 'controls'],
+                                        [treatments.length, 'Treatments', 'treatments'],
+                                        [issues.length, 'Issues', 'issues'],
+                                    ].map(([n, label, target]) => (
+                                        <button key={label} onClick={() => setTab(target)}
+                                            className={`px-2 py-1 rounded ${n ? 'bg-[#0A1F44]/5 text-[#0A1F44] hover:bg-[#0A1F44]/10' : 'bg-white text-[#A0AEC0] border border-dashed border-gray-200'}`}>
+                                            {n} {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                                <div>
+                                    <h4 className="text-xs text-[#718096] uppercase font-medium mb-2">Affected assets</h4>
+                                    {assets.length === 0 ? <p className="text-xs text-[#718096]">No assets linked — use <b>Edit</b> to link affected assets.</p> : (
+                                        <ul className="divide-y divide-gray-100">
+                                            {assets.map((a) => (
+                                                <li key={a.id} className="py-2 flex items-center justify-between">
+                                                    <Link href={route('assets.show', a.id)} className="hover:underline">
+                                                        <span className="font-mono text-xs text-[#0A1F44] mr-2">{a.asset_id_code}</span>{a.name}
+                                                    </Link>
+                                                    <span className="text-xs text-[#718096]">{humanize(a.criticality)}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                                <div>
+                                    <h4 className="text-xs text-[#718096] uppercase font-medium mb-2">Threats realising this risk</h4>
+                                    {threatAssessments.length === 0 ? <p className="text-xs text-[#718096]">No threats linked yet.</p> : (
+                                        <ul className="divide-y divide-gray-100">
+                                            {threatAssessments.map((ta) => (
+                                                <li key={ta.id} className="py-2 flex items-center justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        {ta.threat ? (
+                                                            <Link href={route('threats.show', ta.threat.id)} className="hover:underline">
+                                                                <span className="font-mono text-xs text-[#0A1F44] mr-2">{ta.threat.threat_id_code}</span>{ta.threat.name}
+                                                            </Link>
+                                                        ) : '—'}
+                                                        <p className="text-xs text-[#718096] truncate">{ta.analysis || `Assessed ${formatDate(ta.assessment_date)} by ${ta.assessor?.name || '—'}`}</p>
+                                                    </div>
+                                                    <ScoreDisplay score={ta.score} />
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    {allowed('edit threats') && availableThreats.length > 0 && (
+                                        <LinkThreatForm risk={risk} availableThreats={availableThreats} likelihoodLabels={likelihoodLabels} impactLabels={impactLabels} />
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -169,90 +255,116 @@ export default function ShowRisk({ risk }) {
                     {tab === 'assessment' && (
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <KpiCard label="Inherent Likelihood" value={risk.inherent_likelihood} tone="white" />
-                                <KpiCard label="Inherent Impact" value={risk.inherent_impact} tone="white" />
-                                <KpiCard label="Inherent Score" value={risk.inherent_score} tone="navy" />
-                                <KpiCard label="Residual Score" value={risk.residual_score} tone="green" />
+                                <KpiCard label="Inherent Likelihood" value={risk.inherent_likelihood ? `${risk.inherent_likelihood} · ${likelihoodLabels[risk.inherent_likelihood] || ''}` : '—'} tone="white" />
+                                <KpiCard label="Inherent Impact" value={risk.inherent_impact ? `${risk.inherent_impact} · ${impactLabels[risk.inherent_impact] || ''}` : '—'} tone="white" />
+                                <KpiCard label="Inherent Score" value={risk.inherent_score || '—'} sublabel={humanize(risk.inherent_rating)} tone="navy" />
+                                <KpiCard label="Residual Score" value={risk.residual_score || '—'} sublabel={humanize(risk.residual_rating)} tone="green" />
                             </div>
                             <div className="bg-gray-50 rounded-lg p-4">
-                                <h4 className="text-xs text-[#718096] uppercase font-medium mb-2">What-if scenario slider — Control-effectiveness uplift</h4>
+                                <h4 className="text-xs text-[#718096] uppercase font-medium mb-2">What-if scenario — control-effectiveness uplift</h4>
                                 <input type="range" min="0" max="90" step="5" value={controlUplift}
                                     onChange={(e) => setControlUplift(Number(e.target.value))}
-                                    className="w-full accent-[#0A1F44]" />
+                                    className="w-full accent-[#0A1F44]" aria-label="Control effectiveness uplift" />
                                 <div className="flex items-center justify-between text-xs mt-1">
                                     <span className="text-[#718096]">Uplift: <span className="font-semibold text-[#0A1F44]">{controlUplift}%</span></span>
-                                    <span className="text-[#718096]">Recomputed residual: <span className="font-semibold text-[#2D7D46]">{recomputedResidual}</span></span>
+                                    <span className="text-[#718096]">Projected residual: <span className="font-semibold text-[#2D7D46]">{recomputedResidual}</span> ({humanize(ratingFor(recomputedResidual))})</span>
                                 </div>
-                                <p className="text-[10px] text-[#718096] mt-2">What-if based on inherent score × (1 − uplift). Not persisted; demonstrates the Atheris FAIR-aware residual calculator.</p>
+                                <p className="text-[10px] text-[#718096] mt-2">Projection = inherent score × (1 − uplift). Not saved — record a <b>New Assessment</b> to persist a score.</p>
                             </div>
                             {assessments.length > 0 ? (
                                 <ul className="divide-y divide-gray-100">
                                     {assessments.map((a) => (
                                         <li key={a.id} className="py-3">
                                             <div className="flex items-center justify-between">
-                                                <span className="capitalize text-xs bg-gray-100 px-2 py-0.5 rounded">{a.methodology || 'qualitative'}</span>
-                                                <span className="text-xs text-[#718096]">{a.assessment_date}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="capitalize text-xs bg-gray-100 px-2 py-0.5 rounded">{humanize(a.methodology)}</span>
+                                                    <span className="capitalize text-xs bg-gray-100 px-2 py-0.5 rounded">{humanize(a.assessment_type)}</span>
+                                                    {a.score && <ScoreDisplay score={a.score} />}
+                                                </div>
+                                                <span className="text-xs text-[#718096]">{formatDate(a.assessment_date)}</span>
                                             </div>
-                                            <p className="text-[#2D3748] mt-1">{a.justification || 'Periodic assessment.'}</p>
-                                            <p className="text-xs text-[#718096]">By {a.assessor?.name}</p>
+                                            <p className="text-[#2D3748] mt-1">{a.justification || 'No justification recorded.'}</p>
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-xs text-[#718096]">By {a.assessor?.name || '—'}</p>
+                                                <Link href={route('risk-assessments.show', a.id)} className="text-xs text-[#1A365D] hover:underline">View assessment →</Link>
+                                            </div>
                                         </li>
                                     ))}
                                 </ul>
                             ) : (
-                                <p className="text-xs text-[#718096] text-center py-8">No recorded assessments yet — use the What-if above and click <b>Edit</b> to persist a new score.</p>
+                                <Empty>No recorded assessments yet — click <b>New Assessment</b> to score this risk.</Empty>
                             )}
                         </div>
                     )}
 
                     {tab === 'graph' && (
-                        <div>
-                            <p className="text-xs text-[#718096] mb-2">Threat → Risk → Control → Vulnerability → Asset relationship graph. Drag nodes · zoom · pan · mini-map.</p>
-                            <AtherisFlow
-                                nodes={[
-                                    { id: 'risk', label: risk.risk_id_code + ' — ' + (risk.title || '').slice(0, 30), type: 'risk' },
-                                    ...linkedThreats.map((t) => ({ id: 't-' + t.id, label: (t.threat_id_code || t.name || 'Threat').slice(0, 28), type: 'threat' })),
-                                    ...linkedVulns.map((v) => ({ id: 'v-' + v.id, label: (v.vuln_id_code || v.cve_id || v.title || 'Vuln').slice(0, 28), type: 'vulnerability' })),
-                                    ...linkedControls.map((c) => ({ id: 'c-' + c.id, label: (c.control_code || c.title || 'Control').slice(0, 28), type: 'control' })),
-                                    ...linkedAssets.map((a) => ({ id: 'a-' + a.id, label: (a.asset_id_code || a.name || 'Asset').slice(0, 28), type: 'asset' })),
-                                ]}
-                                edges={[
-                                    ...linkedThreats.map((t) => ({ id: 'et-' + t.id, source: 't-' + t.id, target: 'risk', label: 'exploits', animated: true })),
-                                    ...linkedVulns.map((v) => ({ id: 'ev-' + v.id, source: 'v-' + v.id, target: 'risk', label: 'amplifies' })),
-                                    ...linkedControls.map((c) => ({ id: 'ec-' + c.id, source: 'risk', target: 'c-' + c.id, label: 'mitigated by' })),
-                                    ...linkedAssets.map((a) => ({ id: 'ea-' + a.id, source: 'risk', target: 'a-' + a.id, label: 'affects' })),
-                                ]}
-                                layout="radial"
-                                height={540}
-                            />
-                        </div>
+                        threats.length + vulnerabilities.length + controls.length + assets.length === 0 ? (
+                            <Empty>No threats, vulnerabilities, controls or assets are linked to this risk yet.</Empty>
+                        ) : (
+                            <div>
+                                <p className="text-xs text-[#718096] mb-2">Threat → Risk → Control / Asset ← Vulnerability relationship graph. Drag nodes · zoom · pan.</p>
+                                <AtherisFlow
+                                    nodes={[
+                                        { id: 'risk', label: risk.risk_id_code + ' — ' + (risk.title || '').slice(0, 30), type: 'risk' },
+                                        ...threats.map((t) => ({ id: 't-' + t.id, label: (t.threat_id_code || t.name || 'Threat').slice(0, 28), type: 'threat' })),
+                                        ...vulnerabilities.map((v) => ({ id: 'v-' + v.id, label: (v.vuln_id_code || v.cve_id || v.title || 'Vuln').slice(0, 28), type: 'vulnerability' })),
+                                        ...controls.map((c) => ({ id: 'c-' + c.id, label: (c.control_code || c.title || 'Control').slice(0, 28), type: 'control' })),
+                                        ...assets.map((a) => ({ id: 'a-' + a.id, label: (a.asset_id_code || a.name || 'Asset').slice(0, 28), type: 'asset' })),
+                                    ]}
+                                    edges={[
+                                        ...threats.map((t) => ({ id: 'et-' + t.id, source: 't-' + t.id, target: 'risk', label: 'realises', animated: true })),
+                                        ...controls.map((c) => ({ id: 'ec-' + c.id, source: 'risk', target: 'c-' + c.id, label: 'mitigated by' })),
+                                        ...assets.map((a) => ({ id: 'ea-' + a.id, source: 'risk', target: 'a-' + a.id, label: 'affects' })),
+                                        // Vulnerabilities reach the risk through the assets they sit on.
+                                        ...vulnerabilities.flatMap((v) => (v.asset_ids || [])
+                                            .map((id) => ({ id: `ev-${v.id}-${id}`, source: 'v-' + v.id, target: 'a-' + id, label: 'exposes' }))),
+                                    ]}
+                                    layout="radial"
+                                    height={540}
+                                />
+                            </div>
+                        )
                     )}
 
                     {tab === 'controls' && (
-                        <ul className="divide-y divide-gray-100">
-                            {linkedControls.map((c) => (
-                                <li key={c.id} className="py-3 flex items-center justify-between">
-                                    <div>
-                                        <p className="font-mono text-xs text-[#0A1F44]">{c.control_code}</p>
-                                        <p className="text-[#2D3748]">{c.title}</p>
-                                    </div>
-                                    <StatusBadge status={c.effectiveness === 'effective' ? 'pass' : c.effectiveness === 'partially_effective' ? 'warn' : 'fail'} label={c.effectiveness?.replace('_', ' ')} />
-                                </li>
-                            ))}
-                        </ul>
+                        controls.length === 0 ? <Empty>No controls mapped to this risk.</Empty> : (
+                            <ul className="divide-y divide-gray-100">
+                                {controls.map((c) => (
+                                    <li key={c.id} className="py-3 flex items-center justify-between">
+                                        <Link href={route('controls.show', c.id)} className="hover:underline">
+                                            <p className="font-mono text-xs text-[#0A1F44]">{c.control_code}</p>
+                                            <p className="text-[#2D3748]">{c.title}</p>
+                                        </Link>
+                                        <div className="text-right">
+                                            <StatusBadge status={effectivenessTone(c.effectiveness)} label={humanize(c.effectiveness || 'not_tested')} />
+                                            {c.pivot?.effectiveness && <p className="text-[10px] text-[#718096] mt-1">Against this risk: {humanize(c.pivot.effectiveness)}</p>}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )
                     )}
 
                     {tab === 'treatments' && (
                         treatments.length === 0 ? (
-                            <p className="text-xs text-[#718096] text-center py-8">No treatment plans created yet.</p>
+                            <Empty>No treatment plans created yet — click <b>Add Treatment</b>.</Empty>
                         ) : (
                             <ul className="space-y-3">
                                 {treatments.map((t) => (
-                                    <li key={t.id} className="border border-gray-100 rounded-lg p-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="font-medium">{t.title}</span>
-                                            <StatusBadge status={t.status} />
-                                        </div>
-                                        <div className="text-xs text-[#718096] mt-1">{t.strategy} · due {t.due_date || '—'}</div>
+                                    <li key={t.id} className="border border-gray-100 rounded-lg p-3 hover:border-[#C9A86A]">
+                                        <Link href={route('risk-treatments.show', t.id)} className="block">
+                                            <div className="flex items-center justify-between">
+                                                <span className="font-medium">{t.title}</span>
+                                                <TreatmentStatusBadge status={t.status} overdue={t.is_overdue} />
+                                            </div>
+                                            <div className="flex items-center justify-between text-xs text-[#718096] mt-1">
+                                                <span>{humanize(t.strategy)} · due {formatDate(t.due_date)} · {t.assignee?.name || 'Unassigned'}{t.target_score ? ` · target residual ${t.target_score}` : ''}</span>
+                                                <span>{t.completion_percentage ?? 0}% complete</span>
+                                            </div>
+                                            <div className="h-1.5 bg-gray-100 rounded mt-2">
+                                                <div className="h-1.5 bg-[#2D7D46] rounded" style={{ width: `${t.completion_percentage ?? 0}%` }} />
+                                            </div>
+                                        </Link>
                                     </li>
                                 ))}
                             </ul>
@@ -260,128 +372,127 @@ export default function ShowRisk({ risk }) {
                     )}
 
                     {tab === 'issues' && (
-                        <ul className="divide-y divide-gray-100">
-                            {linkedIssues.map((i) => (
-                                <li key={i.id} className="py-3 flex items-center justify-between">
-                                    <div>
-                                        <p className="text-[#2D3748]">{i.title}</p>
-                                        <p className="text-xs text-[#718096]">Due {i.due_date}</p>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <StatusBadge status={i.severity} />
-                                        <StatusBadge status={i.status} />
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
+                        issues.length === 0 ? <Empty>No remediation issues raised against this risk. <Link href={route('issues.index')} className="text-[#1A365D] underline">Open the issue tracker</Link>.</Empty> : (
+                            <ul className="divide-y divide-gray-100">
+                                {issues.map((i) => (
+                                    <li key={i.id} className="py-3 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-[#2D3748]">{i.title}</p>
+                                            <p className="text-xs text-[#718096]">Due {formatDate(i.due_date)} · {i.owner?.name || 'Unassigned'}</p>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <StatusBadge status={i.severity} label={humanize(i.severity)} />
+                                            <StatusBadge status={i.status} label={humanize(i.status)} />
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )
                     )}
 
                     {tab === 'evidence' && (
-                        <table className="w-full text-sm divide-y divide-gray-100">
-                            <thead className="text-xs uppercase text-[#718096]">
-                                <tr><th className="py-2 text-left">Path</th><th>Size (kB)</th><th>Retention</th><th>Hash</th></tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {evidence.map((e) => (
-                                    <tr key={e.id}>
-                                        <td className="py-2 font-mono text-xs">{e.file_path}</td>
-                                        <td className="text-xs">{Math.round(e.bytes / 1024)}</td>
-                                        <td className="text-xs">{e.retention_until}</td>
-                                        <td className="font-mono text-[10px] text-[#718096] truncate max-w-[180px]">{e.sha256}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div className="space-y-4">
+                            <p className="text-xs text-[#718096]">Evidence for this risk is the evidence held against its mitigating controls and treatment plans.</p>
+                            {controls.length === 0 && treatments.length === 0 ? (
+                                <Empty>No controls or treatments to hold evidence yet.</Empty>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {controls.map((c) => (
+                                        <Link key={c.id} href={route('controls.show', c.id)} className="text-xs px-2 py-1 rounded border border-gray-200 hover:border-[#C9A86A]">
+                                            {c.control_code} evidence →
+                                        </Link>
+                                    ))}
+                                    <Link href={route('evidence-vault.index')} className="text-xs px-2 py-1 rounded bg-[#0A1F44] text-white">Open Evidence Vault →</Link>
+                                </div>
+                            )}
+                        </div>
                     )}
 
                     {tab === 'fair' && (
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <KpiCard label="Mean ALE" value={ngn(risk.fair_annual_loss_expectancy)} tone="gold" />
-                                <KpiCard label="SLE" value={ngn(risk.fair_single_loss_expectancy)} tone="white" />
-                                <KpiCard label="P95 ALE" value={ngn((risk.fair_annual_loss_expectancy || 0) * 2.3)} tone="amber" />
-                                <KpiCard label="P99 ALE" value={ngn((risk.fair_annual_loss_expectancy || 0) * 3.6)} tone="red" />
+                                <KpiCard label="ALE (register)" value={risk.fair_annual_loss_expectancy ? ngn(risk.fair_annual_loss_expectancy) : '—'} tone="gold" />
+                                <KpiCard label="SLE (register)" value={risk.fair_single_loss_expectancy ? ngn(risk.fair_single_loss_expectancy) : '—'} tone="white" />
+                                <KpiCard label="P95 ALE" value={run ? ngn(run.ale_p95_ngn) : '—'} sublabel={run ? 'Latest Monte Carlo run' : 'No simulation run'} tone="amber" />
+                                <KpiCard label="P99 ALE" value={run ? ngn(run.ale_p99_ngn) : '—'} sublabel={run ? formatDate(run.ran_at, true) : null} tone="red" />
                             </div>
-                            <div className="bg-gray-50 rounded-lg p-4">
-                                <h4 className="text-xs text-[#718096] uppercase font-medium mb-3">Monte Carlo distribution (10,000 iterations, Naira)</h4>
-                                <div className="flex items-end gap-1 h-28">
-                                    {Array.from({ length: 20 }).map((_, idx) => {
-                                        const h = Math.max(5, 20 + Math.round(80 * Math.exp(-Math.pow((idx - 8) / 4, 2))));
-                                        return <div key={idx} className="flex-1 bg-[#C9A86A] rounded-t" style={{ height: `${h}%` }} />;
-                                    })}
+                            {run && Array.isArray(run.histogram) && run.histogram.length > 0 ? (
+                                <div className="bg-gray-50 rounded-lg p-4">
+                                    <h4 className="text-xs text-[#718096] uppercase font-medium mb-3">
+                                        {fair.scenario.name} — loss distribution ({Number(fair.scenario.iterations || 0).toLocaleString()} iterations, Naira)
+                                    </h4>
+                                    <div className="flex items-end gap-1 h-28">
+                                        {(() => {
+                                            const counts = run.histogram.map((b) => Number(b.count ?? b.frequency ?? b[1] ?? b) || 0);
+                                            const max = Math.max(1, ...counts);
+                                            return counts.map((c, idx) => <div key={idx} className="flex-1 bg-[#C9A86A] rounded-t" style={{ height: `${Math.max(3, (c / max) * 100)}%` }} />);
+                                        })()}
+                                    </div>
                                 </div>
-                                <p className="text-[10px] text-[#718096] mt-2">FAIR: frequency × magnitude with CBN loss-frequency priors and NDPC fine-band tiers.</p>
-                            </div>
+                            ) : (
+                                <Empty>
+                                    {fair ? `Scenario "${fair.scenario.name}" has not been simulated yet.` : 'No FAIR scenario is linked to this risk.'}{' '}
+                                    <Link href={route('fair.index')} className="text-[#1A365D] underline">Go to FAIR Quantification</Link>.
+                                </Empty>
+                            )}
                         </div>
                     )}
 
                     {tab === 'history' && (
-                        <table className="w-full text-sm divide-y divide-gray-100">
-                            <thead className="text-xs uppercase text-[#718096]">
-                                <tr><th className="py-2 text-left">Date</th><th>Inherent</th><th>Residual</th><th>Change reason</th></tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {history.map((h) => (
-                                    <tr key={h.id}>
-                                        <td className="py-2 text-xs text-[#718096]">{h.recorded_at}</td>
-                                        <td className="text-xs">{h.inherent_score}</td>
-                                        <td className="text-xs">{h.residual_score}</td>
-                                        <td className="text-xs text-[#2D3748]">{h.change_reason}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        history.length === 0 ? <Empty>No score changes recorded yet. Scores are captured whenever the risk is assessed or re-scored.</Empty> : (
+                            <table className="w-full text-sm divide-y divide-gray-100">
+                                <thead className="text-xs uppercase text-[#718096]">
+                                    <tr><th className="py-2 text-left">Date</th><th>Inherent</th><th>Residual</th><th className="text-left">Change reason</th><th className="text-left">By</th></tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {history.map((h) => (
+                                        <tr key={h.id}>
+                                            <td className="py-2 text-xs text-[#718096]">{formatDate(h.recorded_at, true)}</td>
+                                            <td className="text-center"><ScoreDisplay score={h.inherent_score} /></td>
+                                            <td className="text-center"><ScoreDisplay score={h.residual_score} /></td>
+                                            <td className="text-xs text-[#2D3748]">{h.change_reason}</td>
+                                            <td className="text-xs text-[#718096]">{h.changed_by_user?.name || '—'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )
                     )}
 
                     {tab === 'audit' && (
-                        <ul className="divide-y divide-gray-100">
-                            {auditTrail.map((a) => (
-                                <li key={a.id} className="py-2 flex items-start gap-3">
-                                    <ClockIcon className="w-4 h-4 text-[#718096] mt-0.5" />
-                                    <div>
-                                        <p className="text-xs text-[#718096]">{a.ts} · <span className="text-[#0A1F44] font-medium">{a.actor}</span> · {a.action}</p>
-                                        <p className="text-[#2D3748]">{a.summary}</p>
-                                    </div>
-                                </li>
-                            ))}
-                        </ul>
+                        audit.length === 0 ? <Empty>No audit events recorded.</Empty> : (
+                            <ul className="divide-y divide-gray-100">
+                                {audit.map((a) => (
+                                    <li key={a.id} className="py-2 flex items-start gap-3">
+                                        <ClockIcon className="w-4 h-4 text-[#718096] mt-0.5" />
+                                        <div>
+                                            <p className="text-xs text-[#718096]">{formatDate(a.ts, true)} · <span className="text-[#0A1F44] font-medium">{a.actor}</span> · {humanize(a.action)}</p>
+                                            {a.changes?.length > 0 ? (
+                                                <ul className="text-xs text-[#2D3748] mt-0.5">
+                                                    {a.changes.filter((c) => c.field !== 'updated_at').map((c) => (
+                                                        <li key={c.field}><span className="text-[#718096]">{humanize(c.field)}:</span> {String(c.old ?? '—')} → {String(c.new ?? '—')}</li>
+                                                    ))}
+                                                </ul>
+                                            ) : <p className="text-[#2D3748]">Risk {a.action === 'created' ? 'registered' : humanize(a.action).toLowerCase()}</p>}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )
                     )}
                 </div>
             </div>
-        </AuthenticatedLayout>
-    );
-}
 
-function RiskGraphInline({ risk, threats, controls, vulns, assets }) {
-    const width = 780, height = 400, cx = width / 2, cy = height / 2;
-    const groups = [
-        { label: 'Threats', items: threats, color: '#B3261E', angle: Math.PI },
-        { label: 'Vulnerabilities', items: vulns, color: '#E5A100', angle: Math.PI * 1.5 },
-        { label: 'Assets', items: assets, color: '#2D7D46', angle: 0 },
-        { label: 'Controls', items: controls, color: '#C9A86A', angle: Math.PI * 0.5 },
-    ];
-    return (
-        <svg width={width} height={height} className="bg-[#F7FAFC] rounded-lg">
-            <circle cx={cx} cy={cy} r={40} fill="#0A1F44" />
-            <text x={cx} y={cy - 3} textAnchor="middle" fontSize="10" fontWeight="700" fill="#C9A86A">RISK</text>
-            <text x={cx} y={cy + 10} textAnchor="middle" fontSize="8" fill="#fff">{risk.risk_id_code}</text>
-            {groups.map((g, gi) => (
-                g.items.map((it, i) => {
-                    const spread = 0.35;
-                    const a = g.angle - spread + (2 * spread * i) / Math.max(1, g.items.length - 1);
-                    const x = cx + 180 * Math.cos(a);
-                    const y = cy + 140 * Math.sin(a);
-                    return (
-                        <g key={`${g.label}-${it.id}`}>
-                            <line x1={cx} y1={cy} x2={x} y2={y} stroke={g.color} strokeOpacity="0.5" />
-                            <circle cx={x} cy={y} r={22} fill={g.color} />
-                            <text x={x} y={y + 38} textAnchor="middle" fontSize="9" fill="#2D3748">
-                                {(it.title || it.name || it.asset_id_code || '').toString().slice(0, 24)}
-                            </text>
-                        </g>
-                    );
-                })
-            ))}
-        </svg>
+            <Modal show={confirmingDelete} onClose={() => setConfirmingDelete(false)} maxWidth="md">
+                <div className="p-6">
+                    <h2 className="text-lg font-semibold text-[#2D3748]">Archive {risk.risk_id_code}?</h2>
+                    <p className="mt-2 text-sm text-[#718096]">The risk is removed from the register, heat maps and dashboards. It stays in the audit trail and its code is never reused.</p>
+                    <div className="mt-6 flex justify-end gap-2">
+                        <button onClick={() => setConfirmingDelete(false)} className="px-4 py-2 text-sm rounded-lg border border-gray-200">Cancel</button>
+                        <button onClick={destroy} className="px-4 py-2 text-sm rounded-lg bg-[#C53030] text-white">Archive risk</button>
+                    </div>
+                </div>
+            </Modal>
+        </AuthenticatedLayout>
     );
 }

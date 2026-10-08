@@ -28,11 +28,12 @@ const NODE_COLORS = {
  *   layout: 'radial' | 'grid' | 'horizontal' | 'vertical' (default 'radial')
  *   height: number (default 500)
  */
-export default function AtherisFlow({ nodes = [], edges = [], layout = 'radial', height = 520, fitView = true }) {
+export default function AtherisFlow({ nodes = [], edges = [], layout = 'radial', height = 520, fitView = true, onNodeClick }) {
     const rfNodes = useMemo(() => layoutNodes(nodes, layout).map((n) => ({
         id: String(n.id),
         position: n.position || { x: 0, y: 0 },
         data: { label: n.label || String(n.id), ...(n.data || {}) },
+        title: n.title,
         style: {
             background: NODE_COLORS[n.type] || NODE_COLORS.default,
             color: '#fff',
@@ -44,8 +45,10 @@ export default function AtherisFlow({ nodes = [], edges = [], layout = 'radial',
             minWidth: 120,
             maxWidth: 220,
             textAlign: 'center',
+            cursor: onNodeClick && n.href ? 'pointer' : undefined,
         },
-    })), [nodes, layout]);
+        href: n.href,
+    })), [nodes, layout, onNodeClick]);
 
     const rfEdges = useMemo(() => edges.map((e, idx) => ({
         id: String(e.id ?? `e-${idx}`),
@@ -65,6 +68,7 @@ export default function AtherisFlow({ nodes = [], edges = [], layout = 'radial',
                 nodes={rfNodes}
                 edges={rfEdges}
                 fitView={fitView}
+                onNodeClick={onNodeClick ? (_, node) => onNodeClick(node) : undefined}
                 fitViewOptions={{ padding: 0.2 }}
                 defaultEdgeOptions={{ style: { stroke: '#C9A86A' } }}
                 proOptions={{ hideAttribution: true }}

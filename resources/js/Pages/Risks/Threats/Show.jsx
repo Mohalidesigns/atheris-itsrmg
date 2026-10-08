@@ -4,13 +4,14 @@ import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 import { Head, Link, useForm, router } from '@inertiajs/react';
+import { formatDate, threatLabel } from '@/Utils/risk';
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 function DetailRow({ label, value }) {
     return (
         <div className="py-3 grid grid-cols-3 gap-4 border-b border-gray-50 last:border-0">
             <dt className="text-sm font-medium text-[#718096]">{label}</dt>
-            <dd className="text-sm text-[#2D3748] col-span-2 capitalize">{value || '--'}</dd>
+            <dd className="text-sm text-[#2D3748] col-span-2">{value || '--'}</dd>
         </div>
     );
 }
@@ -21,6 +22,7 @@ export default function ShowThreat({ threat, risks = [] }) {
         likelihood: '',
         impact: '',
         analysis: '',
+        recommendations: '',
     });
 
     const submitAssessment = (e) => {
@@ -46,7 +48,7 @@ export default function ShowThreat({ threat, risks = [] }) {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <p className="text-xs text-[#718096] uppercase font-medium">Severity</p>
-                    <div className="mt-1">{threat.severity ? <StatusBadge status={threat.severity} /> : <span className="text-sm text-gray-400">--</span>}</div>
+                    <div className="mt-1">{threat.severity ? <StatusBadge status={threat.severity} label={threatLabel(threat.severity)} /> : <span className="text-sm text-gray-400">--</span>}</div>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <p className="text-xs text-[#718096] uppercase font-medium">Likelihood</p>
@@ -80,13 +82,13 @@ export default function ShowThreat({ threat, risks = [] }) {
                     </div>
                     <div className="px-6 py-2">
                         <DetailRow label="Description" value={threat.description} />
-                        <DetailRow label="Category" value={threat.category} />
-                        <DetailRow label="Source" value={threat.source} />
-                        <DetailRow label="Type" value={threat.type} />
+                        <DetailRow label="Category" value={threat.category && threatLabel(threat.category)} />
+                        <DetailRow label="Source" value={threat.source && threatLabel(threat.source)} />
+                        <DetailRow label="Type" value={threat.type && threatLabel(threat.type)} />
                         <DetailRow label="Capability" value={threat.capability} />
                         <DetailRow label="Intent" value={threat.intent} />
                         <DetailRow label="Countermeasures" value={threat.countermeasures} />
-                        <DetailRow label="Last Seen" value={threat.last_seen ? new Date(threat.last_seen).toLocaleDateString() : null} />
+                        <DetailRow label="Last Seen" value={threat.last_seen ? formatDate(threat.last_seen) : null} />
                     </div>
                 </div>
 
@@ -119,7 +121,7 @@ export default function ShowThreat({ threat, risks = [] }) {
                                             </div>
                                         </div>
                                         <p className="text-xs text-[#718096] mt-1">
-                                            {a.assessment_date} · by {a.assessor?.name || '--'}
+                                            {formatDate(a.assessment_date)} · by {a.assessor?.name || '--'}
                                             {a.likelihood != null && ` · L${a.likelihood}`}{a.impact != null && ` × I${a.impact}`}
                                         </p>
                                     </li>
@@ -163,6 +165,12 @@ export default function ShowThreat({ threat, risks = [] }) {
                                 <textarea value={data.analysis} onChange={e => setData('analysis', e.target.value)} rows={2}
                                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm" />
                             </div>
+                            <div>
+                                <InputLabel value="Recommendations" />
+                                <textarea value={data.recommendations} onChange={e => setData('recommendations', e.target.value)} rows={2}
+                                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm" />
+                            </div>
+                            {(errors.likelihood || errors.impact) && <p className="text-xs text-red-600">{errors.likelihood || errors.impact}</p>}
                             <div className="flex justify-end">
                                 <PrimaryButton disabled={processing}>Record Assessment</PrimaryButton>
                             </div>

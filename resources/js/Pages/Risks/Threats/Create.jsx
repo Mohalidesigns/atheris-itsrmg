@@ -5,7 +5,9 @@ import TextInput from '@/Components/TextInput';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 
-const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+import { formatDate, threatLabel } from '@/Utils/risk';
+
+const cap = threatLabel;
 
 export default function CreateThreat({ nextCode, categories = [], sources = [], types = [], severities = [] }) {
     const { data, setData, post, processing, errors } = useForm({

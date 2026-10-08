@@ -104,6 +104,9 @@ class DatabaseSeeder extends Seeder
         // vulnerability tickets, response procedures)
         $this->call(DemoCrossLinkSeeder::class);
 
+        // Reusable assessment questions (IT Risk → Question Library)
+        $this->call(QuestionLibrarySeeder::class);
+
         // One test login per role (password: Password@123) — attached to
         // Kano Heritage Bank so every role sees populated modules
         $this->call(RoleDemoUsersSeeder::class);

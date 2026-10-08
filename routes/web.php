@@ -2,50 +2,50 @@
 
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\AssetController;
+use App\Http\Controllers\AuditTrailController;
+use App\Http\Controllers\Auth\SamlController;
+use App\Http\Controllers\Auth\ScimController;
+use App\Http\Controllers\BcpController;
+use App\Http\Controllers\BusinessAssetController;
+use App\Http\Controllers\ChangeRequestController;
 use App\Http\Controllers\ComplianceController;
 use App\Http\Controllers\ControlController;
-use App\Http\Controllers\DataBreachController;
-use App\Http\Controllers\IncidentController;
-use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\RiskAssessmentController;
-use App\Http\Controllers\RiskController;
-use App\Http\Controllers\RiskTreatmentController;
-use App\Http\Controllers\AssetController;
-use App\Http\Controllers\BcpController;
-use App\Http\Controllers\VendorController;
-use App\Http\Controllers\PolicyController;
-use App\Http\Controllers\ReportController;
-use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\AuditTrailController;
-use App\Http\Controllers\VulnerabilityController;
-use App\Http\Controllers\ThreatController;
-use App\Http\Controllers\QuestionLibraryController;
-use App\Http\Controllers\VulnerabilityTicketController;
-use App\Http\Controllers\SecurityAlertController;
-use App\Http\Controllers\ResponseProcedureController;
-use App\Http\Controllers\BusinessAssetController;
-use App\Http\Controllers\VendorAssessmentController;
 use App\Http\Controllers\ControlStandardController;
-use App\Http\Controllers\PolicyAttestationController;
-use App\Http\Controllers\ChangeRequestController;
-use App\Http\Controllers\PolicyExceptionController;
-use App\Http\Controllers\IsmsController;
-use App\Http\Controllers\PciController;
-use App\Http\Controllers\MonitoringController;
-use App\Modules\CBNCSAT\Http\Controllers\CsatAssessmentController;
-use App\Http\Controllers\PlatformController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\IntegrationsController;
-use App\Http\Controllers\EaController;
+use App\Http\Controllers\DataBreachController;
 use App\Http\Controllers\Ea\DecisionRecordController;
 use App\Http\Controllers\Ea\DepthController;
 use App\Http\Controllers\Ea\PortalController;
 use App\Http\Controllers\Ea\StewardshipController;
 use App\Http\Controllers\Ea\SurveyController;
 use App\Http\Controllers\Ea\WedgeController;
+use App\Http\Controllers\EaController;
+use App\Http\Controllers\IncidentController;
+use App\Http\Controllers\IntegrationsController;
+use App\Http\Controllers\IsmsController;
+use App\Http\Controllers\MonitoringController;
+use App\Http\Controllers\PciController;
+use App\Http\Controllers\PlatformController;
+use App\Http\Controllers\PolicyAttestationController;
+use App\Http\Controllers\PolicyController;
+use App\Http\Controllers\PolicyExceptionController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\QuestionLibraryController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\ResponseProcedureController;
 use App\Http\Controllers\Returns\RegulatoryReturnController;
-use App\Http\Controllers\Auth\SamlController;
-use App\Http\Controllers\Auth\ScimController;
+use App\Http\Controllers\RiskAssessmentController;
+use App\Http\Controllers\RiskController;
+use App\Http\Controllers\RiskTreatmentController;
+use App\Http\Controllers\SecurityAlertController;
+use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\ThreatController;
+use App\Http\Controllers\VendorAssessmentController;
+use App\Http\Controllers\VendorController;
+use App\Http\Controllers\VulnerabilityController;
+use App\Http\Controllers\VulnerabilityTicketController;
+use App\Modules\CBNCSAT\Http\Controllers\CsatAssessmentController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -128,6 +128,12 @@ Route::middleware('auth')->group(function () {
     // Question Library
     Route::get('/question-libraries', [QuestionLibraryController::class, 'index'])
         ->middleware('permission:view risks')->name('question-libraries.index');
+    Route::post('/question-libraries', [QuestionLibraryController::class, 'store'])
+        ->middleware('permission:create risks')->name('question-libraries.store');
+    Route::put('/question-libraries/{questionLibrary}', [QuestionLibraryController::class, 'update'])
+        ->middleware('permission:edit risks')->name('question-libraries.update');
+    Route::delete('/question-libraries/{questionLibrary}', [QuestionLibraryController::class, 'destroy'])
+        ->middleware('permission:delete risks')->name('question-libraries.destroy');
 
     // Compliance Module
     Route::get('/compliance/dashboard', [ComplianceController::class, 'dashboard'])
@@ -459,7 +465,8 @@ Route::middleware('auth')->group(function () {
 
         // Phase 5: FAIR
         Route::get('/fair', [PlatformController::class, 'fairIndex'])->name('fair.index');
-        Route::post('/fair/{scenario}/run', [PlatformController::class, 'fairRun'])->name('fair.run');
+        Route::post('/fair/{scenario}/run', [PlatformController::class, 'fairRun'])->name('fair.run')->middleware('permission:edit risks');
+        Route::patch('/fair/{scenario}/link', [PlatformController::class, 'fairLink'])->name('fair.link')->middleware('permission:edit risks');
 
         // Phase 5: Vuln Prioritiser + Advisories
         Route::get('/vuln-prioritiser', [PlatformController::class, 'vulnPrioritiserIndex'])->name('vuln-prioritiser.index');

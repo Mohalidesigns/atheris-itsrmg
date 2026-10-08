@@ -3,11 +3,14 @@
 namespace App\Models;
 
 use App\Models\Concerns\HasTenantIdAlias;
+use App\Models\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class FairScenario extends Model
 {
-    use HasTenantIdAlias;
+    use BelongsToOrganization, HasTenantIdAlias;
 
     protected $guarded = [];
 
@@ -17,8 +20,13 @@ class FairScenario extends Model
         'control_effectiveness' => 'array',
     ];
 
-    public function runs()
+    public function runs(): HasMany
     {
         return $this->hasMany(FairRun::class, 'scenario_id');
+    }
+
+    public function risk(): BelongsTo
+    {
+        return $this->belongsTo(Risk::class);
     }
 }

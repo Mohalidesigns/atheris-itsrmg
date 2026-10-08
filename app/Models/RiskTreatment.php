@@ -40,6 +40,27 @@ class RiskTreatment extends Model
 
     public const STRATEGIES = ['mitigate', 'transfer', 'avoid', 'accept'];
 
+    /** Statuses after which a plan is no longer "open" work. */
+    public const CLOSED_STATUSES = ['completed', 'rejected'];
+
+    protected $appends = ['is_overdue'];
+
+    /** Past its due date and still open — derived, so it never goes stale like a stored 'overdue' flag. */
+    public function getIsOverdueAttribute(): bool
+    {
+        return $this->due_date !== null
+            && $this->due_date->isPast()
+            && ! $this->due_date->isToday()
+            && ! in_array($this->status, self::CLOSED_STATUSES, true);
+    }
+
+    public function scopeOverdue($query)
+    {
+        return $query->whereNotNull('due_date')
+            ->whereDate('due_date', '<', now()->toDateString())
+            ->whereNotIn('status', self::CLOSED_STATUSES);
+    }
+
     public function risk(): BelongsTo
     {
         return $this->belongsTo(Risk::class);
