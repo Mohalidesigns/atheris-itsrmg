@@ -15,7 +15,7 @@ class InherentRiskScoringService
             ->where('is_active', true)->count();
 
         $responses = CsatIrResponse::where('assessment_id', $assessmentId)
-            ->whereHas('question', fn($q) => $q->where('category_code', $categoryCode)->where('is_active', true))
+            ->whereHas('question', fn ($q) => $q->where('category_code', $categoryCode)->where('is_active', true))
             ->get();
 
         $answeredCount = $responses->count();
@@ -45,12 +45,16 @@ class InherentRiskScoringService
     public function calculateCompositeRisk(int $assessmentId): array
     {
         $categoryScores = collect(range(1, 5))
-            ->map(fn($cat) => $this->calculateCategoryScore($assessmentId, $cat));
+            ->map(fn ($cat) => $this->calculateCategoryScore($assessmentId, $cat));
 
-        $answeredCategories = $categoryScores->filter(fn($s) => $s['answered_count'] > 0);
+        // TRD §4.1: equal-weighted mean of the five category averages. Until every question is
+        // answered the composite is provisional (BR-IR-06 blocks submission while incomplete).
+        $answeredCategories = $categoryScores->filter(fn ($s) => $s['answered_count'] > 0);
         $compositeScore = $answeredCategories->count() > 0
             ? $answeredCategories->avg('average_score')
             : 0;
+        $answered = $categoryScores->sum('answered_count');
+        $total = $categoryScores->sum('question_count');
 
         $compositeLevel = match (true) {
             $compositeScore <= 1.4 => 'least',
@@ -62,8 +66,11 @@ class InherentRiskScoringService
 
         return [
             'score' => round($compositeScore, 3),
-            'level' => $compositeLevel,
-            'category_scores' => $categoryScores->toArray(),
+            'level' => $answered > 0 ? $compositeLevel : null,
+            'answered' => $answered,
+            'total' => $total,
+            'is_complete' => $total > 0 && $answered >= $total,
+            'category_scores' => $categoryScores->map(fn ($c) => $c + ['category_name' => CsatIrQuestion::CATEGORY_NAMES[$c['category_code']] ?? 'Category '.$c['category_code']])->toArray(),
         ];
     }
 
@@ -86,7 +93,7 @@ class InherentRiskScoringService
             );
         }
 
-        CsatAssessment::where('id', $assessmentId)->update([
+        CsatAssessment::withoutGlobalScopes()->where('id', $assessmentId)->update([
             'composite_risk_score' => $composite['score'],
             'composite_risk_level' => $composite['level'],
         ]);

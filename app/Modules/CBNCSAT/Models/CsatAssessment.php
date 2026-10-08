@@ -3,6 +3,7 @@
 namespace App\Modules\CBNCSAT\Models;
 
 use App\Models\Organization;
+use App\Models\Traits\BelongsToOrganization;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -12,7 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class CsatAssessment extends Model
 {
-    use SoftDeletes;
+    use BelongsToOrganization, SoftDeletes;
 
     protected $table = 'csat_assessments';
 

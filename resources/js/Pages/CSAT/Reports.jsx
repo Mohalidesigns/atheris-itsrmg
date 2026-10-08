@@ -2,12 +2,12 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-const riskColors = { least: '#2D7D46', minimal: '#319795', moderate: '#D4AF37', significant: '#DD6B20', most: '#C53030' };
-const maturityColors = { 0: '#C53030', 1: '#DD6B20', 2: '#D4AF37', 3: '#319795', 4: '#2D7D46', 5: '#1A365D' };
+import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
+import { IR_LEVEL_COLORS as riskColors, MATURITY_COLORS as maturityColors, MATURITY_KEYS, RAG_COLORS, humanize } from '@/Utils/csat';
 
-export default function Reports({ assessment, irScores, domainScores, componentScores, gapCount, recommendations, domainNames, maturityLevels }) {
+export default function Reports({ assessment, irScores, domainScores, componentScores, gapCount, recommendations, domainNames, maturityLevels, readiness }) {
     const irChartData = (irScores?.category_scores || []).map(s => ({
-        name: `Cat ${s.category_code}`,
+        name: s.category_name || `Category ${s.category_code}`,
         score: parseFloat(s.average_score),
         level: s.risk_level,
     }));
@@ -22,8 +22,11 @@ export default function Reports({ assessment, irScores, domainScores, componentS
         <AuthenticatedLayout header="Executive Report">
             <Head title="Reports" />
 
-            <div className="mb-4">
+            <div className="mb-4 flex items-center justify-between">
                 <Link href={route('csat.overview', assessment.id)} className="text-sm text-[#1A365D] hover:underline">&larr; Back to Overview</Link>
+                <Link href={route('csat.submission-package', assessment.id)} className="inline-flex items-center gap-1 px-3 py-2 text-sm rounded-lg bg-[#1A365D] text-white">
+                    <DocumentArrowDownIcon className="w-4 h-4" /> CBN Submission Package
+                </Link>
             </div>
 
             {/* Summary Cards */}
@@ -32,14 +35,14 @@ export default function Reports({ assessment, irScores, domainScores, componentS
                     <p className="text-xs text-[#718096] mb-1">Inherent Risk</p>
                     <span className="inline-block px-4 py-1 rounded-lg text-sm font-bold text-white"
                         style={{ backgroundColor: riskColors[irScores?.level] || '#718096' }}>
-                        {irScores?.level?.charAt(0).toUpperCase() + irScores?.level?.slice(1) || 'N/A'}
+                        {irScores?.level ? humanize(irScores.level) : 'N/A'}
                     </span>
                     <p className="text-2xl font-bold font-mono text-[#2D3748] mt-1">{irScores?.score || '—'}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm text-center">
                     <p className="text-xs text-[#718096] mb-1">Maturity Level</p>
                     <span className="inline-block px-4 py-1 rounded-lg text-sm font-bold text-white"
-                        style={{ backgroundColor: maturityColors[assessment.overall_maturity_level ? ['sub_baseline','baseline','evolving','intermediate','advanced','innovative'].indexOf(assessment.overall_maturity_level) : 0] || '#718096' }}>
+                        style={{ backgroundColor: maturityColors[MATURITY_KEYS.indexOf(assessment.overall_maturity_level)] || '#718096' }}>
                         {assessment.overall_maturity_level?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'N/A'}
                     </span>
                 </div>
@@ -49,9 +52,9 @@ export default function Reports({ assessment, irScores, domainScores, componentS
                     <p className="text-xs text-[#718096]">marked "No"</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm text-center">
-                    <p className="text-xs text-[#718096] mb-1">AI Recommendations</p>
-                    <p className="text-3xl font-bold font-mono text-[#1A365D]">{(recommendations || []).length}</p>
-                    <p className="text-xs text-[#718096]">active</p>
+                    <p className="text-xs text-[#718096] mb-1">Submission readiness</p>
+                    <p className="text-3xl font-bold font-mono" style={{ color: RAG_COLORS[readiness?.rag] }}>{readiness?.score ?? 0}</p>
+                    <p className="text-xs text-[#718096]">{(recommendations || []).length} open recommendation(s)</p>
                 </div>
             </div>
 
@@ -60,11 +63,11 @@ export default function Reports({ assessment, irScores, domainScores, componentS
                 <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm mb-6">
                     <h3 className="text-sm font-semibold text-[#2D3748] mb-3">Inherent Risk by Category</h3>
                     <ResponsiveContainer width="100%" height={200}>
-                        <BarChart data={irChartData}>
-                            <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                            <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
+                        <BarChart data={irChartData} layout="vertical">
+                            <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11 }} />
+                            <YAxis type="category" dataKey="name" width={230} tick={{ fontSize: 11 }} />
                             <Tooltip />
-                            <Bar dataKey="score" radius={[4, 4, 0, 0]}>
+                            <Bar isAnimationActive={false} dataKey="score" radius={[0, 4, 4, 0]}>
                                 {irChartData.map((e, i) => <Cell key={i} fill={riskColors[e.level] || '#718096'} />)}
                             </Bar>
                         </BarChart>
@@ -82,8 +85,8 @@ export default function Reports({ assessment, irScores, domainScores, componentS
                                 tickFormatter={v => maturityLevels[v]?.substring(0, 5) || v} />
                             <YAxis dataKey="name" type="category" width={180} tick={{ fontSize: 11 }} />
                             <Tooltip formatter={(v) => maturityLevels[v] || v} />
-                            <Bar dataKey="achieved" fill="#1A365D" radius={[0, 4, 4, 0]} name="Achieved" />
-                            <Bar dataKey="target" fill="#D4AF37" radius={[0, 4, 4, 0]} name="Target" />
+                            <Bar isAnimationActive={false} dataKey="achieved" fill="#1A365D" radius={[0, 4, 4, 0]} name="Achieved" />
+                            <Bar isAnimationActive={false} dataKey="target" fill="#D4AF37" radius={[0, 4, 4, 0]} name="Target" />
                         </BarChart>
                     </ResponsiveContainer>
                 </div>
@@ -101,7 +104,7 @@ export default function Reports({ assessment, irScores, domainScores, componentS
                                 </span>
                                 <div>
                                     <p className="text-sm font-medium text-[#2D3748]">{r.recommendation_text}</p>
-                                    <p className="text-xs text-[#718096] mt-1">{r.recommendation_type} — {r.scope_reference}</p>
+                                    <p className="text-xs text-[#718096] mt-1">{humanize(r.recommendation_type)} — {r.scope_reference}</p>
                                 </div>
                             </div>
                         ))}

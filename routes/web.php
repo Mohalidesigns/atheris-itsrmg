@@ -338,55 +338,53 @@ Route::middleware('auth')->group(function () {
             ->middleware('permission:create csat')->name('store');
 
         Route::prefix('{assessment}')->group(function () {
+            // Reads — `view csat` (group middleware).
             Route::get('/overview', [CsatAssessmentController::class, 'overview'])->name('overview');
-
-            // Institution Profile
             Route::get('/institution-profile', [CsatAssessmentController::class, 'institutionProfile'])->name('institution-profile');
-            Route::post('/institution-profile', [CsatAssessmentController::class, 'saveInstitutionProfile'])->name('institution-profile.save');
-            Route::post('/stakeholder', [CsatAssessmentController::class, 'saveStakeholder'])->name('stakeholder.save');
-
-            // Inherent Risk
             Route::get('/inherent-risk', [CsatAssessmentController::class, 'inherentRiskDashboard'])->name('ir.dashboard');
             Route::get('/inherent-risk/questions', [CsatAssessmentController::class, 'inherentRiskQuestions'])->name('ir.questions');
-            Route::post('/inherent-risk/response', [CsatAssessmentController::class, 'saveIrResponse'])->name('ir.response.save');
             Route::get('/inherent-risk/narratives', [CsatAssessmentController::class, 'inherentRiskNarratives'])->name('ir.narratives');
-            Route::post('/inherent-risk/narrative', [CsatAssessmentController::class, 'saveIrNarrative'])->name('ir.narrative.save');
-
-            // Maturity Assessment
             Route::get('/maturity', [CsatAssessmentController::class, 'maturityDashboard'])->name('ma.dashboard');
             Route::get('/maturity/assessment', [CsatAssessmentController::class, 'maturityAssessment'])->name('ma.assessment');
-            Route::post('/maturity/response', [CsatAssessmentController::class, 'saveMaResponse'])->name('ma.response.save');
-            Route::post('/maturity/compensating-control', [CsatAssessmentController::class, 'saveCompensatingControl'])->name('ma.cc.save');
             Route::get('/maturity/narratives', [CsatAssessmentController::class, 'maturityNarratives'])->name('ma.narratives');
-            Route::post('/maturity/narrative', [CsatAssessmentController::class, 'saveMaNarrative'])->name('ma.narrative.save');
             Route::get('/maturity/targets', [CsatAssessmentController::class, 'maturityTargets'])->name('ma.targets');
-            Route::post('/maturity/target', [CsatAssessmentController::class, 'saveTarget'])->name('ma.target.save');
-
-            // Threats
             Route::get('/threats', [CsatAssessmentController::class, 'threats'])->name('threats');
-            Route::post('/threats', [CsatAssessmentController::class, 'storeThreat'])->name('threats.store');
-            Route::put('/threats/{threat}', [CsatAssessmentController::class, 'updateThreat'])->name('threats.update');
-            Route::delete('/threats/{threat}', [CsatAssessmentController::class, 'destroyThreat'])->name('threats.destroy');
-
-            // Vulnerabilities
             Route::get('/vulnerabilities', [CsatAssessmentController::class, 'vulnerabilities'])->name('vulnerabilities');
-            Route::post('/vulnerabilities', [CsatAssessmentController::class, 'storeVulnerability'])->name('vulnerabilities.store');
-            Route::put('/vulnerabilities/{vulnerability}', [CsatAssessmentController::class, 'updateVulnerability'])->name('vulnerabilities.update');
-
-            // Workflow
             Route::get('/workflow', [CsatAssessmentController::class, 'workflow'])->name('workflow');
-            Route::post('/workflow/submit', [CsatAssessmentController::class, 'submitForApproval'])->name('workflow.submit');
-            Route::post('/workflow/approve', [CsatAssessmentController::class, 'approve'])
-                ->middleware('permission:approve csat')->name('workflow.approve');
-            Route::post('/workflow/reject', [CsatAssessmentController::class, 'reject'])
-                ->middleware('permission:approve csat')->name('workflow.reject');
-
-            // Reports
             Route::get('/reports', [CsatAssessmentController::class, 'reports'])->name('reports');
-
-            // AI Insights
+            Route::get('/submission-package', [CsatAssessmentController::class, 'submissionPackage'])
+                ->middleware('permission:export csat')->name('submission-package');
             Route::get('/ai-insights', [CsatAssessmentController::class, 'aiInsights'])->name('ai-insights');
-            Route::put('/ai-insights/{recommendation}', [CsatAssessmentController::class, 'dismissRecommendation'])->name('ai.dismiss');
+
+            // Writes — answering, registers and narratives need `edit csat`; the
+            // controller additionally locks everything once the cycle leaves draft/in_progress.
+            Route::middleware('permission:edit csat')->group(function () {
+                Route::post('/institution-profile', [CsatAssessmentController::class, 'saveInstitutionProfile'])->name('institution-profile.save');
+                Route::post('/stakeholder', [CsatAssessmentController::class, 'saveStakeholder'])->name('stakeholder.save');
+                Route::post('/inherent-risk/response', [CsatAssessmentController::class, 'saveIrResponse'])->name('ir.response.save');
+                Route::post('/inherent-risk/narrative', [CsatAssessmentController::class, 'saveIrNarrative'])->name('ir.narrative.save');
+                Route::post('/maturity/response', [CsatAssessmentController::class, 'saveMaResponse'])->name('ma.response.save');
+                Route::post('/maturity/compensating-control', [CsatAssessmentController::class, 'saveCompensatingControl'])->name('ma.cc.save');
+                Route::post('/maturity/narrative', [CsatAssessmentController::class, 'saveMaNarrative'])->name('ma.narrative.save');
+                Route::post('/maturity/target', [CsatAssessmentController::class, 'saveTarget'])->name('ma.target.save');
+                Route::post('/threats', [CsatAssessmentController::class, 'storeThreat'])->name('threats.store');
+                Route::put('/threats/{threat}', [CsatAssessmentController::class, 'updateThreat'])->name('threats.update');
+                Route::post('/vulnerabilities', [CsatAssessmentController::class, 'storeVulnerability'])->name('vulnerabilities.store');
+                Route::put('/vulnerabilities/{vulnerability}', [CsatAssessmentController::class, 'updateVulnerability'])->name('vulnerabilities.update');
+                Route::put('/deadline', [CsatAssessmentController::class, 'updateDeadline'])->name('deadline.update');
+                Route::post('/workflow/submit', [CsatAssessmentController::class, 'submitForApproval'])->name('workflow.submit');
+                Route::post('/ai-insights/generate', [CsatAssessmentController::class, 'generateInsights'])->name('ai.generate');
+                Route::put('/ai-insights/{recommendation}', [CsatAssessmentController::class, 'dismissRecommendation'])->name('ai.dismiss');
+            });
+            Route::middleware('permission:delete csat')->group(function () {
+                Route::delete('/threats/{threat}', [CsatAssessmentController::class, 'destroyThreat'])->name('threats.destroy');
+                Route::delete('/vulnerabilities/{vulnerability}', [CsatAssessmentController::class, 'destroyVulnerability'])->name('vulnerabilities.destroy');
+            });
+            Route::middleware('permission:approve csat')->group(function () {
+                Route::post('/workflow/approve', [CsatAssessmentController::class, 'approve'])->name('workflow.approve');
+                Route::post('/workflow/reject', [CsatAssessmentController::class, 'reject'])->name('workflow.reject');
+                Route::post('/workflow/submit-to-cbn', [CsatAssessmentController::class, 'submitToCbn'])->name('workflow.submit-cbn');
+            });
         });
     });
 

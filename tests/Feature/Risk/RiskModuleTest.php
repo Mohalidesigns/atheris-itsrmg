@@ -47,7 +47,9 @@ class RiskModuleTest extends TestCase
     {
         return Risk::factory()->create($attributes + [
             'organization_id' => $this->org->id,
-            'category_id' => RiskCategory::factory()->create(['organization_id' => $this->org->id])->id,
+            'category_id' => RiskCategory::firstOrCreate(
+                ['organization_id' => $this->org->id, 'slug' => 'cyber'], ['name' => 'Cyber']
+            )->id,
             'risk_owner_id' => $this->manager->id,
             'created_by' => $this->manager->id,
         ]);

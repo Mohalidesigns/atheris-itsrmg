@@ -6,140 +6,146 @@ use App\Modules\CBNCSAT\Models\CsatAssessment;
 use App\Modules\CBNCSAT\Models\CsatMaResponse;
 use App\Modules\CBNCSAT\Models\CsatMaScore;
 use App\Modules\CBNCSAT\Models\CsatMaStatement;
+use Illuminate\Support\Collection;
 
+/**
+ * CBN-CSAT maturity scoring (BRD BR-MA-05):
+ *  (a) component maturity = highest level L such that every statement at levels 1..L is Yes / Yes[CC];
+ *  (b) assessment-factor maturity = average of its components' levels;
+ *  (c) domain maturity = lowest factor maturity in the domain (whole levels);
+ *  (d) per-level fractional score = (Yes + Yes[CC]) / applicable statements.
+ *
+ * N/A marks a statement as not applicable: it is removed from the population rather than
+ * counted as a failure (the spec gives N/A as a valid answer but no failure semantics).
+ * Unanswered statements count against the level, so an incomplete component cannot attain it.
+ */
 class MaturityScoringService
 {
-    public function calculateComponentMaturity(int $assessmentId, string $componentCode): array
+    private const LEVEL_COLUMNS = [1 => 'baseline_score', 2 => 'evolving_score', 3 => 'intermediate_score', 4 => 'advanced_score', 5 => 'innovative_score'];
+
+    public const LEVEL_KEYS = [0 => 'sub_baseline', 1 => 'baseline', 2 => 'evolving', 3 => 'intermediate', 4 => 'advanced', 5 => 'innovative'];
+
+    /** @var Collection<int, CsatMaStatement>|null */
+    private ?Collection $statements = null;
+
+    private function statements(): Collection
     {
-        $achievedLevel = 0;
+        return $this->statements ??= CsatMaStatement::where('is_active', true)
+            ->get(['id', 'domain_code', 'domain_name', 'factor_code', 'factor_name', 'component_code', 'component_name', 'maturity_level']);
+    }
+
+    /** @return Collection<int, string> statement_id => response */
+    private function responses(int $assessmentId): Collection
+    {
+        return CsatMaResponse::where('assessment_id', $assessmentId)
+            ->whereNotNull('response')
+            ->pluck('response', 'statement_id');
+    }
+
+    public function scoreComponent(Collection $statements, Collection $responses): array
+    {
+        $achieved = 0;
+        $broken = false;
         $levelScores = [];
 
         foreach (range(1, 5) as $level) {
-            $statements = CsatMaStatement::where('component_code', $componentCode)
-                ->where('maturity_level', $level)
-                ->where('is_active', true)
-                ->get();
+            $atLevel = $statements->where('maturity_level', $level);
+            $applicable = $atLevel->reject(fn ($s) => ($responses[$s->id] ?? null) === 'na');
+            $met = $applicable->filter(fn ($s) => in_array($responses[$s->id] ?? null, ['yes', 'yes_cc'], true))->count();
 
-            if ($statements->isEmpty()) {
-                $levelScores[$level] = 1.0;
-                continue;
-            }
-
-            $responses = CsatMaResponse::where('assessment_id', $assessmentId)
-                ->whereIn('statement_id', $statements->pluck('id'))
-                ->get()
-                ->keyBy('statement_id');
-
-            $total = $statements->count();
-            $yesCount = $responses->filter(fn($r) => in_array($r->response, ['yes', 'yes_cc']))->count();
-            $fraction = $total > 0 ? $yesCount / $total : 0;
+            // A level with no applicable statements is trivially met.
+            $fraction = $applicable->count() > 0 ? $met / $applicable->count() : 1.0;
             $levelScores[$level] = round($fraction, 4);
 
-            if ($fraction < 1.0) break;
-            $achievedLevel = $level;
+            if (! $broken && $fraction >= 1.0) {
+                $achieved = $level;
+            } else {
+                $broken = true;
+            }
         }
 
-        $totalStatements = CsatMaStatement::where('component_code', $componentCode)->where('is_active', true)->count();
-        $answeredCount = CsatMaResponse::where('assessment_id', $assessmentId)
-            ->whereIn('statement_id', CsatMaStatement::where('component_code', $componentCode)->where('is_active', true)->pluck('id'))
-            ->whereNotNull('response')
-            ->count();
-        $completionPct = $totalStatements > 0 ? ($answeredCount / $totalStatements) * 100 : 0;
+        $answered = $statements->filter(fn ($s) => isset($responses[$s->id]))->count();
 
         return [
-            'component_code' => $componentCode,
-            'achieved_maturity_level' => $achievedLevel,
-            'completion_pct' => round($completionPct, 2),
+            'achieved_maturity_level' => $achieved,
             'level_scores' => $levelScores,
+            'completion_pct' => $statements->count() ? round($answered / $statements->count() * 100, 2) : 0,
         ];
     }
 
-    public function calculateFactorMaturity(int $assessmentId, string $factorCode): array
+    /** Full hierarchy for an assessment without persisting. */
+    public function calculate(int $assessmentId): array
     {
-        $components = CsatMaStatement::where('factor_code', $factorCode)
-            ->where('is_active', true)
-            ->distinct('component_code')
-            ->pluck('component_code');
+        $responses = $this->responses($assessmentId);
+        $domains = [];
 
-        $componentScores = $components->map(fn($code) => $this->calculateComponentMaturity($assessmentId, $code));
+        foreach ($this->statements()->groupBy('domain_code')->sortKeys() as $domainCode => $domainStatements) {
+            $factors = [];
+            foreach ($domainStatements->groupBy('factor_code') as $factorCode => $factorStatements) {
+                $components = [];
+                foreach ($factorStatements->groupBy('component_code') as $componentCode => $componentStatements) {
+                    $components[$componentCode] = ['code' => $componentCode, 'name' => $componentStatements->first()->component_name]
+                        + $this->scoreComponent($componentStatements, $responses);
+                }
+                $c = collect($components);
+                $average = $c->avg('achieved_maturity_level');
+                $factors[$factorCode] = [
+                    'code' => $factorCode,
+                    'name' => $factorStatements->first()->factor_name,
+                    'average_level' => round($average, 2),
+                    'achieved_maturity_level' => (int) floor($average),
+                    'level_scores' => collect(range(1, 5))->mapWithKeys(fn ($l) => [$l => round($c->avg(fn ($x) => $x['level_scores'][$l]), 4)])->all(),
+                    'completion_pct' => round($c->avg('completion_pct'), 2),
+                    'components' => $components,
+                ];
+            }
+            $f = collect($factors);
+            $domains[(int) $domainCode] = [
+                'code' => 'D'.$domainCode,
+                'name' => CsatMaStatement::DOMAIN_NAMES[$domainCode] ?? $domainStatements->first()->domain_name,
+                'achieved_maturity_level' => (int) $f->min('achieved_maturity_level'),
+                'level_scores' => collect(range(1, 5))->mapWithKeys(fn ($l) => [$l => round($f->avg(fn ($x) => $x['level_scores'][$l]), 4)])->all(),
+                'completion_pct' => round($domainStatements->filter(fn ($s) => isset($responses[$s->id]))->count() / max(1, $domainStatements->count()) * 100, 2),
+                'factors' => $factors,
+            ];
+        }
 
-        $factorLevel = $componentScores->count() > 0
-            ? $componentScores->min('achieved_maturity_level')
-            : 0;
-
-        return [
-            'factor_code' => $factorCode,
-            'achieved_maturity_level' => $factorLevel,
-            'component_scores' => $componentScores->toArray(),
-        ];
-    }
-
-    public function calculateDomainMaturity(int $assessmentId, int $domainCode): array
-    {
-        $components = CsatMaStatement::where('domain_code', $domainCode)
-            ->where('is_active', true)
-            ->distinct('component_code')
-            ->pluck('component_code');
-
-        $componentScores = $components->map(fn($code) => $this->calculateComponentMaturity($assessmentId, $code));
-        $domainLevel = $componentScores->count() > 0 ? $componentScores->min('achieved_maturity_level') : 0;
-
-        return [
-            'domain_code' => $domainCode,
-            'achieved_maturity_level' => $domainLevel,
-            'component_scores' => $componentScores->toArray(),
-        ];
+        return $domains;
     }
 
     public function recalculateAndPersist(int $assessmentId): array
     {
-        $domainScores = [];
+        $domains = $this->calculate($assessmentId);
+        $now = now();
 
-        foreach (range(1, 5) as $domainCode) {
-            $domain = $this->calculateDomainMaturity($assessmentId, $domainCode);
-            $domainScores[] = $domain;
-
-            $domainName = CsatMaStatement::DOMAIN_NAMES[$domainCode] ?? "Domain {$domainCode}";
-
-            // Persist component scores
-            foreach ($domain['component_scores'] as $cs) {
-                $componentName = CsatMaStatement::where('component_code', $cs['component_code'])->value('component_name') ?? $cs['component_code'];
-                CsatMaScore::updateOrCreate(
-                    ['assessment_id' => $assessmentId, 'score_type' => 'component', 'scope_code' => $cs['component_code']],
-                    [
-                        'scope_name' => $componentName,
-                        'baseline_score' => $cs['level_scores'][1] ?? 0,
-                        'evolving_score' => $cs['level_scores'][2] ?? 0,
-                        'intermediate_score' => $cs['level_scores'][3] ?? 0,
-                        'advanced_score' => $cs['level_scores'][4] ?? 0,
-                        'innovative_score' => $cs['level_scores'][5] ?? 0,
-                        'achieved_maturity_level' => $cs['achieved_maturity_level'],
-                        'completion_pct' => $cs['completion_pct'],
-                        'calculated_at' => now(),
-                    ]
-                );
+        $persist = function (string $type, string $code, string $name, array $row) use ($assessmentId, $now) {
+            $values = [
+                'scope_name' => $name,
+                'achieved_maturity_level' => $row['achieved_maturity_level'],
+                'completion_pct' => $row['completion_pct'],
+                'calculated_at' => $now,
+            ];
+            foreach (self::LEVEL_COLUMNS as $level => $column) {
+                $values[$column] = $row['level_scores'][$level] ?? 0;
             }
+            // Targets live on the same row and are set separately — never overwritten here.
+            CsatMaScore::updateOrCreate(['assessment_id' => $assessmentId, 'score_type' => $type, 'scope_code' => $code], $values);
+        };
 
-            // Persist domain score
-            CsatMaScore::updateOrCreate(
-                ['assessment_id' => $assessmentId, 'score_type' => 'domain', 'scope_code' => "D{$domainCode}"],
-                [
-                    'scope_name' => $domainName,
-                    'achieved_maturity_level' => $domain['achieved_maturity_level'],
-                    'completion_pct' => collect($domain['component_scores'])->avg('completion_pct') ?? 0,
-                    'calculated_at' => now(),
-                ]
-            );
+        foreach ($domains as $domain) {
+            $persist('domain', $domain['code'], $domain['name'], $domain);
+            foreach ($domain['factors'] as $factor) {
+                $persist('factor', $factor['code'], $factor['name'], $factor);
+                foreach ($factor['components'] as $component) {
+                    $persist('component', $component['code'], $component['name'], $component);
+                }
+            }
         }
 
-        // Overall maturity = lowest domain
-        $overallLevel = collect($domainScores)->min('achieved_maturity_level');
-        $levelMap = [0 => 'sub_baseline', 1 => 'baseline', 2 => 'evolving', 3 => 'intermediate', 4 => 'advanced', 5 => 'innovative'];
+        $overall = collect($domains)->min('achieved_maturity_level') ?? 0;
+        CsatAssessment::withoutGlobalScopes()->where('id', $assessmentId)
+            ->update(['overall_maturity_level' => self::LEVEL_KEYS[$overall]]);
 
-        CsatAssessment::where('id', $assessmentId)->update([
-            'overall_maturity_level' => $levelMap[$overallLevel] ?? 'sub_baseline',
-        ]);
-
-        return $domainScores;
+        return $domains;
     }
 }

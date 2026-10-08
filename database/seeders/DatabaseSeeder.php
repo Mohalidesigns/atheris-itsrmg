@@ -77,6 +77,8 @@ class DatabaseSeeder extends Seeder
         $this->call(CsatMaNarrativesTemplateSeeder::class);
         $this->call(IsmsPciMonitoringSeeder::class);
         $this->call(FirstBankDemoSeeder::class);
+        // CBN-CSAT: computed scores, narratives, registers; Kano ready for approval, First Bank partial.
+        $this->call(CsatDemoCompletionSeeder::class);
 
         // Session 5 — Enterprise Architecture module
         $this->call(EaPhase1Seeder::class);

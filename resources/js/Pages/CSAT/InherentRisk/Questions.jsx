@@ -1,6 +1,18 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { lockMessage } from '@/Utils/csat';
+
+function CommentBox({ disabled, initial, onSave }) {
+    const [value, setValue] = useState(initial || '');
+    return (
+        <textarea rows={1} value={value} disabled={disabled} placeholder="Comment / evidence reference (saved when you leave the field)"
+            onChange={(e) => setValue(e.target.value)}
+            onBlur={() => value !== (initial || '') && onSave(value)}
+            className="mt-3 ml-10 w-[calc(100%-2.5rem)] text-xs border-gray-200 rounded-lg disabled:bg-gray-50" />
+    );
+}
 
 const riskLevelLabels = { 1: 'Least', 2: 'Minimal', 3: 'Moderate', 4: 'Significant', 5: 'Most' };
 const riskLevelColors = { 1: '#2D7D46', 2: '#319795', 3: '#D4AF37', 4: '#DD6B20', 5: '#C53030' };
@@ -9,7 +21,7 @@ const categoryNames = {
     3: 'Online/Mobile Products and Technology Services', 4: 'Organisational Characteristics', 5: 'External Threats',
 };
 
-export default function InherentRiskQuestions({ assessment, questions, responses }) {
+export default function InherentRiskQuestions({ assessment, questions, responses, editable = true }) {
     const [activeCategory, setActiveCategory] = useState(1);
     const [saving, setSaving] = useState(null);
 
@@ -19,12 +31,13 @@ export default function InherentRiskQuestions({ assessment, questions, responses
         grouped[q.category_code].push(q);
     });
 
-    const saveResponse = (questionId, level, comment = null) => {
+    // The comment is only sent when it is being edited, so choosing a level never erases it.
+    const saveResponse = (questionId, level, comment) => {
         setSaving(questionId);
         router.post(route('csat.ir.response.save', assessment.id), {
             question_id: questionId,
             selected_level: level,
-            comment,
+            ...(comment !== undefined ? { comment } : {}),
         }, {
             preserveScroll: true,
             onFinish: () => setSaving(null),
@@ -40,6 +53,11 @@ export default function InherentRiskQuestions({ assessment, questions, responses
             <div className="mb-4">
                 <Link href={route('csat.ir.dashboard', assessment.id)} className="text-sm text-[#1A365D] hover:underline">&larr; Back to IR Dashboard</Link>
             </div>
+            {!editable && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                    <LockClosedIcon className="w-4 h-4" /> {lockMessage(assessment)}
+                </div>
+            )}
 
             <div className="flex gap-6">
                 {/* Category Sidebar */}
@@ -90,8 +108,8 @@ export default function InherentRiskQuestions({ assessment, questions, responses
                                 <div className="grid grid-cols-5 gap-2 ml-10">
                                     {[1, 2, 3, 4, 5].map(level => (
                                         <button key={level}
-                                            onClick={() => saveResponse(q.id, level)}
-                                            disabled={saving === q.id}
+                                            onClick={() => level !== selectedLevel && saveResponse(q.id, level)}
+                                            disabled={!editable || saving === q.id}
                                             className={`p-2 rounded-lg border text-xs transition-all ${
                                                 selectedLevel === level
                                                     ? 'border-2 shadow-md text-white'
@@ -105,6 +123,10 @@ export default function InherentRiskQuestions({ assessment, questions, responses
                                         </button>
                                     ))}
                                 </div>
+                                {selectedLevel && (
+                                    <CommentBox key={`${q.id}-${resp?.updated_at}`} disabled={!editable} initial={resp?.comment}
+                                        onSave={(comment) => saveResponse(q.id, selectedLevel, comment)} />
+                                )}
                             </div>
                         );
                     })}

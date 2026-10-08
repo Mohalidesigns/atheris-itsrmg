@@ -1,5 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
+import { STATUS_LABELS, formatDate } from '@/Utils/csat';
 import { PlusIcon } from '@heroicons/react/24/outline';
 
 const statusColors = {
@@ -67,7 +68,7 @@ export default function CsatIndex({ assessments }) {
                                             {a.assessment_year} Assessment
                                         </h3>
                                         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[a.status] || 'bg-gray-100'}`}>
-                                            {a.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                                            {STATUS_LABELS[a.status] || a.status}
                                         </span>
                                     </div>
                                     <p className="text-sm text-[#718096]">
@@ -75,7 +76,7 @@ export default function CsatIndex({ assessments }) {
                                     </p>
                                     {a.submission_deadline && (
                                         <p className="text-xs text-[#718096] mt-1">
-                                            Deadline: {new Date(a.submission_deadline).toLocaleDateString()}
+                                            {a.status === 'submitted' ? `Submitted: ${formatDate(a.submitted_at)}` : `Deadline: ${formatDate(a.submission_deadline)}`}
                                         </p>
                                     )}
                                 </div>

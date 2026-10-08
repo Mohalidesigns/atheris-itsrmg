@@ -3,26 +3,30 @@
 namespace App\Modules\CBNCSAT\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Modules\CBNCSAT\Models\CsatAiRecommendation;
 use App\Modules\CBNCSAT\Models\CsatAssessment;
+use App\Modules\CBNCSAT\Models\CsatInstitutionProfile;
+use App\Modules\CBNCSAT\Models\CsatIrNarrative;
 use App\Modules\CBNCSAT\Models\CsatIrQuestion;
 use App\Modules\CBNCSAT\Models\CsatIrResponse;
-use App\Modules\CBNCSAT\Models\CsatMaStatement;
-use App\Modules\CBNCSAT\Models\CsatMaResponse;
 use App\Modules\CBNCSAT\Models\CsatMaCompensatingControl;
 use App\Modules\CBNCSAT\Models\CsatMaNarrative;
+use App\Modules\CBNCSAT\Models\CsatMaResponse;
+use App\Modules\CBNCSAT\Models\CsatMaScore;
+use App\Modules\CBNCSAT\Models\CsatMaStatement;
+use App\Modules\CBNCSAT\Models\CsatStakeholderEngagement;
 use App\Modules\CBNCSAT\Models\CsatThreat;
 use App\Modules\CBNCSAT\Models\CsatThreatCatalogue;
 use App\Modules\CBNCSAT\Models\CsatVulnerability;
-use App\Modules\CBNCSAT\Models\CsatInstitutionProfile;
-use App\Modules\CBNCSAT\Models\CsatStakeholderEngagement;
-use App\Modules\CBNCSAT\Models\CsatIrNarrative;
-use App\Modules\CBNCSAT\Models\CsatMaScore;
-use App\Modules\CBNCSAT\Models\CsatApprovalRecord;
-use App\Modules\CBNCSAT\Models\CsatAiRecommendation;
+use App\Modules\CBNCSAT\Services\CsatInsightService;
+use App\Modules\CBNCSAT\Services\CsatWorkflowService;
 use App\Modules\CBNCSAT\Services\InherentRiskScoringService;
 use App\Modules\CBNCSAT\Services\MaturityScoringService;
-use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class CsatAssessmentController extends Controller
@@ -30,6 +34,8 @@ class CsatAssessmentController extends Controller
     public function __construct(
         private InherentRiskScoringService $irScoring,
         private MaturityScoringService $maScoring,
+        private CsatWorkflowService $workflowService,
+        private CsatInsightService $insights,
     ) {}
 
     // ===== Assessment CRUD =====
@@ -54,11 +60,13 @@ class CsatAssessmentController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'assessment_year' => 'required|integer|min:2020|max:' . (date('Y') + 1),
+            'assessment_year' => 'required|integer|min:2020|max:'.(date('Y') + 1),
             'submission_deadline' => 'nullable|date',
         ]);
 
-        $exists = CsatAssessment::where('organization_id', auth()->user()->organization_id)
+        // The unique index (org, year, framework) also covers archived cycles.
+        $exists = CsatAssessment::withTrashed()
+            ->where('organization_id', auth()->user()->organization_id)
             ->where('assessment_year', $validated['assessment_year'])
             ->exists();
 
@@ -66,13 +74,18 @@ class CsatAssessmentController extends Controller
             return back()->withErrors(['assessment_year' => 'An assessment for this year already exists.']);
         }
 
-        $assessment = CsatAssessment::create([
-            'organization_id' => auth()->user()->organization_id,
-            'assessment_year' => $validated['assessment_year'],
-            'submission_deadline' => $validated['submission_deadline'] ?? null,
-            'created_by' => auth()->id(),
-            'status' => 'draft',
-        ]);
+        $assessment = DB::transaction(function () use ($validated) {
+            $assessment = CsatAssessment::create([
+                'organization_id' => auth()->user()->organization_id,
+                'assessment_year' => $validated['assessment_year'],
+                'submission_deadline' => $validated['submission_deadline'] ?? null,
+                'created_by' => auth()->id(),
+                'status' => 'draft',
+            ]);
+            CsatMaNarrative::provisionFor($assessment->id);
+
+            return $assessment;
+        });
 
         return redirect()->route('csat.overview', $assessment)->with('success', 'Assessment created.');
     }
@@ -92,6 +105,8 @@ class CsatAssessmentController extends Controller
 
         return Inertia::render('CSAT/Overview', [
             'assessment' => $assessment,
+            'editable' => $this->workflowService->isEditable($assessment),
+            'checklist' => $this->workflowService->checklist($assessment),
             'profile' => $profile,
             'irScores' => $irScores,
             'maScores' => $maScores,
@@ -104,6 +119,8 @@ class CsatAssessmentController extends Controller
                 'ma_pct' => $maTotal > 0 ? round(($maAnswered / $maTotal) * 100) : 0,
                 'threats_count' => $assessment->threats()->count(),
                 'vulnerabilities_count' => $assessment->vulnerabilities()->count(),
+                'ir_categories' => count(CsatIrQuestion::CATEGORY_NAMES),
+                'ma_domains' => count(CsatMaStatement::DOMAIN_NAMES),
             ],
         ]);
     }
@@ -122,12 +139,14 @@ class CsatAssessmentController extends Controller
             'profile' => $profile,
             'stakeholders' => $stakeholders,
             'stakeholderRoles' => CsatStakeholderEngagement::ROLES,
+            'editable' => $this->workflowService->isEditable($assessment),
         ]);
     }
 
     public function saveInstitutionProfile(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
             'institution_name' => 'required|string|max:255',
@@ -152,19 +171,23 @@ class CsatAssessmentController extends Controller
     public function saveStakeholder(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
-            'role_key' => 'required|string|max:100',
+            'role_key' => ['required', Rule::in(array_keys(CsatStakeholderEngagement::ROLES))],
             'engagement_status' => 'required|in:yes,no,na,yes_with_comment',
-            'comment' => 'nullable|string',
+            'comment' => 'nullable|string|max:2000|required_if:engagement_status,no,yes_with_comment',
             'name_of_person' => 'nullable|string|max:255',
         ]);
 
-        $roleLabel = CsatStakeholderEngagement::ROLES[$validated['role_key']] ?? $validated['role_key'];
+        $roleKey = $validated['role_key'];
+        // Only overwrite fields the client actually sent, so changing the status keeps the name/comment.
+        $values = ['role_label' => CsatStakeholderEngagement::ROLES[$roleKey], 'engagement_status' => $validated['engagement_status']]
+            + collect($validated)->only(['comment', 'name_of_person'])->all();
 
         CsatStakeholderEngagement::updateOrCreate(
-            ['assessment_id' => $assessment->id, 'role_key' => $validated['role_key']],
-            ['role_label' => $roleLabel, 'engagement_status' => $validated['engagement_status'], 'comment' => $validated['comment'], 'name_of_person' => $validated['name_of_person']]
+            ['assessment_id' => $assessment->id, 'role_key' => $roleKey],
+            $values
         );
 
         return back()->with('success', 'Stakeholder engagement saved.');
@@ -192,6 +215,7 @@ class CsatAssessmentController extends Controller
 
         return Inertia::render('CSAT/InherentRisk/Questions', [
             'assessment' => $assessment,
+            'editable' => $this->workflowService->isEditable($assessment),
             'questions' => $questions,
             'responses' => $responses,
         ]);
@@ -200,6 +224,7 @@ class CsatAssessmentController extends Controller
     public function saveIrResponse(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
             'question_id' => 'required|exists:csat_ir_questions,id',
@@ -211,10 +236,9 @@ class CsatAssessmentController extends Controller
             ['assessment_id' => $assessment->id, 'question_id' => $validated['question_id']],
             [
                 'selected_level' => $validated['selected_level'],
-                'comment' => $validated['comment'],
                 'completed_by' => auth()->id(),
                 'completed_at' => now(),
-            ]
+            ] + ($request->has('comment') ? ['comment' => $validated['comment']] : [])
         );
 
         $this->irScoring->recalculateAndPersist($assessment->id);
@@ -235,6 +259,7 @@ class CsatAssessmentController extends Controller
 
         return Inertia::render('CSAT/InherentRisk/Narratives', [
             'assessment' => $assessment,
+            'editable' => $this->workflowService->isEditable($assessment),
             'narratives' => $narratives,
             'narrativeFields' => $narrativeFields,
         ]);
@@ -243,6 +268,7 @@ class CsatAssessmentController extends Controller
     public function saveIrNarrative(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
             'category_code' => 'required|integer|min:1|max:5',
@@ -250,8 +276,10 @@ class CsatAssessmentController extends Controller
             'narrative_value' => 'nullable|string',
         ]);
 
-        $fields = collect($this->getIrNarrativeFields())->flatMap(fn($cat) => $cat['fields']);
-        $field = $fields->firstWhere('key', $validated['narrative_key']);
+        $field = collect($this->getIrNarrativeFields())
+            ->firstWhere('category_code', $validated['category_code'])['fields'] ?? [];
+        $field = collect($field)->firstWhere('key', $validated['narrative_key']);
+        abort_unless($field, 422, 'Unknown narrative field for this category.');
 
         CsatIrNarrative::updateOrCreate(
             ['assessment_id' => $assessment->id, 'category_code' => $validated['category_code'], 'narrative_key' => $validated['narrative_key']],
@@ -267,15 +295,16 @@ class CsatAssessmentController extends Controller
     {
         $this->authorizeAssessment($assessment);
 
-        $domainScores = $assessment->maScores()->where('score_type', 'domain')->get();
-        $componentScores = $assessment->maScores()->where('score_type', 'component')->get();
-        $irScores = $assessment->irCategoryScores()->get();
+        $domainScores = $assessment->maScores()->where('score_type', 'domain')->orderBy('scope_code')->get();
+        $factorScores = $assessment->maScores()->where('score_type', 'factor')->orderBy('scope_code')->get();
+        $componentScores = $assessment->maScores()->where('score_type', 'component')->orderBy('scope_code')->get();
 
         return Inertia::render('CSAT/Maturity/Dashboard', [
             'assessment' => $assessment,
             'domainScores' => $domainScores,
+            'factorScores' => $factorScores,
             'componentScores' => $componentScores,
-            'irScores' => $irScores,
+            'irComposite' => $this->irScoring->calculateCompositeRisk($assessment->id),
             'domainNames' => CsatMaStatement::DOMAIN_NAMES,
             'maturityLevels' => CsatMaStatement::MATURITY_LEVELS,
         ]);
@@ -285,30 +314,39 @@ class CsatAssessmentController extends Controller
     {
         $this->authorizeAssessment($assessment);
 
-        $domainFilter = $request->get('domain');
+        $domainFilter = (int) ($request->get('domain') ?: 1);
 
-        $query = CsatMaStatement::where('is_active', true);
-        if ($domainFilter) {
-            $query->where('domain_code', $domainFilter);
-        }
-        $statements = $query->orderBy('domain_code')->orderBy('factor_code')
-            ->orderBy('component_code')->orderBy('maturity_level')->orderBy('sequence')->get();
+        $statements = CsatMaStatement::where('is_active', true)->where('domain_code', $domainFilter)
+            ->orderBy('factor_code')->orderBy('component_code')->orderBy('maturity_level')->orderBy('sequence')->get();
 
-        $responses = $assessment->maResponses()->get()->keyBy('statement_id');
+        $responses = $assessment->maResponses()->with('compensatingControl')->get()->keyBy('statement_id');
+
+        // Sidebar progress for every domain, not just the one being viewed.
+        $answeredByDomain = $assessment->maResponses()->whereNotNull('response')
+            ->join('csat_ma_statements as s', 's.id', '=', 'csat_ma_responses.statement_id')
+            ->where('s.is_active', true)
+            ->selectRaw('s.domain_code, count(*) as n')->groupBy('s.domain_code')->pluck('n', 'domain_code');
+        $totalByDomain = CsatMaStatement::where('is_active', true)
+            ->selectRaw('domain_code, count(*) as n')->groupBy('domain_code')->pluck('n', 'domain_code');
 
         return Inertia::render('CSAT/Maturity/Assessment', [
             'assessment' => $assessment,
+            'editable' => $this->workflowService->isEditable($assessment),
             'statements' => $statements,
             'responses' => $responses,
+            'domainProgress' => collect(CsatMaStatement::DOMAIN_NAMES)->map(fn ($name, $code) => [
+                'answered' => (int) ($answeredByDomain[$code] ?? 0), 'total' => (int) ($totalByDomain[$code] ?? 0),
+            ]),
             'domainNames' => CsatMaStatement::DOMAIN_NAMES,
             'maturityLevels' => CsatMaStatement::MATURITY_LEVELS,
-            'currentDomain' => $domainFilter ? (int) $domainFilter : null,
+            'currentDomain' => $domainFilter,
         ]);
     }
 
     public function saveMaResponse(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
             'statement_id' => 'required|exists:csat_ma_statements,id',
@@ -321,11 +359,13 @@ class CsatAssessmentController extends Controller
             [
                 'response' => $validated['response'],
                 'has_compensating_control' => $validated['response'] === 'yes_cc',
-                'comment' => $validated['comment'],
                 'responded_by' => auth()->id(),
                 'responded_at' => now(),
-            ]
+            ] + ($request->has('comment') ? ['comment' => $validated['comment']] : [])
         );
+        if ($validated['response'] !== 'yes_cc') {
+            $maResponse->compensatingControl()->delete();
+        }
 
         $this->maScoring->recalculateAndPersist($assessment->id);
 
@@ -333,20 +373,24 @@ class CsatAssessmentController extends Controller
             $assessment->update(['status' => 'in_progress']);
         }
 
-        return back()->with('success', 'Response saved.');
+        return back()->with('success', $validated['response'] === 'yes_cc' && ! $maResponse->compensatingControl()->exists()
+            ? 'Saved — document the compensating control for this Yes [CC] answer.'
+            : 'Response saved.');
     }
 
     public function saveCompensatingControl(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
-            'response_id' => 'required|exists:csat_ma_responses,id',
+            'response_id' => ['required', Rule::exists('csat_ma_responses', 'id')
+                ->where('assessment_id', $assessment->id)->where('response', 'yes_cc')],
             'control_name' => 'required|string|max:500',
             'control_description' => 'required|string',
             'effectiveness_level' => 'required|in:high,medium,low',
-            'planned_permanent_date' => 'nullable|date',
-        ]);
+            'planned_permanent_date' => 'required|date',
+        ], ['response_id.exists' => 'A compensating control can only be recorded against a Yes [CC] answer in this assessment.']);
 
         CsatMaCompensatingControl::updateOrCreate(
             ['response_id' => $validated['response_id']],
@@ -369,6 +413,7 @@ class CsatAssessmentController extends Controller
 
         return Inertia::render('CSAT/Maturity/Narratives', [
             'assessment' => $assessment,
+            'editable' => $this->workflowService->isEditable($assessment),
             'narratives' => $narratives,
             'domainNames' => CsatMaStatement::DOMAIN_NAMES,
         ]);
@@ -377,9 +422,10 @@ class CsatAssessmentController extends Controller
     public function saveMaNarrative(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
-            'id' => 'required|exists:csat_ma_narratives,id',
+            'id' => ['required', Rule::exists('csat_ma_narratives', 'id')->where('assessment_id', $assessment->id)],
             'response_text' => 'nullable|string',
         ]);
 
@@ -400,13 +446,20 @@ class CsatAssessmentController extends Controller
         $domainScores = $assessment->maScores()->where('score_type', 'domain')->get();
         $componentScores = $assessment->maScores()->where('score_type', 'component')->get();
 
+        // A gap = a "No" at or below its domain's target level (all "No" answers when no target is set).
+        $targets = $domainScores->mapWithKeys(fn ($d) => [(int) ltrim($d->scope_code, 'D') => $d->target_maturity_level]);
         $gapStatements = CsatMaResponse::where('assessment_id', $assessment->id)
             ->where('response', 'no')
             ->with('statement')
-            ->get();
+            ->get()
+            ->filter(fn ($r) => $r->statement && (! ($targets[$r->statement->domain_code] ?? null)
+                || $r->statement->maturity_level <= $targets[$r->statement->domain_code]))
+            ->sortBy(fn ($r) => [$r->statement->domain_code, $r->statement->maturity_level])
+            ->values();
 
         return Inertia::render('CSAT/Maturity/Targets', [
             'assessment' => $assessment,
+            'editable' => $this->workflowService->isEditable($assessment),
             'domainScores' => $domainScores,
             'componentScores' => $componentScores,
             'gapStatements' => $gapStatements,
@@ -418,9 +471,10 @@ class CsatAssessmentController extends Controller
     public function saveTarget(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
-            'scope_code' => 'required|string|max:20',
+            'scope_code' => ['required', Rule::exists('csat_ma_scores', 'scope_code')->where('assessment_id', $assessment->id)],
             'target_maturity_level' => 'required|integer|min:1|max:5',
         ]);
 
@@ -437,11 +491,13 @@ class CsatAssessmentController extends Controller
     {
         $this->authorizeAssessment($assessment);
 
-        $threats = $assessment->threats()->with('createdBy:id,name')->orderByDesc('inherent_risk_score')->get();
+        $threats = $assessment->threats()->with('createdBy:id,name')->orderByDesc('inherent_risk_score')->get()
+            ->map(fn ($t) => $t->toArray() + ['created_by_name' => $t->createdBy?->name]);
         $catalogue = CsatThreatCatalogue::where('is_active', true)->orderBy('threat_name')->get();
 
         return Inertia::render('CSAT/Threats', [
             'assessment' => $assessment,
+            'editable' => $this->workflowService->isEditable($assessment),
             'threats' => $threats,
             'catalogue' => $catalogue,
         ]);
@@ -450,6 +506,7 @@ class CsatAssessmentController extends Controller
     public function storeThreat(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
             'threat_name' => 'required|string|max:500',
@@ -472,6 +529,8 @@ class CsatAssessmentController extends Controller
     public function updateThreat(Request $request, CsatAssessment $assessment, CsatThreat $threat)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureOwned($assessment, $threat->assessment_id);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
             'threat_name' => 'required|string|max:500',
@@ -493,7 +552,10 @@ class CsatAssessmentController extends Controller
     public function destroyThreat(CsatAssessment $assessment, CsatThreat $threat)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureOwned($assessment, $threat->assessment_id);
+        $this->ensureEditable($assessment);
         $threat->delete();
+
         return back()->with('success', 'Threat removed.');
     }
 
@@ -503,11 +565,13 @@ class CsatAssessmentController extends Controller
     {
         $this->authorizeAssessment($assessment);
 
-        $vulnerabilities = $assessment->vulnerabilities()->with(['assignee:id,name', 'createdBy:id,name'])->orderByDesc('composite_score')->get();
-        $users = User::where('organization_id', auth()->user()->organization_id)->select('id', 'name')->get();
+        $vulnerabilities = $assessment->vulnerabilities()->with(['assignee:id,name', 'createdBy:id,name'])->orderByDesc('composite_score')->get()
+            ->map(fn ($v) => $v->toArray() + ['created_by_name' => $v->createdBy?->name, 'due_date_input' => $v->due_date?->format('Y-m-d')]);
+        $users = User::where('organization_id', auth()->user()->organization_id)->orderBy('name')->select('id', 'name')->get();
 
         return Inertia::render('CSAT/Vulnerabilities', [
             'assessment' => $assessment,
+            'editable' => $this->workflowService->isEditable($assessment),
             'vulnerabilities' => $vulnerabilities,
             'users' => $users,
         ]);
@@ -516,6 +580,7 @@ class CsatAssessmentController extends Controller
     public function storeVulnerability(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
             'vulnerability_name' => 'required|string|max:500',
@@ -526,7 +591,7 @@ class CsatAssessmentController extends Controller
             'mitigants_in_place' => 'required|boolean',
             'existing_mitigants' => 'nullable|string',
             'planned_mitigants' => 'nullable|string',
-            'assigned_to' => 'nullable|exists:users,id',
+            'assigned_to' => ['nullable', Rule::exists('users', 'id')->where('organization_id', auth()->user()->organization_id)],
             'due_date' => 'nullable|date',
             'comment' => 'nullable|string',
         ]);
@@ -539,6 +604,8 @@ class CsatAssessmentController extends Controller
     public function updateVulnerability(Request $request, CsatAssessment $assessment, CsatVulnerability $vulnerability)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureOwned($assessment, $vulnerability->assessment_id);
+        $this->ensureEditable($assessment);
 
         $validated = $request->validate([
             'vulnerability_name' => 'sometimes|string|max:500',
@@ -550,7 +617,7 @@ class CsatAssessmentController extends Controller
             'existing_mitigants' => 'nullable|string',
             'planned_mitigants' => 'nullable|string',
             'remediation_status' => 'sometimes|in:identified,assigned,in_progress,remediated,verified',
-            'assigned_to' => 'nullable|exists:users,id',
+            'assigned_to' => ['nullable', Rule::exists('users', 'id')->where('organization_id', auth()->user()->organization_id)],
             'due_date' => 'nullable|date',
             'comment' => 'nullable|string',
         ]);
@@ -560,85 +627,111 @@ class CsatAssessmentController extends Controller
         return back()->with('success', 'Vulnerability updated.');
     }
 
+    public function destroyVulnerability(CsatAssessment $assessment, CsatVulnerability $vulnerability)
+    {
+        $this->authorizeAssessment($assessment);
+        $this->ensureOwned($assessment, $vulnerability->assessment_id);
+        $this->ensureEditable($assessment);
+        $vulnerability->delete();
+
+        return back()->with('success', 'Vulnerability removed.');
+    }
+
     // ===== Workflow =====
 
     public function workflow(CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
 
-        $approvalRecords = $assessment->approvalRecords()->orderBy('actioned_at')->get();
+        $user = auth()->user();
+        $next = $this->workflowService->nextStage($assessment);
+        $signed = $this->workflowService->currentCycle($assessment)->where('action', 'approved')->pluck('approver_id');
 
         return Inertia::render('CSAT/Workflow', [
             'assessment' => $assessment,
-            'approvalRecords' => $approvalRecords,
+            'approvalRecords' => $assessment->approvalRecords()->orderBy('actioned_at')->orderBy('id')->get(),
+            'stages' => $this->workflowService->stages($assessment),
+            'nextStage' => $next,
+            'checklist' => $this->workflowService->checklist($assessment),
+            'editable' => $this->workflowService->isEditable($assessment),
+            'can' => [
+                'submit' => $user->can('edit csat') && $this->workflowService->isEditable($assessment),
+                'approve' => $next !== null && ($user->hasRole('Super Admin') || $user->can($next['permission'])) && ! $signed->contains($user->id),
+                'signedEarlierStage' => $next !== null && $signed->contains($user->id),
+                'submitToCbn' => $assessment->status === 'approved' && $user->can('approve csat'),
+                'export' => $user->can('export csat'),
+            ],
         ]);
     }
 
-    public function submitForApproval(CsatAssessment $assessment)
+    public function submitForApproval(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $comments = $request->validate(['comments' => 'nullable|string|max:2000'])['comments'] ?? null;
+        $this->workflowService->submit($assessment, $request->user(), $comments);
 
-        $assessment->update(['status' => 'pending_approval']);
-
-        return back()->with('success', 'Assessment submitted for approval.');
+        return back()->with('success', 'Submitted for approval — awaiting '.$this->workflowService->nextStage($assessment->fresh())['name'].'.');
     }
 
     public function approve(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $validated = $request->validate(['comments' => 'nullable|string|max:2000']);
 
-        $validated = $request->validate([
-            'comments' => 'nullable|string',
-        ]);
+        $stage = $this->workflowService->approve($assessment, $request->user(), $validated['comments'] ?? null);
+        $next = $this->workflowService->nextStage($assessment->fresh());
 
-        $user = auth()->user();
-        $stageNumber = $assessment->approvalRecords()->max('stage_number') ?? 0;
-        $stageNumber++;
-
-        CsatApprovalRecord::create([
-            'assessment_id' => $assessment->id,
-            'stage_number' => $stageNumber,
-            'action' => 'approved',
-            'approver_id' => $user->id,
-            'approver_name' => $user->name,
-            'approver_role' => $user->getRoleNames()->first() ?? 'User',
-            'digital_signature_token' => hash('sha256', $user->id . $assessment->id . $stageNumber . now()->toISOString()),
-            'comments' => $validated['comments'],
-            'actioned_at' => now(),
-        ]);
-
-        if ($stageNumber >= 2) {
-            $assessment->update(['status' => 'approved']);
-        }
-
-        return back()->with('success', 'Assessment approved.');
+        return back()->with('success', "Stage {$stage['number']} ({$stage['name']}) signed."
+            .($next ? " Awaiting {$next['name']}." : ' Assessment fully approved — ready to submit to the CBN.'));
     }
 
     public function reject(Request $request, CsatAssessment $assessment)
     {
         $this->authorizeAssessment($assessment);
+        $validated = $request->validate(['comments' => 'required|string|max:2000']);
 
-        $validated = $request->validate([
-            'comments' => 'required|string',
+        $stage = $this->workflowService->returnForRevision($assessment, $request->user(), $validated['comments']);
+
+        return back()->with('success', "Returned for revision at stage {$stage['number']} ({$stage['name']}).");
+    }
+
+    public function submitToCbn(Request $request, CsatAssessment $assessment)
+    {
+        $this->authorizeAssessment($assessment);
+        $this->workflowService->submitToCbn($assessment, $request->user());
+
+        return back()->with('success', 'Assessment recorded as submitted to the CBN on '.now()->format('d M Y').'.');
+    }
+
+    public function updateDeadline(Request $request, CsatAssessment $assessment)
+    {
+        $this->authorizeAssessment($assessment);
+        $this->ensureEditable($assessment);
+        $validated = $request->validate(['submission_deadline' => 'required|date']);
+        $assessment->update($validated);
+
+        return back()->with('success', 'Submission deadline updated.');
+    }
+
+    /** CBN submission package (BR-AW-03) — printable summary of every section. */
+    public function submissionPackage(CsatAssessment $assessment)
+    {
+        $this->authorizeAssessment($assessment);
+
+        return Inertia::render('CSAT/SubmissionPackage', [
+            'assessment' => $assessment,
+            'profile' => $assessment->institutionProfile,
+            'stakeholders' => $assessment->stakeholderEngagement()->get(),
+            'ir' => $this->irScoring->calculateCompositeRisk($assessment->id),
+            'domainScores' => $assessment->maScores()->where('score_type', 'domain')->orderBy('scope_code')->get(),
+            'factorScores' => $assessment->maScores()->where('score_type', 'factor')->orderBy('scope_code')->get(),
+            'threats' => $assessment->threats()->orderByDesc('inherent_risk_score')->get(),
+            'vulnerabilities' => $assessment->vulnerabilities()->with('assignee:id,name')->orderByDesc('composite_score')->get(),
+            'approvalRecords' => $assessment->approvalRecords()->orderBy('actioned_at')->orderBy('id')->get(),
+            'stages' => $this->workflowService->stages($assessment),
+            'checklist' => $this->workflowService->checklist($assessment),
+            'maturityLevels' => CsatMaStatement::MATURITY_LEVELS,
         ]);
-
-        $user = auth()->user();
-        $stageNumber = $assessment->approvalRecords()->max('stage_number') ?? 0;
-
-        CsatApprovalRecord::create([
-            'assessment_id' => $assessment->id,
-            'stage_number' => $stageNumber + 1,
-            'action' => 'rejected',
-            'approver_id' => $user->id,
-            'approver_name' => $user->name,
-            'approver_role' => $user->getRoleNames()->first() ?? 'User',
-            'comments' => $validated['comments'],
-            'actioned_at' => now(),
-        ]);
-
-        $assessment->update(['status' => 'in_progress']);
-
-        return back()->with('success', 'Assessment returned for revision.');
     }
 
     // ===== Reports =====
@@ -648,8 +741,8 @@ class CsatAssessmentController extends Controller
         $this->authorizeAssessment($assessment);
 
         $irScores = $this->irScoring->calculateCompositeRisk($assessment->id);
-        $domainScores = $assessment->maScores()->where('score_type', 'domain')->get();
-        $componentScores = $assessment->maScores()->where('score_type', 'component')->get();
+        $domainScores = $assessment->maScores()->where('score_type', 'domain')->orderBy('scope_code')->get();
+        $componentScores = $assessment->maScores()->where('score_type', 'component')->orderBy('scope_code')->get();
         $gapCount = CsatMaResponse::where('assessment_id', $assessment->id)->where('response', 'no')->count();
         $aiRecs = $assessment->aiRecommendations()->where('is_dismissed', false)->orderBy('priority_rank')->get();
 
@@ -660,6 +753,7 @@ class CsatAssessmentController extends Controller
             'componentScores' => $componentScores,
             'gapCount' => $gapCount,
             'recommendations' => $aiRecs,
+            'readiness' => $this->insights->readiness($assessment),
             'domainNames' => CsatMaStatement::DOMAIN_NAMES,
             'maturityLevels' => CsatMaStatement::MATURITY_LEVELS,
         ]);
@@ -671,18 +765,30 @@ class CsatAssessmentController extends Controller
     {
         $this->authorizeAssessment($assessment);
 
-        $recommendations = $assessment->aiRecommendations()->orderBy('priority_rank')->get();
+        $recommendations = $assessment->aiRecommendations()->orderBy('is_dismissed')->orderBy('priority_rank')->get();
 
         return Inertia::render('CSAT/AIInsights', [
             'assessment' => $assessment,
             'recommendations' => $recommendations,
+            'readiness' => $this->insights->readiness($assessment),
+            'engine' => CsatInsightService::ENGINE,
         ]);
+    }
+
+    public function generateInsights(CsatAssessment $assessment)
+    {
+        $this->authorizeAssessment($assessment);
+        $count = $this->insights->generate($assessment);
+
+        return back()->with('success', "Insights refreshed — {$count} recommendation(s).");
     }
 
     public function dismissRecommendation(CsatAssessment $assessment, CsatAiRecommendation $recommendation)
     {
         $this->authorizeAssessment($assessment);
+        $this->ensureOwned($assessment, $recommendation->assessment_id);
         $recommendation->update(['is_dismissed' => true]);
+
         return back()->with('success', 'Recommendation dismissed.');
     }
 
@@ -690,7 +796,23 @@ class CsatAssessmentController extends Controller
 
     private function authorizeAssessment(CsatAssessment $assessment): void
     {
-        abort_if($assessment->organization_id !== auth()->user()->organization_id, 403);
+        abort_unless((int) $assessment->organization_id === (int) auth()->user()->organization_id, 403);
+    }
+
+    /** Child records are bound globally by id — make sure they belong to this assessment. */
+    private function ensureOwned(CsatAssessment $assessment, ?int $childAssessmentId): void
+    {
+        abort_unless((int) $childAssessmentId === (int) $assessment->id, 404);
+    }
+
+    /** Answers and registers are frozen once the cycle is submitted for approval. */
+    private function ensureEditable(CsatAssessment $assessment): void
+    {
+        if (! $this->workflowService->isEditable($assessment)) {
+            throw ValidationException::withMessages([
+                'workflow' => 'This assessment is '.str_replace('_', ' ', $assessment->status).' and locked for editing. It must be returned for revision before changes can be made.',
+            ]);
+        }
     }
 
     private function getIrNarrativeFields(): array

@@ -1,9 +1,9 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
+import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { MATURITY_COLORS as maturityColors, lockMessage } from '@/Utils/csat';
 
-const maturityColors = { 0: '#C53030', 1: '#DD6B20', 2: '#D4AF37', 3: '#319795', 4: '#2D7D46', 5: '#1A365D' };
-
-export default function MaturityTargets({ assessment, domainScores, componentScores, gapStatements, domainNames, maturityLevels }) {
+export default function MaturityTargets({ assessment, domainScores, componentScores, gapStatements, domainNames, maturityLevels, editable = true }) {
     const saveTarget = (scopeCode, level) => {
         router.post(route('csat.ma.target.save', assessment.id), {
             scope_code: scopeCode, target_maturity_level: level,
@@ -17,6 +17,11 @@ export default function MaturityTargets({ assessment, domainScores, componentSco
             <div className="mb-4 flex items-center justify-between">
                 <Link href={route('csat.ma.dashboard', assessment.id)} className="text-sm text-[#1A365D] hover:underline">&larr; Back to Maturity Dashboard</Link>
             </div>
+            {!editable && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
+                    <LockClosedIcon className="w-4 h-4" /> {lockMessage(assessment)}
+                </div>
+            )}
 
             {/* Domain Target Setting */}
             <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6">
@@ -38,8 +43,8 @@ export default function MaturityTargets({ assessment, domainScores, componentSco
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-xs text-[#718096]">Target:</span>
-                                    <select value={ds.target_maturity_level || ''} onChange={e => saveTarget(ds.scope_code, parseInt(e.target.value))}
-                                        className="px-2 py-1 border border-gray-200 rounded text-sm">
+                                    <select value={ds.target_maturity_level || ''} disabled={!editable} onChange={e => e.target.value && saveTarget(ds.scope_code, parseInt(e.target.value))}
+                                        className="px-2 py-1 border border-gray-200 rounded text-sm disabled:bg-gray-50">
                                         <option value="">Set target</option>
                                         {[1,2,3,4,5].map(l => <option key={l} value={l}>{maturityLevels[l]}</option>)}
                                     </select>
@@ -47,7 +52,7 @@ export default function MaturityTargets({ assessment, domainScores, componentSco
                                 {gap > 0 && (
                                     <span className="px-2 py-0.5 bg-red-50 text-[#C53030] text-xs font-bold rounded">Gap: {gap} level{gap > 1 ? 's' : ''}</span>
                                 )}
-                                {gap === 0 && ds.target_maturity_level > 0 && (
+                                {gap <= 0 && ds.target_maturity_level > 0 && (
                                     <span className="px-2 py-0.5 bg-green-50 text-[#2D7D46] text-xs font-bold rounded">Target Met</span>
                                 )}
                             </div>
@@ -93,10 +98,10 @@ export default function MaturityTargets({ assessment, domainScores, componentSco
             {/* Gap Statements (No responses) */}
             <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm">
                 <h3 className="text-base font-semibold text-[#2D3748] mb-4">
-                    Gap Statements <span className="text-sm font-normal text-[#718096]">({(gapStatements || []).length} items marked "No")</span>
+                    Gap Statements <span className="text-sm font-normal text-[#718096]">({(gapStatements || []).length} "No" answers at or below each domain's target level)</span>
                 </h3>
                 {(gapStatements || []).length === 0 ? (
-                    <p className="text-sm text-[#718096]">No gap statements found. All assessed statements are compliant.</p>
+                    <p className="text-sm text-[#718096]">No gaps against the current targets.</p>
                 ) : (
                     <div className="space-y-2 max-h-96 overflow-y-auto">
                         {(gapStatements || []).map(gs => (
@@ -107,7 +112,7 @@ export default function MaturityTargets({ assessment, domainScores, componentSco
                                 </span>
                                 <div>
                                     <p className="text-sm text-[#2D3748]">{gs.statement?.statement_text}</p>
-                                    <p className="text-xs text-[#718096] mt-1">{gs.statement?.component_name} — {gs.statement?.factor_name}</p>
+                                    <p className="text-xs text-[#718096] mt-1">{domainNames[gs.statement?.domain_code]} · {gs.statement?.factor_name} · {gs.statement?.component_name} · {maturityLevels[gs.statement?.maturity_level]}</p>
                                 </div>
                             </div>
                         ))}

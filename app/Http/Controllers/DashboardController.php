@@ -16,6 +16,8 @@ use App\Models\Risk;
 use App\Models\TprmSecurityRating;
 use App\Models\Vendor;
 use App\Models\Vulnerability;
+use App\Modules\CBNCSAT\Models\CsatAssessment;
+use App\Modules\CBNCSAT\Models\CsatMaStatement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -120,14 +122,31 @@ class DashboardController extends Controller
             });
 
         // CBN-CSAT maturity radar (5 domains × 5 levels)
-        $csat = [
-            'domains' => ['Cyber Risk Mgmt', 'Threat Intel', 'Cybersecurity Controls', 'External Dependency', 'Incident Mgmt'],
-            'current' => [3.2, 2.8, 3.5, 2.9, 3.4],
-            'target' => [4, 4, 4.5, 4, 4.5],
-            'overall' => 3.16,
-            'target_overall' => 4.2,
-            'completion_percent' => 60,
-        ];
+        // CBN-CSAT radar from the organisation's latest cycle. A domain plots as its achieved level plus
+        // its fractional progress towards the next level, so movement shows before a level is attained.
+        $csat = null;
+        $latestCsat = CsatAssessment::when($orgId, fn ($q) => $q->where('organization_id', $orgId))
+            ->orderByDesc('assessment_year')->orderByDesc('id')->first();
+        if ($latestCsat) {
+            $levelColumns = [1 => 'baseline_score', 2 => 'evolving_score', 3 => 'intermediate_score', 4 => 'advanced_score', 5 => 'innovative_score'];
+            $domains = $latestCsat->maScores()->where('score_type', 'domain')->orderBy('scope_code')->get();
+            $statementTotal = CsatMaStatement::where('is_active', true)->count();
+            $csat = [
+                'assessment_id' => $latestCsat->id,
+                'year' => $latestCsat->assessment_year,
+                'status' => $latestCsat->status,
+                'domains' => $domains->map(fn ($d) => $d->scope_code)->all(),
+                'domain_names' => $domains->pluck('scope_name')->all(),
+                'current' => $domains->map(fn ($d) => round($d->achieved_maturity_level
+                    + ($d->achieved_maturity_level < 5 ? (float) $d->{$levelColumns[$d->achieved_maturity_level + 1]} : 0), 2))->all(),
+                'target' => $domains->map(fn ($d) => (int) ($d->target_maturity_level ?? 0))->all(),
+                'overall' => $latestCsat->overall_maturity_level,
+                'inherent_risk' => $latestCsat->composite_risk_level,
+                'completion_percent' => $statementTotal ? (int) round($latestCsat->maResponses()->whereNotNull('response')->count() / $statementTotal * 100) : 0,
+                'readiness' => $latestCsat->ai_readiness_score,
+                'readiness_rag' => $latestCsat->ai_readiness_rag,
+            ];
+        }
 
         // Aggregate counts
         $counts = [

@@ -10,7 +10,7 @@ import Sidebar from '@/Components/Sidebar/Sidebar';
 import Dropdown from '@/Components/Dropdown';
 
 export default function AuthenticatedLayout({ header, children }) {
-    const { auth, flash } = usePage().props;
+    const { auth, flash, errors } = usePage().props;
     const user = auth.user;
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -141,6 +141,12 @@ export default function AuthenticatedLayout({ header, children }) {
                 {flash?.error && (
                     <div className="mx-4 sm:mx-6 mt-4 px-4 py-3 bg-[#C53030]/10 border border-[#C53030]/20 rounded-lg text-sm text-[#C53030] font-medium">
                         {flash.error}
+                    </div>
+                )}
+                {/* Action-level errors (e.g. workflow / record locks) that belong to no single form field */}
+                {errors?.workflow && (
+                    <div role="alert" className="mx-4 sm:mx-6 mt-4 px-4 py-3 bg-[#C53030]/10 border border-[#C53030]/20 rounded-lg text-sm text-[#C53030] font-medium">
+                        {errors.workflow}
                     </div>
                 )}
 

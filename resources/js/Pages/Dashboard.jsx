@@ -2,8 +2,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
-import { IMPACT_LABELS, LIKELIHOOD_LABELS, ratingColor } from '@/Utils/risk';
-import { Head, Link, router } from '@inertiajs/react';
+import { IMPACT_LABELS, LIKELIHOOD_LABELS, humanize, ratingColor } from '@/Utils/risk';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     ShieldExclamationIcon,
     ServerStackIcon,
@@ -90,13 +90,13 @@ function Donut({ data, colors, size = 140 }) {
     </svg>;
 }
 
-function CsatRadar({ csat = {} }) {
+function CsatRadar({ csat }) {
     const size = 240, cx = size/2, cy = size/2;
     const levels = 5;
-    const domains = csat.domains || [];
-    const current = csat.current || [];
-    const target = csat.target || [];
-    if (domains.length === 0) return null;
+    const domains = csat?.domains || [];
+    const current = csat?.current || [];
+    const target = csat?.target || [];
+    if (domains.length === 0) return <p className="text-xs text-[#718096] py-16 text-center">No maturity scores yet.</p>;
     const angle = (i) => (i / domains.length) * Math.PI * 2 - Math.PI / 2;
     const point = (val, i) => {
         const r = (val / levels) * (size/2 - 30);
@@ -123,7 +123,8 @@ function CsatRadar({ csat = {} }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = {} }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null }) {
+    const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
     const vulnFunnel = severityOrder.map((s) => ({ level: s, n: Number(vulnsBySeverity[s] || 0) }));
@@ -381,9 +382,13 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                     <div className="flex items-start justify-between mb-3">
                         <div>
                             <h3 className="text-sm font-semibold text-[#2D3748]">CBN-CSAT Maturity</h3>
-                            <p className="text-xs text-[#718096]">Overall {csat.overall} / {csat.target_overall} · {csat.completion_percent}% complete</p>
+                            <p className="text-xs text-[#718096]">
+                                {csat ? `${csat.year} · ${humanize(csat.status)} · overall ${humanize(csat.overall)} · inherent risk ${humanize(csat.inherent_risk)} · ${csat.completion_percent}% answered · readiness ${csat.readiness ?? '—'}/100` : 'No CSAT cycle started'}
+                            </p>
                         </div>
-                        <Link href={route('csat.index')} className="text-xs text-[#0A1F44] underline">CSAT →</Link>
+                        {(auth?.user?.permissions || []).includes('view csat') || (auth?.user?.roles || []).includes('Super Admin') ? (
+                            <Link href={csat ? route('csat.overview', csat.assessment_id) : route('csat.index')} className="text-xs text-[#0A1F44] underline">CSAT →</Link>
+                        ) : null}
                     </div>
                     <div className="flex justify-center">
                         <CsatRadar csat={csat} />

@@ -38,14 +38,17 @@ export default function InherentRiskDashboard({ assessment, scores }) {
 
             {/* Composite Risk */}
             <div className="bg-white rounded-xl border border-gray-100 p-6 shadow-sm mb-6 text-center">
-                <p className="text-sm text-[#718096] mb-2">Composite Inherent Risk</p>
+                <p className="text-sm text-[#718096] mb-2">Composite Inherent Risk <span className="text-xs">(equal-weighted mean of the 5 category averages)</span></p>
                 <div className="inline-flex items-center gap-3">
                     <span className="text-4xl font-bold font-mono text-[#2D3748]">{scores.score}</span>
                     <span className={`px-4 py-2 rounded-lg text-sm font-bold text-white`}
                         style={{ backgroundColor: riskColors[scores.level] || '#718096' }}>
-                        {scores.level?.charAt(0).toUpperCase() + scores.level?.slice(1)}
+                        {scores.level ? scores.level.charAt(0).toUpperCase() + scores.level.slice(1) : 'Not scored'}
                     </span>
                 </div>
+                {!scores.is_complete && (
+                    <p className="text-xs text-[#DD6B20] mt-2">Provisional — {scores.answered} of {scores.total} questions answered. CBN submission is blocked until every question is answered (BR-IR-06).</p>
+                )}
             </div>
 
             {/* Category Chart */}
@@ -56,7 +59,7 @@ export default function InherentRiskDashboard({ assessment, scores }) {
                         <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11 }} />
                         <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(v, name) => [v.toFixed(3), 'Average Score']} />
-                        <Bar dataKey="score" radius={[0, 4, 4, 0]}>
+                        <Bar isAnimationActive={false} dataKey="score" radius={[0, 4, 4, 0]}>
                             {chartData.map((entry, i) => (
                                 <Cell key={i} fill={riskColors[entry.level] || '#718096'} />
                             ))}
