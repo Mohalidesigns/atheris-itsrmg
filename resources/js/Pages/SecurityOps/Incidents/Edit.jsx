@@ -7,7 +7,7 @@ import PrimaryButton from '@/Components/PrimaryButton';
 
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-export default function EditIncident({ incident, users = [], statuses = [], types = [] }) {
+export default function EditIncident({ incident, users = [], statuses = [], types = [], procedures = [] }) {
     const { data, setData, put, processing, errors } = useForm({
         title: incident.title || '',
         description: incident.description || '',
@@ -20,6 +20,7 @@ export default function EditIncident({ incident, users = [], statuses = [], type
         affected_users_count: incident.affected_users_count ?? '',
         root_cause: incident.root_cause || '',
         lessons_learned: incident.lessons_learned || '',
+        response_procedure_id: incident.response_procedure_id || '',
     });
 
     const submit = (e) => {
@@ -112,7 +113,7 @@ export default function EditIncident({ incident, users = [], statuses = [], type
                         </div>
 
                         <div>
-                            <InputLabel htmlFor="root_cause" value="Root Cause" />
+                            <InputLabel htmlFor="root_cause" value="Root Cause (required to close)" />
                             <textarea id="root_cause" value={data.root_cause} onChange={e => setData('root_cause', e.target.value)} rows={2}
                                 className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm" />
                             <InputError message={errors.root_cause} className="mt-1" />
@@ -123,6 +124,17 @@ export default function EditIncident({ incident, users = [], statuses = [], type
                             <textarea id="lessons_learned" value={data.lessons_learned} onChange={e => setData('lessons_learned', e.target.value)} rows={2}
                                 className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm" />
                             <InputError message={errors.lessons_learned} className="mt-1" />
+                        </div>
+
+                        <div>
+                            <InputLabel htmlFor="response_procedure_id" value="Response procedure" />
+                            <select id="response_procedure_id" value={data.response_procedure_id} onChange={e => setData('response_procedure_id', e.target.value)}
+                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm">
+                                <option value="">None yet</option>
+                                {procedures.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                            </select>
+                            
+                            <InputError message={errors.response_procedure_id} className="mt-1" />
                         </div>
 
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">

@@ -5,7 +5,7 @@ import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
-export default function ShowResponseProcedure({ procedure }) {
+export default function ShowResponseProcedure({ procedure, incidents = [] }) {
     const destroy = () => {
         if (confirm('Delete this response procedure? This cannot be undone.')) {
             router.delete(route('response-procedures.destroy', procedure.id));
@@ -91,6 +91,23 @@ export default function ShowResponseProcedure({ procedure }) {
                         )}
                     </div>
                 </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-gray-100 bg-white p-6 shadow-sm">
+                <h3 className="mb-3 text-sm font-semibold text-[#2D3748]">Incidents following this procedure</h3>
+                {incidents.length === 0 ? (
+                    <p className="text-sm text-[#718096]">No incident has adopted this procedure yet.</p>
+                ) : (
+                    <ul className="divide-y divide-gray-100 text-sm">
+                        {incidents.map((i) => (
+                            <li key={i.id} className="flex items-center justify-between gap-2 py-2">
+                                <Link href={route('incidents.show', i.id)} className="text-[#0A1F44] hover:underline">
+                                    <span className="font-mono text-xs">{i.incident_id_code}</span> {i.title}
+                                </Link>
+                                <span className="text-xs capitalize text-[#718096]">{i.severity} · {i.status.replace(/_/g, ' ')}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
         </AuthenticatedLayout>
     );

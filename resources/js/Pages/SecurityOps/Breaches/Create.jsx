@@ -6,24 +6,30 @@ import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 
 export default function CreateBreach({ users, incidents, breachTypes }) {
-    const { data, setData, post, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, transform } = useForm({
         title: '',
         description: '',
         breach_type: '',
         incident_id: '',
         data_types_affected: '',
         records_affected: '',
-        ndpa_notification_required: false,
+        discovered_at: '',
+        ndpa_notification_required: true,
         assigned_to: '',
     });
 
     const submit = (e) => {
         e.preventDefault();
-        post(route('breaches.store'));
+        // Data types are typed as a comma-separated list; the API stores them as an array.
+        transform((d) => ({
+            ...d,
+            data_types_affected: d.data_types_affected.split(',').map((t) => t.trim()).filter(Boolean),
+        }));
+        post(route('data-breaches.store'));
     };
 
     const defaultBreachTypes = breachTypes || [
-        'confidentiality', 'integrity', 'availability', 'combined',
+        'confidentiality', 'integrity', 'availability',
     ];
 
     return (
@@ -108,7 +114,15 @@ export default function CreateBreach({ users, incidents, breachTypes }) {
                                 onChange={e => setData('data_types_affected', e.target.value)}
                                 placeholder="e.g. Names, Email addresses, Phone numbers, Financial data"
                             />
-                            <InputError message={errors.data_types_affected} className="mt-1" />
+                            <InputError message={errors.data_types_affected || errors['data_types_affected.0']} className="mt-1" />
+                        </div>
+
+                        <div>
+                            <InputLabel htmlFor="discovered_at" value="Discovered at" />
+                            <TextInput id="discovered_at" type="datetime-local" value={data.discovered_at} className="mt-1 block w-full"
+                                onChange={e => setData('discovered_at', e.target.value)} />
+                            <p className="mt-1 text-xs text-[#718096]">When the bank became aware. The NDPA 72-hour clock runs from here (defaults to the linked incident's detection, else now).</p>
+                            <InputError message={errors.discovered_at} className="mt-1" />
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -153,13 +167,13 @@ export default function CreateBreach({ users, incidents, breachTypes }) {
                             <div>
                                 <InputLabel htmlFor="ndpa_notification_required" value="NDPA Notification Required" className="!mb-0" />
                                 <p className="text-xs text-[#718096]">
-                                    Check this if the breach requires notification to the Nigeria Data Protection Authority.
+                                    Personal data was affected and the NDPC must be notified within 72 hours of discovery (NDPA 2023 s.40).
                                 </p>
                             </div>
                         </div>
 
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
-                            <Link href={route('breaches.index')} className="px-4 py-2 text-sm text-[#718096] hover:text-[#2D3748]">
+                            <Link href={route('data-breaches.index')} className="px-4 py-2 text-sm text-[#718096] hover:text-[#2D3748]">
                                 Cancel
                             </Link>
                             <PrimaryButton disabled={processing}>

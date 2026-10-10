@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { useState } from 'react';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
 import { PencilIcon, TrashIcon, ArrowUpCircleIcon } from '@heroicons/react/24/outline';
@@ -14,7 +15,8 @@ function DetailRow({ label, value }) {
     );
 }
 
-export default function ShowSecurityAlert({ alert }) {
+export default function ShowSecurityAlert({ alert, openIncidents = [] }) {
+    const [linkTo, setLinkTo] = useState('');
     const destroy = () => {
         if (confirm(`Delete alert ${alert.alert_id_code}? This cannot be undone.`)) {
             router.delete(route('security-alerts.destroy', alert.id));
@@ -67,6 +69,15 @@ export default function ShowSecurityAlert({ alert }) {
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-[#0A1F44] text-white hover:bg-[#1A2F54]">
                         <ArrowUpCircleIcon className="w-4 h-4" /> Promote to Incident
                     </button>
+                )}
+                {!alert.incident_id && openIncidents.length > 0 && (
+                    <form className="flex items-center gap-1" onSubmit={(e) => { e.preventDefault(); linkTo && router.post(route('security-alerts.link', alert.id), { incident_id: linkTo }); }}>
+                        <select value={linkTo} onChange={(e) => setLinkTo(e.target.value)} className="rounded-lg border border-gray-200 py-1.5 text-sm">
+                            <option value="">Link to an open incident…</option>
+                            {openIncidents.map((i) => <option key={i.id} value={i.id}>{i.incident_id_code} · {i.title}</option>)}
+                        </select>
+                        <button disabled={!linkTo} className="rounded-lg border border-[#0A1F44]/20 px-3 py-1.5 text-sm text-[#0A1F44] disabled:opacity-50">Link</button>
+                    </form>
                 )}
                 <button onClick={destroy}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-[#C53030]/30 rounded-lg hover:bg-[#C53030]/5 text-[#C53030]">

@@ -13,9 +13,12 @@ function NdpaStatusBadge({ breach }) {
         );
     }
     if (breach.ndpa_notification_required) {
+        const deadline = breach.ndpa_notification_deadline ? new Date(breach.ndpa_notification_deadline) : null;
+        const overdue = deadline && deadline < new Date();
+        const hoursLeft = deadline ? Math.max(0, Math.round((deadline - new Date()) / 36e5)) : null;
         return (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[#C53030]/10 text-[#C53030]">
-                Required
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${overdue ? 'bg-[#C53030] text-white' : 'bg-[#C53030]/10 text-[#C53030]'}`}>
+                {overdue ? 'Overdue' : hoursLeft !== null ? `Due in ${hoursLeft}h` : 'Required'}
             </span>
         );
     }
@@ -49,11 +52,11 @@ export default function BreachesIndex({ breaches, filters }) {
 
     const handleSearch = (e) => {
         e.preventDefault();
-        router.get(route('breaches.index'), { ...filters, search }, { preserveState: true });
+        router.get(route('data-breaches.index'), { ...filters, search }, { preserveState: true });
     };
 
     const applyFilter = (key, value) => {
-        router.get(route('breaches.index'), { ...filters, [key]: value || undefined }, { preserveState: true });
+        router.get(route('data-breaches.index'), { ...filters, [key]: value || undefined }, { preserveState: true });
     };
 
     return (
@@ -76,7 +79,7 @@ export default function BreachesIndex({ breaches, filters }) {
                         Filters
                     </button>
                     <Link
-                        href={route('breaches.create')}
+                        href={route('data-breaches.create')}
                         className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-[#1A365D] rounded-lg hover:bg-[#2D4A7A] transition-colors"
                     >
                         <PlusIcon className="w-4 h-4" />
@@ -112,7 +115,7 @@ export default function BreachesIndex({ breaches, filters }) {
                                 className="text-sm border-gray-200 rounded-lg focus:ring-[#1A365D]/30 focus:border-[#1A365D]"
                             >
                                 <option value="">All Statuses</option>
-                                {['open', 'investigating', 'contained', 'notifying', 'remediated', 'closed'].map(s => (
+                                {['identified', 'investigating', 'contained', 'notified', 'resolved', 'closed'].map(s => (
                                     <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
                                 ))}
                             </select>
@@ -122,7 +125,7 @@ export default function BreachesIndex({ breaches, filters }) {
                                 className="text-sm border-gray-200 rounded-lg focus:ring-[#1A365D]/30 focus:border-[#1A365D]"
                             >
                                 <option value="">NDPA Status</option>
-                                <option value="required">Notification Required</option>
+                                <option value="pending">Notification pending</option>
                                 <option value="notified">Already Notified</option>
                                 <option value="not_required">Not Required</option>
                             </select>
@@ -155,12 +158,12 @@ export default function BreachesIndex({ breaches, filters }) {
                                 breaches.data.map(breach => (
                                     <tr key={breach.id} className="hover:bg-gray-50/50 transition-colors">
                                         <td className="px-4 py-3">
-                                            <Link href={route('breaches.show', breach.id)} className="font-mono-data text-[#1A365D] font-medium hover:underline">
+                                            <Link href={route('data-breaches.show', breach.id)} className="font-mono-data text-[#1A365D] font-medium hover:underline">
                                                 {breach.breach_id_code || `BRC-${String(breach.id).padStart(4, '0')}`}
                                             </Link>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <Link href={route('breaches.show', breach.id)} className="text-[#2D3748] font-medium hover:text-[#1A365D]">
+                                            <Link href={route('data-breaches.show', breach.id)} className="text-[#2D3748] font-medium hover:text-[#1A365D]">
                                                 {breach.title}
                                             </Link>
                                         </td>

@@ -1,205 +1,200 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import PageHeader from '@/Components/PageHeader';
+import KpiCard from '@/Components/KpiCard';
+import StatusBadge from '@/Components/StatusBadge';
+import { formatDate, humanize } from '@/Utils/risk';
 import { Head, Link } from '@inertiajs/react';
-import {
-    ShieldExclamationIcon,
-    ExclamationTriangleIcon,
-    FireIcon,
-    BoltIcon,
-    ArrowRightIcon,
-    PlusIcon,
-} from '@heroicons/react/24/outline';
+import { BellAlertIcon, BugAntIcon, ClockIcon, FireIcon, ShieldExclamationIcon } from '@heroicons/react/24/outline';
 
-function StatCard({ title, value, color, icon: Icon, subtitle }) {
-    const bgMap = {
-        red: 'bg-[#C53030]', orange: 'bg-[#DD6B20]', gold: 'bg-[#D4AF37]',
-        green: 'bg-[#2D7D46]', navy: 'bg-[#1A365D]', teal: 'bg-[#319795]',
-    };
+const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
+const SEVERITY_COLOR = { critical: '#B3261E', high: '#E5A100', medium: '#1D4ED8', low: '#718096', info: '#A0AEC0' };
+
+function hours(h) {
+    if (h === null || h === undefined) return '—';
+    return h >= 48 ? `${(h / 24).toFixed(1)} d` : `${h} h`;
+}
+
+function Panel({ title, href, linkLabel, children }) {
     return (
-        <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-                <p className="text-xs text-[#718096] uppercase font-medium">{title}</p>
-                {Icon && (
-                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center ${bgMap[color]}/10`}>
-                        <Icon className="w-4 h-4" style={{ color: bgMap[color]?.replace('bg-[', '').replace(']', '') }} />
-                    </span>
-                )}
+        <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-start justify-between gap-2">
+                <h3 className="text-sm font-semibold text-[#2D3748]">{title}</h3>
+                {href && <Link href={href} className="whitespace-nowrap text-xs text-[#0A1F44] underline">{linkLabel}</Link>}
             </div>
-            <div className="flex items-end gap-2 mt-1">
-                <span className="text-2xl font-bold font-mono-data text-[#2D3748]">{value}</span>
-                {color && <span className={`w-2 h-2 rounded-full mb-1.5 ${bgMap[color]}`} />}
-            </div>
-            {subtitle && <p className="text-xs text-[#718096] mt-0.5">{subtitle}</p>}
+            {children}
         </div>
     );
 }
 
-const severityColors = {
-    critical: '#C53030',
-    high: '#DD6B20',
-    medium: '#D4AF37',
-    low: '#2D7D46',
-    info: '#319795',
-};
+export default function SecurityOpsDashboard({ stats = {}, responseTimes = {}, topPriorities = [], clocks = [], activeIncidents = [], newAlerts = [], severityMix = {} }) {
+    const mixTotal = SEVERITIES.reduce((n, s) => n + Number(severityMix[s] || 0), 0);
 
-function SeverityBadge({ severity }) {
-    const color = severityColors[severity] || '#718096';
-    return (
-        <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize"
-            style={{ backgroundColor: `${color}15`, color }}
-        >
-            {severity}
-        </span>
-    );
-}
-
-function StatusBadge({ status }) {
-    const map = {
-        open: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
-        in_progress: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
-        resolved: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
-        closed: { bg: 'bg-gray-100', text: 'text-gray-500' },
-        mitigated: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
-        accepted: { bg: 'bg-[#D4AF37]/10', text: 'text-[#D4AF37]' },
-    };
-    const style = map[status] || map.open;
-    return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${style.bg} ${style.text}`}>
-            {(status || '').replace(/_/g, ' ')}
-        </span>
-    );
-}
-
-export default function SecurityOpsDashboard({ stats, recentVulnerabilities, activeIncidents }) {
     return (
         <AuthenticatedLayout header="Security Operations">
             <Head title="Security Operations Dashboard" />
+            <PageHeader
+                breadcrumbs={[{ label: 'Security Operations' }, { label: 'Dashboard' }]}
+                title="Security Operations Dashboard"
+                subtitle="Exposure, detection and response, and the regulatory clocks running against them."
+            />
 
-            {/* Stats Row */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                <StatCard
-                    title="Total Vulnerabilities"
-                    value={stats.total_vulns}
-                    color="navy"
-                    icon={ShieldExclamationIcon}
-                    subtitle={`${stats.overdue_vulns || 0} overdue`}
-                />
-                <StatCard
-                    title="Critical Vulns"
-                    value={stats.critical_vulns}
-                    color="red"
-                    icon={FireIcon}
-                    subtitle={`${stats.high_vulns || 0} high`}
-                />
-                <StatCard
-                    title="Open Incidents"
-                    value={stats.open_incidents}
-                    color="orange"
-                    icon={ExclamationTriangleIcon}
-                />
-                <StatCard
-                    title="Active Breaches"
-                    value={stats.active_breaches || 0}
-                    color="red"
-                    icon={BoltIcon}
-                />
-            </div>
-
-            {/* Actions */}
-            <div className="flex gap-2 mb-6">
-                <Link
-                    href={route('vulnerabilities.index')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-[#1A365D] rounded-lg hover:bg-[#2D4A7A] transition-colors"
-                >
-                    <ShieldExclamationIcon className="w-4 h-4" />
-                    Vulnerabilities
+            <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                <Link href={route('vulnerabilities.index', { status: 'outstanding' })}>
+                    <KpiCard label="Open findings" value={stats.vulns_outstanding ?? 0} sublabel={`${stats.vulns_critical ?? 0} critical · ${stats.vulns_high ?? 0} high`} tone="white" icon={BugAntIcon} />
                 </Link>
-                <Link
-                    href={route('incidents.index')}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 text-[#718096]"
-                >
-                    <ExclamationTriangleIcon className="w-4 h-4" />
-                    Incidents
+                <Link href={route('vuln-prioritiser.index', { kev: 1 })}>
+                    <KpiCard label="Known exploited" value={stats.vulns_kev ?? 0} sublabel={`${stats.vulns_p1 ?? 0} at P1`} tone={stats.vulns_kev ? 'red' : 'white'} icon={FireIcon} />
+                </Link>
+                <Link href={route('vulnerabilities.index', { overdue: 1 })}>
+                    <KpiCard label="Past SLA" value={stats.vulns_sla_breached ?? 0} sublabel="remediation overdue" tone={stats.vulns_sla_breached ? 'amber' : 'white'} icon={ClockIcon} />
+                </Link>
+                <Link href={route('incidents.index', { status: 'active' })}>
+                    <KpiCard label="Active incidents" value={stats.incidents_active ?? 0} sublabel={`${stats.incidents_critical ?? 0} critical`} tone={stats.incidents_critical ? 'red' : 'navy'} icon={ShieldExclamationIcon} />
+                </Link>
+                <Link href={route('security-alerts.index', { status: 'new' })}>
+                    <KpiCard label="New alerts" value={stats.alerts_new ?? 0} sublabel={`${stats.alerts_new_high ?? 0} high or critical`} tone="white" icon={BellAlertIcon} />
+                </Link>
+                <Link href={route('notifications.index', { status: 'overdue' })}>
+                    <KpiCard label="Notifications overdue" value={stats.notifications_overdue ?? 0} sublabel={`${stats.notifications_open ?? 0} open · ${stats.ndpa_pending ?? 0} NDPA pending`} tone={stats.notifications_overdue ? 'red' : 'white'} />
                 </Link>
             </div>
 
-            {/* Bottom Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Recent Vulnerabilities */}
-                <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base font-semibold text-[#2D3748]">Recent Vulnerabilities</h3>
-                        <Link href={route('vulnerabilities.index')} className="text-xs text-[#1A365D] hover:underline flex items-center gap-1">
-                            View All <ArrowRightIcon className="w-3 h-3" />
-                        </Link>
-                    </div>
-                    {recentVulnerabilities && recentVulnerabilities.length > 0 ? (
+            <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="lg:col-span-2">
+                    <Panel title="Fix first: top risk-ranked findings" href={route('vuln-prioritiser.index')} linkLabel="Prioritiser →">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
+                            <table className="min-w-full text-sm">
                                 <thead>
-                                    <tr className="border-b border-gray-100">
-                                        <th className="pb-2 text-left text-xs font-medium text-[#718096]">ID</th>
-                                        <th className="pb-2 text-left text-xs font-medium text-[#718096]">Title</th>
-                                        <th className="pb-2 text-left text-xs font-medium text-[#718096]">Severity</th>
-                                        <th className="pb-2 text-left text-xs font-medium text-[#718096]">Status</th>
+                                    <tr className="text-left text-xs uppercase text-[#718096]">
+                                        <th className="py-2 pr-3">Score</th>
+                                        <th className="py-2 pr-3">Finding</th>
+                                        <th className="py-2 pr-3">Signals</th>
+                                        <th className="py-2">Due</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {recentVulnerabilities.slice(0, 5).map(vuln => (
-                                        <tr key={vuln.id} className="hover:bg-gray-50/50">
-                                            <td className="py-2">
-                                                <Link href={route('vulnerabilities.show', vuln.id)} className="font-mono-data text-xs text-[#1A365D] font-semibold hover:underline">
-                                                    {vuln.vuln_id_code || `VULN-${String(vuln.id).padStart(4, '0')}`}
-                                                </Link>
+                                <tbody className="divide-y divide-gray-100">
+                                    {topPriorities.length === 0 && (
+                                        <tr><td colSpan={4} className="py-6 text-center text-[#718096]">No outstanding findings.</td></tr>
+                                    )}
+                                    {topPriorities.map((v) => (
+                                        <tr key={v.id}>
+                                            <td className="py-2 pr-3">
+                                                <span className="font-mono font-bold text-[#0A1F44]">{v.score}</span>
+                                                <span className="ml-1 rounded bg-[#0A1F44] px-1.5 py-0.5 text-[10px] text-white">{v.band}</span>
                                             </td>
-                                            <td className="py-2">
-                                                <Link href={route('vulnerabilities.show', vuln.id)} className="text-[#2D3748] hover:text-[#1A365D] truncate block max-w-[200px]">
-                                                    {vuln.title}
+                                            <td className="py-2 pr-3">
+                                                <Link href={route('vulnerabilities.show', v.id)} className="text-[#0A1F44] hover:underline">
+                                                    <span className="font-mono text-xs">{v.vuln_id_code}</span> {v.title}
                                                 </Link>
+                                                <p className="text-xs text-[#718096]">{v.cve_id || 'No CVE'}{v.asset ? ` · ${v.asset.name}` : ''}</p>
                                             </td>
-                                            <td className="py-2"><SeverityBadge severity={vuln.severity} /></td>
-                                            <td className="py-2"><StatusBadge status={vuln.status} /></td>
+                                            <td className="py-2 pr-3 text-xs">
+                                                <div className="flex flex-wrap gap-1">
+                                                    <StatusBadge status={v.severity} />
+                                                    {v.kev && <StatusBadge status="critical" label={v.ransomware ? 'KEV · ransomware' : 'KEV'} />}
+                                                    {v.epss !== null && <span className="text-[#718096]">EPSS {(v.epss * 100).toFixed(0)}%</span>}
+                                                </div>
+                                            </td>
+                                            <td className={`py-2 text-xs ${v.sla_breached ? 'font-semibold text-[#B3261E]' : 'text-[#718096]'}`}>
+                                                {formatDate(v.due_date)}{v.sla_breached ? ' · overdue' : ''}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
-                    ) : (
-                        <p className="text-sm text-[#718096] py-8 text-center">No vulnerabilities recorded yet.</p>
-                    )}
+                    </Panel>
                 </div>
 
-                {/* Active Incidents */}
-                <div className="bg-white rounded-xl border border-gray-100 p-5 shadow-sm">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-base font-semibold text-[#2D3748]">Active Incidents</h3>
-                        <Link href={route('incidents.index')} className="text-xs text-[#1A365D] hover:underline flex items-center gap-1">
-                            View All <ArrowRightIcon className="w-3 h-3" />
-                        </Link>
-                    </div>
-                    {activeIncidents && activeIncidents.length > 0 ? (
-                        <div className="space-y-2">
-                            {activeIncidents.slice(0, 5).map(incident => (
-                                <div key={incident.id} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <span className="font-mono-data text-xs text-[#1A365D] font-semibold shrink-0">
-                                            {incident.incident_id_code || `INC-${String(incident.id).padStart(4, '0')}`}
-                                        </span>
-                                        <Link href={route('incidents.show', incident.id)} className="text-sm text-[#2D3748] hover:text-[#1A365D] truncate">
-                                            {incident.title}
-                                        </Link>
+                <Panel title="Regulatory clocks" href={route('notifications.index')} linkLabel="Notifications →">
+                    <ul className="divide-y divide-gray-100 text-xs">
+                        {clocks.length === 0 && <li className="py-3 text-[#718096]">No regulatory deadlines running.</li>}
+                        {clocks.map((c) => (
+                            <li key={`${c.kind}-${c.id}`} className="py-2">
+                                <Link href={c.href} className="block hover:underline">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="font-medium text-[#2D3748]">{c.label}</span>
+                                        <StatusBadge status={c.overdue ? 'critical' : c.status} label={c.overdue ? 'Overdue' : humanize(c.status)} />
                                     </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <SeverityBadge severity={incident.severity} />
-                                        <StatusBadge status={incident.status} />
-                                    </div>
+                                    <p className="truncate text-[#718096]">{c.subject}</p>
+                                    <p className={c.overdue ? 'font-semibold text-[#B3261E]' : 'text-[#718096]'}>Deadline {formatDate(c.deadline_at, true)}</p>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </Panel>
+            </div>
+
+            <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <Panel title="Active incidents" href={route('incidents.index', { status: 'active' })} linkLabel="All active →">
+                    <ul className="divide-y divide-gray-100 text-sm">
+                        {activeIncidents.length === 0 && <li className="py-3 text-xs text-[#718096]">No active incidents.</li>}
+                        {activeIncidents.map((i) => (
+                            <li key={i.id} className="py-2">
+                                <Link href={route('incidents.show', i.id)} className="text-[#0A1F44] hover:underline">
+                                    <span className="font-mono text-xs">{i.incident_id_code}</span> {i.title}
+                                </Link>
+                                <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-[#718096]">
+                                    <StatusBadge status={i.severity} />
+                                    <span>{humanize(i.status)}</span>
+                                    <span>· {i.assignee?.name || 'Unassigned'}</span>
                                 </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="text-sm text-[#718096] py-8 text-center">No active incidents.</p>
+                            </li>
+                        ))}
+                    </ul>
+                </Panel>
+
+                <Panel title="Alerts awaiting triage" href={route('security-alerts.index', { status: 'new' })} linkLabel="Alert queue →">
+                    <ul className="divide-y divide-gray-100 text-sm">
+                        {newAlerts.length === 0 && <li className="py-3 text-xs text-[#718096]">The alert queue is clear.</li>}
+                        {newAlerts.map((a) => (
+                            <li key={a.id} className="py-2">
+                                <Link href={route('security-alerts.show', a.id)} className="text-[#0A1F44] hover:underline">
+                                    <span className="font-mono text-xs">{a.alert_id_code}</span> {a.title}
+                                </Link>
+                                <div className="mt-1 flex items-center gap-1 text-xs text-[#718096]">
+                                    <StatusBadge status={a.severity} />
+                                    <span>{a.source || '—'} · {formatDate(a.received_at, true)}</span>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                    {stats.siem_untriaged > 0 && (
+                        <Link href={route('siem.index', { state: 'untriaged' })} className="mt-2 block text-xs text-[#B3261E] underline">
+                            {stats.siem_untriaged} high/critical SIEM signals not yet triaged →
+                        </Link>
                     )}
-                </div>
+                </Panel>
+
+                <Panel title={`Response performance (${responseTimes.window_days ?? 180} days)`}>
+                    <dl className="grid grid-cols-2 gap-3 text-sm">
+                        {[
+                            ['Mean time to respond', hours(responseTimes.mttr_respond_h)],
+                            ['Mean time to contain', hours(responseTimes.mttr_contain_h)],
+                            ['Mean time to resolve', hours(responseTimes.mttr_resolve_h)],
+                            ['Mean time to remediate a finding', responseTimes.vuln_mttr_days != null ? `${responseTimes.vuln_mttr_days} d` : '—'],
+                        ].map(([label, value]) => (
+                            <div key={label} className="rounded-lg border border-gray-100 px-3 py-2">
+                                <dt className="text-[11px] text-[#718096]">{label}</dt>
+                                <dd className="text-lg font-bold text-[#0A1F44]">{value}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                    <h4 className="mt-4 text-xs font-semibold text-[#2D3748]">Open findings by severity</h4>
+                    <div className="mt-2 flex h-3 overflow-hidden rounded-full bg-gray-100">
+                        {SEVERITIES.map((s) => Number(severityMix[s] || 0) > 0 && (
+                            <div key={s} title={`${s}: ${severityMix[s]}`} style={{ width: `${(severityMix[s] / Math.max(mixTotal, 1)) * 100}%`, background: SEVERITY_COLOR[s] }} />
+                        ))}
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-[#718096]">
+                        {SEVERITIES.map((s) => <span key={s} className="capitalize">{s} {severityMix[s] || 0}</span>)}
+                    </div>
+                    {stats.siem_degraded > 0 && (
+                        <Link href={route('siem.index')} className="mt-3 block text-xs text-[#8A6400] underline">
+                            {stats.siem_degraded} SIEM connector{stats.siem_degraded > 1 ? 's' : ''} degraded →
+                        </Link>
+                    )}
+                </Panel>
             </div>
         </AuthenticatedLayout>
     );

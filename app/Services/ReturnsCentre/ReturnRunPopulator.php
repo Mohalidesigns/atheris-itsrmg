@@ -190,12 +190,13 @@ class ReturnRunPopulator
             'key_controls_ineffective' => Control::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')
                 ->where('is_key_control', true)->where('effectiveness', 'ineffective')->count(),
             'csat_status', 'csat_maturity', 'csat_inherent_risk' => $this->csat($source, $orgId, $period),
+            // Breaches belong to the period in which they were discovered, not when they were typed in.
             'breaches_in_period' => DataBreach::withoutGlobalScopes()->where('organization_id', $orgId)
-                ->whereBetween('created_at', [$from, $to])->count(),
+                ->whereBetween('discovered_at', [$from, $to])->count(),
             'breaches_notified' => DataBreach::withoutGlobalScopes()->where('organization_id', $orgId)
-                ->whereBetween('created_at', [$from, $to])->whereNotNull('ndpa_notified_at')->count(),
+                ->whereBetween('discovered_at', [$from, $to])->whereNotNull('ndpa_notified_at')->count(),
             'breach_records_affected' => (int) DataBreach::withoutGlobalScopes()->where('organization_id', $orgId)
-                ->whereBetween('created_at', [$from, $to])->sum('records_affected'),
+                ->whereBetween('discovered_at', [$from, $to])->sum('records_affected'),
             'policies_in_force' => Policy::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')
                 ->whereIn('status', ['approved', 'active'])->count(),
             'vendors_active' => Vendor::withoutGlobalScopes()->where('organization_id', $orgId)->where('status', 'active')->count(),

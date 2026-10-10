@@ -5,9 +5,10 @@ import TextInput from '@/Components/TextInput';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 
-export default function CreateIncident({ users, types }) {
+export default function CreateIncident({ users, types, procedures = [] }) {
+    // datetime-local wants local time, not UTC.
     const now = new Date();
-    const defaultDetected = now.toISOString().slice(0, 16);
+    const defaultDetected = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
     const { data, setData, post, processing, errors } = useForm({
         title: '',
@@ -18,7 +19,9 @@ export default function CreateIncident({ users, types }) {
         assigned_to: '',
         lead_investigator_id: '',
         detected_at: defaultDetected,
+        response_procedure_id: '',
     });
+    const matching = procedures.filter((p) => !data.type || (p.incident_types || []).includes(data.type));
 
     const submit = (e) => {
         e.preventDefault();
@@ -26,7 +29,7 @@ export default function CreateIncident({ users, types }) {
     };
 
     const incidentTypes = types || [
-        'malware', 'phishing', 'data_leak', 'unauthorized_access', 'dos', 'insider_threat', 'other',
+        'malware', 'phishing', 'ransomware', 'data_breach', 'unauthorized_access', 'denial_of_service', 'insider_threat', 'other',
     ];
 
     return (
@@ -158,6 +161,17 @@ export default function CreateIncident({ users, types }) {
                                 </select>
                                 <InputError message={errors.lead_investigator_id} className="mt-1" />
                             </div>
+                        </div>
+
+                        <div>
+                            <InputLabel htmlFor="response_procedure_id" value="Response procedure" />
+                            <select id="response_procedure_id" value={data.response_procedure_id} onChange={e => setData('response_procedure_id', e.target.value)}
+                                className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm">
+                                <option value="">None yet</option>
+                                {matching.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                            </select>
+                            {data.type && matching.length === 0 && <p className="mt-1 text-xs text-[#718096]">No active procedure covers this incident type.</p>}
+                            <InputError message={errors.response_procedure_id} className="mt-1" />
                         </div>
 
                         <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">

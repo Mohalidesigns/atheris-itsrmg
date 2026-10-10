@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import { PencilIcon } from '@heroicons/react/24/outline';
+import { formatDate } from '@/Utils/risk';
 
 const severityColors = {
     critical: '#C53030',
@@ -26,7 +27,7 @@ function TabButton({ active, children, onClick }) {
     );
 }
 
-export default function ShowVulnerability({ vulnerability }) {
+export default function ShowVulnerability({ vulnerability, priority = null }) {
     const [activeTab, setActiveTab] = useState('details');
 
     const severityColor = severityColors[vulnerability.severity] || '#718096';
@@ -51,6 +52,41 @@ export default function ShowVulnerability({ vulnerability }) {
             </div>
         }>
             <Head title={`${vulnerability.vuln_id_code || 'VULN'} - ${vulnerability.title}`} />
+
+            {priority && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+                        <div>
+                            <p className="text-xs uppercase text-[#718096]">Risk priority</p>
+                            <p className="font-mono text-lg font-bold text-[#0A1F44]">{priority.band} · {priority.score}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs uppercase text-[#718096]">EPSS (30-day exploit probability)</p>
+                            <p className="font-semibold text-[#2D3748]">{priority.epss !== null ? `${(priority.epss * 100).toFixed(1)}%` : 'Not scored'}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs uppercase text-[#718096]">CISA KEV</p>
+                            <p className={`font-semibold ${priority.kev ? 'text-[#B3261E]' : 'text-[#2D3748]'}`}>
+                                {priority.kev ? `Known exploited since ${formatDate(priority.kev_date_added)}${priority.ransomware ? ' · ransomware use' : ''}` : 'Not listed'}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-xs uppercase text-[#718096]">Most critical asset</p>
+                            <p className="font-semibold text-[#2D3748]">{priority.asset ? `${priority.asset.name} (${priority.asset.criticality})` : 'None linked'}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs uppercase text-[#718096]">Remediation due</p>
+                            <p className={`font-semibold ${priority.sla_breached && ['open', 'in_progress'].includes(vulnerability.status) ? 'text-[#B3261E]' : 'text-[#2D3748]'}`}>
+                                {formatDate(priority.due_date)}{priority.sla_breached && ['open', 'in_progress'].includes(vulnerability.status) ? ' · past SLA' : ''}
+                            </p>
+                        </div>
+                        {['open', 'in_progress'].includes(vulnerability.status) && (
+                            <Link href={route('vulnerability-tickets.create', { vulnerability_id: vulnerability.id })}
+                                className="ml-auto rounded-lg bg-[#0A1F44] px-3 py-1.5 text-xs text-white">Raise remediation ticket</Link>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Header Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
@@ -124,11 +160,11 @@ export default function ShowVulnerability({ vulnerability }) {
                                 </div>
                                 <div>
                                     <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">Due Date</h4>
-                                    <p className="text-sm text-[#2D3748]">{vulnerability.due_date || '--'}</p>
+                                    <p className="text-sm text-[#2D3748]">{formatDate(vulnerability.due_date)}</p>
                                 </div>
                                 <div>
                                     <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">Created</h4>
-                                    <p className="text-sm text-[#2D3748]">{vulnerability.created_at || '--'}</p>
+                                    <p className="text-sm text-[#2D3748]">{formatDate(vulnerability.created_at)}</p>
                                 </div>
                             </div>
                         </div>
@@ -150,7 +186,7 @@ export default function ShowVulnerability({ vulnerability }) {
                                                 <div>
                                                     <p className="text-sm font-medium text-[#2D3748]">{ticket.title}</p>
                                                     <p className="text-xs text-[#718096]">
-                                                        {ticket.assignee?.name || 'Unassigned'} {ticket.due_date ? `- Due: ${ticket.due_date}` : ''}
+                                                        {ticket.assignee?.name || 'Unassigned'} {ticket.sla_due_at ? `· SLA due ${formatDate(ticket.sla_due_at)}` : ''}
                                                     </p>
                                                 </div>
                                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${ticketStatusMap[ticket.status] || ticketStatusMap.open}`}>

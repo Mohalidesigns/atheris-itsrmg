@@ -108,6 +108,10 @@ class DatabaseSeeder extends Seeder
         // vulnerability tickets, response procedures)
         $this->call(DemoCrossLinkSeeder::class);
 
+        // Security Operations: coherent incident timelines, breach NDPA clocks, alerts, SIEM
+        // connectors, regulatory notifications and remediation tickets (before Returns Centre runs)
+        $this->call(SecurityOperationsDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

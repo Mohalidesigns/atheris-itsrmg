@@ -8,12 +8,14 @@ import PrimaryButton from '@/Components/PrimaryButton';
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 export default function EditBreach({ breach, users = [], incidents = [] }) {
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, put, processing, errors, transform } = useForm({
         title: breach.title || '',
         description: breach.description || '',
         incident_id: breach.incident_id || '',
         breach_type: breach.breach_type || '',
         records_affected: breach.records_affected ?? '',
+        data_types_affected: (breach.data_types_affected || []).join(', '),
+        discovered_at: breach.discovered_at ? String(breach.discovered_at).slice(0, 16) : '',
         status: breach.status || 'identified',
         ndpa_notification_required: !!breach.ndpa_notification_required,
         regulatory_body_notified: !!breach.regulatory_body_notified,
@@ -25,6 +27,10 @@ export default function EditBreach({ breach, users = [], incidents = [] }) {
 
     const submit = (e) => {
         e.preventDefault();
+        transform((d) => ({
+            ...d,
+            data_types_affected: d.data_types_affected.split(',').map((t) => t.trim()).filter(Boolean),
+        }));
         put(route('data-breaches.update', breach.id));
     };
 
@@ -77,6 +83,22 @@ export default function EditBreach({ breach, users = [], incidents = [] }) {
                                     ))}
                                 </select>
                                 <InputError message={errors.status} className="mt-1" />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <InputLabel htmlFor="data_types_affected" value="Data Types Affected" />
+                                <TextInput id="data_types_affected" value={data.data_types_affected} className="mt-1 block w-full"
+                                    onChange={e => setData('data_types_affected', e.target.value)} placeholder="Comma-separated, e.g. BVN, phone numbers" />
+                                <InputError message={errors.data_types_affected} className="mt-1" />
+                            </div>
+                            <div>
+                                <InputLabel htmlFor="discovered_at" value="Discovered at" />
+                                <TextInput id="discovered_at" type="datetime-local" value={data.discovered_at} className="mt-1 block w-full"
+                                    onChange={e => setData('discovered_at', e.target.value)} />
+                                <p className="mt-1 text-xs text-[#718096]">Changing this moves the NDPA 72-hour deadline.</p>
+                                <InputError message={errors.discovered_at} className="mt-1" />
                             </div>
                         </div>
 

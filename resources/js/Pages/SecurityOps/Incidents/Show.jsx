@@ -18,6 +18,7 @@ import {
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
+import { formatDate } from '@/Utils/risk';
 
 const severityColors = {
     critical: '#C53030',
@@ -43,18 +44,17 @@ function TabButton({ active, children, onClick }) {
 
 function IncidentStatusBadge({ status }) {
     const map = {
-        reported: { bg: 'bg-gray-100', text: 'text-gray-600' },
+        detected: { bg: 'bg-[#B3261E]/10', text: 'text-[#B3261E]' },
         triaged: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
         investigating: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
         containing: { bg: 'bg-[#D4AF37]/10', text: 'text-[#D4AF37]' },
-        contained: { bg: 'bg-[#1A365D]/10', text: 'text-[#1A365D]' },
         eradicating: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
         recovering: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
         resolved: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
         closed: { bg: 'bg-gray-100', text: 'text-gray-500' },
-        post_incident: { bg: 'bg-[#1A365D]/10', text: 'text-[#1A365D]' },
+        post_incident_review: { bg: 'bg-[#1A365D]/10', text: 'text-[#1A365D]' },
     };
-    const style = map[status] || map.reported;
+    const style = map[status] || map.detected;
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${style.bg} ${style.text}`}>
             {(status || '').replace(/_/g, ' ')}
@@ -74,19 +74,21 @@ const eventTypeIcons = {
     resolution: CheckCircleIcon,
     status_change: BoltIcon,
     note: DocumentTextIcon,
+    evidence: MagnifyingGlassIcon,
+    assignment: InformationCircleIcon,
 };
 
+// Mirrors IncidentController::updateStatus: forward through the lifecycle, or reopen into investigation.
 const statusTransitions = {
-    reported: ['triaged', 'investigating'],
+    detected: ['triaged', 'investigating'],
     triaged: ['investigating', 'containing'],
-    investigating: ['containing', 'contained', 'eradicating'],
-    containing: ['contained'],
-    contained: ['eradicating', 'recovering'],
+    investigating: ['containing', 'eradicating'],
+    containing: ['eradicating', 'recovering'],
     eradicating: ['recovering'],
     recovering: ['resolved'],
-    resolved: ['closed', 'post_incident'],
-    post_incident: ['closed'],
-    closed: [],
+    resolved: ['post_incident_review', 'closed', 'investigating'],
+    post_incident_review: ['closed', 'investigating'],
+    closed: ['investigating'],
 };
 
 function calculateTimeToRespond(detectedAt, respondedAt) {
@@ -106,7 +108,7 @@ function calculateTimeToRespond(detectedAt, respondedAt) {
     return `${days}d ${hours % 24}h`;
 }
 
-export default function ShowIncident({ incident, statuses, types, eaImpact }) {
+export default function ShowIncident({ incident, statuses, templates = [], suggestedProcedures = [], eaImpact }) {
     const [activeTab, setActiveTab] = useState('timeline');
 
     const severityColor = severityColors[incident.severity] || '#718096';
@@ -114,10 +116,12 @@ export default function ShowIncident({ incident, statuses, types, eaImpact }) {
     const timeToRespond = calculateTimeToRespond(incident.detected_at, incident.responded_at);
 
     const handleStatusChange = (newStatus) => {
-        router.put(route('incidents.update', incident.id), {
-            status: newStatus,
-        }, { preserveState: true });
+        router.patch(route('incidents.update-status', incident.id), { status: newStatus }, { preserveScroll: true });
     };
+
+    const draftedKeys = (incident.notifications || []).map((n) => n.template_key);
+    const draftNotification = (templateKey) => router.post(route('notifications.draft'), { incident_id: incident.id, template_key: templateKey });
+    const adoptProcedure = (id) => router.post(route('incidents.procedure', incident.id), { response_procedure_id: id }, { preserveScroll: true });
 
     const { data: eventData, setData: setEventData, post: postEvent, processing: eventProcessing, errors: eventErrors, reset: resetEvent } = useForm({
         event_type: '',
@@ -171,14 +175,14 @@ export default function ShowIncident({ incident, statuses, types, eaImpact }) {
             {/* Status Update Buttons */}
             {nextStatuses.length > 0 && (
                 <div className="flex items-center gap-2 mb-4">
-                    <span className="text-xs text-[#718096] font-medium">Advance to:</span>
+                    <span className="text-xs text-[#718096] font-medium">Move to:</span>
                     {nextStatuses.map(s => (
                         <button
                             key={s}
                             onClick={() => handleStatusChange(s)}
                             className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border border-[#1A365D] text-[#1A365D] rounded-lg hover:bg-[#1A365D]/5 transition-colors capitalize"
                         >
-                            {s.replace(/_/g, ' ')}
+                            {s === 'investigating' && ['resolved', 'post_incident_review', 'closed'].includes(incident.status) ? 'reopen' : s.replace(/_/g, ' ')}
                         </button>
                     ))}
                 </div>
@@ -198,7 +202,7 @@ export default function ShowIncident({ incident, statuses, types, eaImpact }) {
             {/* Tabs */}
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="border-b border-gray-100 px-4 flex gap-1">
-                    {['timeline', 'details', 'alerts', 'breach'].map(tab => (
+                    {['timeline', 'details', 'procedure', 'notifications', 'alerts', 'breach'].map(tab => (
                         <TabButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)}>
                             {tab.charAt(0).toUpperCase() + tab.slice(1)}
                             {tab === 'timeline' && incident.events?.length > 0 && (
@@ -206,6 +210,9 @@ export default function ShowIncident({ incident, statuses, types, eaImpact }) {
                             )}
                             {tab === 'alerts' && incident.alerts?.length > 0 && (
                                 <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-full">{incident.alerts.length}</span>
+                            )}
+                            {tab === 'notifications' && incident.notifications?.length > 0 && (
+                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-full">{incident.notifications.length}</span>
                             )}
                             {tab === 'breach' && incident.is_data_breach && (
                                 <span className="ml-1 w-2 h-2 rounded-full bg-[#C53030] inline-block" />
@@ -239,7 +246,7 @@ export default function ShowIncident({ incident, statuses, types, eaImpact }) {
                                                     <p className="text-sm text-[#2D3748] mt-0.5">{event.description}</p>
                                                     <div className="flex items-center gap-1 mt-1 text-xs text-[#718096]">
                                                         <ClockIcon className="w-3 h-3" />
-                                                        {event.created_at}
+                                                        {formatDate(event.occurred_at || event.created_at, true)}
                                                     </div>
                                                 </div>
                                             </div>
@@ -264,7 +271,7 @@ export default function ShowIncident({ incident, statuses, types, eaImpact }) {
                                             required
                                         >
                                             <option value="">Select event type...</option>
-                                            {['detection', 'triage', 'investigation', 'containment', 'eradication', 'recovery', 'communication', 'escalation', 'resolution', 'status_change', 'note'].map(t => (
+                                            {['note', 'evidence', 'communication', 'escalation', 'assignment'].map(t => (
                                                 <option key={t} value={t}>
                                                     {t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                                                 </option>
@@ -334,12 +341,85 @@ export default function ShowIncident({ incident, statuses, types, eaImpact }) {
                                 </div>
                                 <div>
                                     <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">Detected At</h4>
-                                    <p className="text-sm text-[#2D3748]">{incident.detected_at || '--'}</p>
+                                    <p className="text-sm text-[#2D3748]">{formatDate(incident.detected_at, true)}</p>
                                 </div>
                                 <div>
                                     <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">Source</h4>
                                     <p className="text-sm text-[#2D3748]">{incident.source || '--'}</p>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'procedure' && (
+                        <div>
+                            {incident.procedure ? (
+                                <div>
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                            <Link href={route('response-procedures.show', incident.procedure.id)} className="text-sm font-semibold text-[#0A1F44] hover:underline">
+                                                {incident.procedure.title}
+                                            </Link>
+                                            <p className="text-xs text-[#718096]">Version {incident.procedure.version || '1.0'} · {incident.procedure.category}</p>
+                                        </div>
+                                    </div>
+                                    <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-[#2D3748]">
+                                        {(incident.procedure.steps || []).map((step, i) => <li key={i}>{step}</li>)}
+                                    </ol>
+                                    {(incident.procedure.escalation_contacts || []).length > 0 && (
+                                        <p className="mt-3 text-xs text-[#718096]">Escalate to: {incident.procedure.escalation_contacts.join(' → ')}</p>
+                                    )}
+                                </div>
+                            ) : (
+                                <div>
+                                    <p className="text-sm text-[#718096]">No response procedure is being followed for this incident.</p>
+                                    {suggestedProcedures.length > 0 ? (
+                                        <ul className="mt-3 space-y-2">
+                                            {suggestedProcedures.map((p) => (
+                                                <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 px-3 py-2">
+                                                    <span className="text-sm text-[#2D3748]">{p.title}</span>
+                                                    <button type="button" onClick={() => adoptProcedure(p.id)} className="rounded border border-[#0A1F44]/20 px-2 py-1 text-xs text-[#0A1F44] hover:bg-[#0A1F44]/5">Follow this</button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <Link href={route('response-procedures.index')} className="mt-2 inline-block text-xs text-[#0A1F44] underline">No procedure covers this incident type: browse the playbooks →</Link>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {activeTab === 'notifications' && (
+                        <div className="space-y-4">
+                            <ul className="divide-y divide-gray-100">
+                                {(incident.notifications || []).length === 0 && <li className="py-2 text-sm text-[#718096]">No regulatory notifications drafted yet.</li>}
+                                {(incident.notifications || []).map((n) => {
+                                    const late = n.delivery_status !== 'submitted' && new Date(n.deadline_at) < new Date();
+                                    return (
+                                        <li key={n.id} className="flex items-center justify-between gap-2 py-2">
+                                            <Link href={route('notifications.show', n.id)} className="text-sm text-[#0A1F44] hover:underline">
+                                                <span className="mr-1 rounded bg-[#0A1F44] px-1.5 py-0.5 text-[10px] text-white">{n.regulator_code}</span>
+                                                {n.template_key}
+                                            </Link>
+                                            <span className={`text-xs ${late ? 'font-semibold text-[#B3261E]' : 'text-[#718096]'}`}>
+                                                {n.delivery_status.replace(/_/g, ' ')} · {n.delivery_status === 'submitted' ? `submitted ${formatDate(n.submitted_at, true)}` : `due ${formatDate(n.deadline_at, true)}`}{late ? ' · overdue' : ''}
+                                            </span>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                            <div>
+                                <p className="text-xs font-semibold text-[#2D3748]">Draft from this incident</p>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {templates.filter((t) => !draftedKeys.includes(t.template_key)).map((t) => (
+                                        <button key={t.id} type="button" onClick={() => draftNotification(t.template_key)}
+                                            className={`rounded-lg border px-3 py-1.5 text-xs ${(t.regulator_code === 'CBN' || (t.regulator_code === 'NDPC' && incident.is_data_breach)) ? 'border-[#B3261E]/40 text-[#B3261E]' : 'border-gray-200 text-[#2D3748]'}`}>
+                                            {t.title}
+                                        </button>
+                                    ))}
+                                </div>
+                                <p className="mt-2 text-[11px] text-[#718096]">Highlighted: CBN incident reporting applies to every cyber incident; NDPC applies when personal data was breached.</p>
                             </div>
                         </div>
                     )}

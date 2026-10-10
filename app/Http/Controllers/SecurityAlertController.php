@@ -6,10 +6,13 @@ use App\Models\Incident;
 use App\Models\IncidentEvent;
 use App\Models\SecurityAlert;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class SecurityAlertController extends Controller
 {
+    private const SORTABLE = ['received_at', 'alert_id_code', 'title', 'source', 'severity', 'status', 'created_at'];
+
     public function index(Request $request)
     {
         $query = SecurityAlert::with(['incident:id,title,incident_id_code', 'acknowledgedBy:id,name']);
@@ -27,14 +30,14 @@ class SecurityAlertController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('alert_id_code', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('alert_id_code', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
-        $sortField = $request->get('sort', 'received_at');
-        $sortDir = $request->get('direction', 'desc');
-        $query->orderBy($sortField, $sortDir);
+        $sortField = in_array($request->get('sort'), self::SORTABLE, true) ? $request->get('sort') : 'received_at';
+        $sortDir = $request->get('direction') === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortField, $sortDir)->orderBy('id');
 
         $alerts = $query->paginate(20)->withQueryString();
 
@@ -61,8 +64,8 @@ class SecurityAlertController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'source' => 'nullable|string|max:255',
-            'severity' => 'required|in:' . implode(',', SecurityAlert::SEVERITIES),
-            'status' => 'nullable|in:' . implode(',', SecurityAlert::STATUSES),
+            'severity' => 'required|in:'.implode(',', SecurityAlert::SEVERITIES),
+            'status' => 'nullable|in:'.implode(',', SecurityAlert::STATUSES),
             'received_at' => 'nullable|date',
         ]);
 
@@ -86,6 +89,9 @@ class SecurityAlertController extends Controller
         return Inertia::render('SecurityOps/SecurityAlerts/Show', [
             'alert' => $securityAlert,
             'statuses' => SecurityAlert::STATUSES,
+            // Open incidents this alert could belong to, instead of opening a duplicate.
+            'openIncidents' => $securityAlert->incident_id ? [] : Incident::whereIn('status', Incident::ACTIVE_STATUSES)
+                ->orderByDesc('detected_at')->get(['id', 'incident_id_code', 'title', 'severity']),
         ]);
     }
 
@@ -104,8 +110,8 @@ class SecurityAlertController extends Controller
             'title' => 'required|string|max:255',
             'description' => 'nullable|string',
             'source' => 'nullable|string|max:255',
-            'severity' => 'required|in:' . implode(',', SecurityAlert::SEVERITIES),
-            'status' => 'required|in:' . implode(',', SecurityAlert::STATUSES),
+            'severity' => 'required|in:'.implode(',', SecurityAlert::SEVERITIES),
+            'status' => 'required|in:'.implode(',', SecurityAlert::STATUSES),
             'received_at' => 'nullable|date',
         ]);
 
@@ -144,7 +150,7 @@ class SecurityAlertController extends Controller
             'organization_id' => $orgId,
             'incident_id_code' => Incident::generateNextCode($orgId),
             'title' => $securityAlert->title,
-            'description' => trim("Promoted from security alert {$securityAlert->alert_id_code}.\n\n" . ($securityAlert->description ?? '')),
+            'description' => trim("Promoted from security alert {$securityAlert->alert_id_code}.\n\n".($securityAlert->description ?? '')),
             'severity' => in_array($securityAlert->severity, ['critical', 'high', 'medium', 'low']) ? $securityAlert->severity : 'medium',
             'status' => 'detected',
             'source' => $securityAlert->source,
@@ -168,5 +174,34 @@ class SecurityAlertController extends Controller
 
         return redirect()->route('incidents.show', $incident)
             ->with('success', "Alert promoted to incident {$incident->incident_id_code}.");
+    }
+
+    /** Attach an alert to an incident that is already open, recording it on the incident timeline. */
+    public function linkIncident(Request $request, SecurityAlert $securityAlert)
+    {
+        if ($securityAlert->incident_id) {
+            return back()->with('error', 'This alert is already linked to an incident.');
+        }
+        $validated = $request->validate([
+            'incident_id' => ['required', Rule::exists('incidents', 'id')
+                ->where('organization_id', $request->user()->organization_id)->whereNull('deleted_at')],
+        ]);
+        $incident = Incident::findOrFail($validated['incident_id']);
+
+        $securityAlert->update([
+            'incident_id' => $incident->id,
+            'status' => 'investigating',
+            'acknowledged_at' => $securityAlert->acknowledged_at ?? now(),
+            'acknowledged_by' => $securityAlert->acknowledged_by ?? auth()->id(),
+        ]);
+        IncidentEvent::create([
+            'incident_id' => $incident->id,
+            'event_type' => 'evidence',
+            'description' => "Security alert {$securityAlert->alert_id_code} linked: {$securityAlert->title}.",
+            'performed_by' => auth()->id(),
+            'occurred_at' => now(),
+        ]);
+
+        return back()->with('success', "Alert linked to {$incident->incident_id_code}.");
     }
 }

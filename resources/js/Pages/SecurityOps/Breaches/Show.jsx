@@ -1,5 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { formatDate } from '@/Utils/risk';
 import { useState } from 'react';
 import {
     PencilIcon,
@@ -31,22 +32,27 @@ function TabButton({ active, children, onClick }) {
     );
 }
 
-export default function ShowBreach({ breach }) {
+export default function ShowBreach({ breach, ndpcNotification = null }) {
+    const { auth } = usePage().props;
+    const canEdit = (auth?.user?.roles || []).includes('Super Admin') || (auth?.user?.permissions || []).includes('edit data-breaches');
+    const record = (party) => confirm(party === 'regulator' ? 'Record that the NDPC has been notified now?' : 'Record that affected individuals have been notified now?')
+        && router.post(route('data-breaches.notified', breach.id), { party }, { preserveScroll: true });
     const [activeTab, setActiveTab] = useState('details');
 
     const statusMap = {
-        open: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
+        identified: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
         investigating: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
         contained: { bg: 'bg-[#1A365D]/10', text: 'text-[#1A365D]' },
-        notifying: { bg: 'bg-[#D4AF37]/10', text: 'text-[#D4AF37]' },
-        remediated: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
+        notified: { bg: 'bg-[#D4AF37]/10', text: 'text-[#8A6400]' },
+        resolved: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
         closed: { bg: 'bg-gray-100', text: 'text-gray-500' },
     };
-    const statusStyle = statusMap[breach.status] || statusMap.open;
+    const statusStyle = statusMap[breach.status] || statusMap.identified;
 
     const ndpaRequired = breach.ndpa_notification_required;
     const ndpaNotified = breach.ndpa_notified_at;
     const ndpaDeadline = breach.ndpa_notification_deadline;
+    const ndpaLate = ndpaDeadline && (ndpaNotified ? new Date(ndpaNotified) > new Date(ndpaDeadline) : new Date(ndpaDeadline) < new Date());
 
     return (
         <AuthenticatedLayout header={
@@ -112,13 +118,13 @@ export default function ShowBreach({ breach }) {
                                 {ndpaDeadline && (
                                     <span className="flex items-center gap-1">
                                         <ClockIcon className="w-3 h-3" />
-                                        Deadline: {ndpaDeadline}
+                                        Discovered {formatDate(breach.discovered_at, true)} · deadline {formatDate(ndpaDeadline, true)}{ndpaLate ? (ndpaNotified ? ' · notified late' : ' · OVERDUE') : ''}
                                     </span>
                                 )}
                                 {ndpaNotified && (
                                     <span className="flex items-center gap-1">
                                         <CheckCircleIcon className="w-3 h-3" />
-                                        Notified: {ndpaNotified}
+                                        Notified: {formatDate(ndpaNotified, true)}
                                     </span>
                                 )}
                             </div>
@@ -128,7 +134,30 @@ export default function ShowBreach({ breach }) {
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-2 mb-4">
+            <div className="flex flex-wrap gap-2 mb-4">
+                {canEdit && ndpaRequired && !ndpaNotified && (
+                    <button type="button" onClick={() => record('regulator')}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#0A1F44] px-3 py-1.5 text-sm text-white">
+                        Record NDPC notification
+                    </button>
+                )}
+                {canEdit && !breach.individuals_notified && (
+                    <button type="button" onClick={() => record('individuals')}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-[#2D3748] hover:bg-gray-50">
+                        Record notice to individuals
+                    </button>
+                )}
+                {ndpcNotification ? (
+                    <Link href={route('notifications.show', ndpcNotification.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-[#0A1F44] hover:bg-gray-50">
+                        NDPC form ({ndpcNotification.delivery_status.replace(/_/g, ' ')})
+                    </Link>
+                ) : breach.incident && ndpaRequired && (
+                    <Link href={route('notifications.index')}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-[#0A1F44] hover:bg-gray-50">
+                        Draft NDPC 72h form
+                    </Link>
+                )}
                 <Link
                     href={route('data-breaches.edit', breach.id)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 text-[#718096]"
@@ -169,11 +198,11 @@ export default function ShowBreach({ breach }) {
                                 </div>
                                 <div>
                                     <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">Data Types</h4>
-                                    <p className="text-sm text-[#2D3748]">{breach.data_types_affected || '--'}</p>
+                                    <p className="text-sm text-[#2D3748]">{(breach.data_types_affected || []).join(', ') || '--'}</p>
                                 </div>
                                 <div>
-                                    <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">Created</h4>
-                                    <p className="text-sm text-[#2D3748]">{breach.created_at || '--'}</p>
+                                    <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">Discovered</h4>
+                                    <p className="text-sm text-[#2D3748]">{formatDate(breach.discovered_at, true)}</p>
                                 </div>
                             </div>
                         </div>
@@ -231,16 +260,20 @@ export default function ShowBreach({ breach }) {
                                 <div className="bg-gray-50 rounded-lg p-4 text-center">
                                     <p className="text-xs text-[#718096] uppercase font-medium mb-2">Deadline</p>
                                     <p className="text-sm font-semibold text-[#2D3748]">
-                                        {ndpaDeadline || '--'}
+                                        {formatDate(ndpaDeadline, true)}
                                     </p>
                                 </div>
                                 <div className="bg-gray-50 rounded-lg p-4 text-center">
                                     <p className="text-xs text-[#718096] uppercase font-medium mb-2">Notified At</p>
                                     <p className="text-sm font-semibold text-[#2D3748]">
-                                        {ndpaNotified || '--'}
+                                        {formatDate(ndpaNotified, true)}
                                     </p>
                                 </div>
                             </div>
+
+                            <p className="text-xs text-[#718096]">
+                                Individuals notified: {breach.individuals_notified ? formatDate(breach.individuals_notified_at, true) : 'not yet'}
+                            </p>
 
                             {ndpaRequired && !ndpaNotified && (
                                 <div className="bg-[#DD6B20]/5 border border-[#DD6B20]/20 rounded-lg p-4">
@@ -258,7 +291,7 @@ export default function ShowBreach({ breach }) {
                                     <div className="flex items-center gap-2">
                                         <CheckCircleIcon className="w-5 h-5 text-[#2D7D46]" />
                                         <p className="text-sm font-medium text-[#2D7D46]">
-                                            NDPA notification was successfully sent on {ndpaNotified}.
+                                            NDPC notified on {formatDate(ndpaNotified, true)}{ndpaLate ? ', after the 72-hour deadline: keep the reasons for the delay on file' : ', within the deadline'}.
                                         </p>
                                     </div>
                                 </div>

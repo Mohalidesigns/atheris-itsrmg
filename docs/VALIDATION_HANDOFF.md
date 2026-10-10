@@ -1,7 +1,7 @@
 # Atheris ITSRM&G — Module Validation Programme: Handoff
 
 **Repo:** `https://github.com/Mohalidesigns/atheris-itsrmg` (private), branch `main`
-**Last commit:** see `git log` — module 4 "Regulatory Intelligence: end-to-end validation fixes"
+**Last commit:** see `git log` — module 5 "Security Operations: end-to-end validation fixes"
 
 ## The brief (from the user)
 
@@ -33,9 +33,10 @@ Validate each sidebar module end to end, in order. For every module:
 | 1 | IT Risk Management | `4db2b92` | `docs/ATH-VAL-001_IT_Risk_Management_Validation_Report.md` | `tests/Feature/Risk/RiskModuleTest.php` |
 | 2 | CBN Cyber Assessment (CSAT) | `af5afd8` | `docs/ATH-VAL-002_CBN_Cyber_Assessment_Validation_Report.md` | `tests/Feature/Csat/CsatModuleTest.php` (9) |
 | 3 | Compliance | `493f44b` | `docs/ATH-VAL-003_Compliance_Validation_Report.md` | `tests/Feature/Compliance/ComplianceModuleTest.php` (12) |
-| 4 | Regulatory Intelligence | see `git log` | `docs/ATH-VAL-004_Regulatory_Intelligence_Validation_Report.md` | `tests/Feature/RegulatoryIntelligence/RegulatoryIntelligenceModuleTest.php` (14) |
+| 4 | Regulatory Intelligence | `4591bce` | `docs/ATH-VAL-004_Regulatory_Intelligence_Validation_Report.md` | `tests/Feature/RegulatoryIntelligence/RegulatoryIntelligenceModuleTest.php` (14) |
+| 5 | Security Operations | see `git log` | `docs/ATH-VAL-005_Security_Operations_Validation_Report.md` | `tests/Feature/SecurityOperations/SecurityOperationsModuleTest.php` (12) |
 
-Last full suite: **193 tests, 0 failures**. The one skip is the route smoke test, which runs separately and passed.
+Last full suite: **219 tests, 0 failures**. The one skip is the route smoke test, which runs separately and passed.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -48,15 +49,28 @@ Last full suite: **193 tests, 0 failures**. The one skip is the route smoke test
 - **Demo data:** `RegulatoryIntelligenceDemoSeeder`, which runs after EA stewardship.
 - **Dashboard:** a Regulatory Intelligence panel.
 
-## Next phase: module 5, Security Operations
+### Security Operations highlights (module 5)
 
-Sidebar group `Security Operations`: Dashboard, Vulnerabilities, Vulnerability Prioritiser, Threat Advisories, Vulnerability Tickets, Incidents, SIEM Integrations, Regulatory Notifications, Security Alerts, Data Breaches, Response Procedures (`resources/js/Config/navigation.js`).
+- **Security:** SIEM connectors and signals, and regulatory notifications, were visible to every bank. They are now tenant-scoped (`incident_notifications.organization_id` backfilled). Every picker (users, assets, findings, incidents) uses a tenant-scoped `exists`. Index sorts are whitelisted. SecOps writes are gated on the module's own permissions (`create/edit/approve incidents`, `create security-alerts`), because Security Analysts hold only `view platform`.
+- **Prioritiser:** random EPSS replaced by CVSS × EPSS × CISA KEV × asset criticality from `epss_cache` / `kev_cache`, with SLAs from `vulnerability_sla_policies` (KEV → critical SLA). "Am I affected?" matches advisory CVEs against the bank's findings and assets.
+- **SIEM:** an HMAC-signed webhook `POST /siem/ingest/{integration}` (outside auth/CSRF, with replay window, de-duplication and PII masking). High and critical signals auto-raise alerts. Alerts can link to open incidents.
+- **Notifications:** drafted from the incident record; per-regulator clocks from detection (`config/secops.php`); Draft → In review → Approved → Submitted, where the preparer cannot approve. An NDPC submission marks the breach notified.
+- **Incidents:** the status buttons never worked (wrong endpoint, non-existent statuses) and are fixed. Types unified. Forward-only lifecycle with reopen. Root cause required to close. Response procedures linked.
+- **Breaches:** the index crashed (wrong route names) and is fixed. The NDPA clock runs from `discovered_at`, and the Returns Centre counts breaches by discovery.
+- **Code series:** `GeneratesSequentialCode` continues each bank's own codes (`FBN-ALR-051`).
+- **Demo data:** `SecurityOperationsDemoSeeder` (after DemoCrossLink, before Regulatory Intelligence). Bank seeders have real CVEs and a medium/low mix.
+- **Dashboard:** the SecOps dashboard is rebuilt; the executive dashboard has a Security Operations panel. Both read `SecurityOpsMetrics`.
+
+## Next phase: module 6, Issues & Remediation
+
+Sidebar group `Issues & Remediation`: Issues Console, SLA Policies, ITSM Integrations (`resources/js/Config/navigation.js`).
 
 **Known items to pick up there:**
-- Several of these pages are `PlatformController` stubs (vuln prioritiser, advisories, SIEM, notifications). Check each model for a tenant scope, and each write for hard-coded `organization_id => 1`.
-- `DashboardController::boardPackExport` also hard-codes org 1 (KRIs & Dashboards pass).
+- ITSM Integrations is a `PlatformController` stub. Check its model for a tenant scope, and its writes for hard-coded `organization_id => 1` (PlatformController still has these at several places).
+- Vulnerability tickets have no ITSM sync. Decide whether Issues should absorb them or link to them.
+- `DashboardController::boardPackExport` still hard-codes org 1 (KRIs & Dashboards pass).
 
-**Remaining sidebar order after that:** Issues & Remediation → Asset Management → Vendor Management → Policy Management → ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest of the sidebar.
+**Remaining sidebar order after that:** Asset Management → Vendor Management → Policy Management → ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest of the sidebar.
 
 ## Open follow-ups (not blocking)
 
@@ -67,6 +81,7 @@ Sidebar group `Security Operations`: Dashboard, Vulnerabilities, Vulnerability P
   - section assignments and the evidence UI
   - CISO email/phone encryption
 - **Regulatory Intelligence:** no OCR engine or LLM attached; Returns Centre exports CSV only; `KRI-COMP-CBN` still reads seeded values.
+- **Security Operations:** EPSS, KEV and advisories are seeded snapshots with no scheduled feed. Notifications record submission but are not delivered to a portal. No deadline reminders. No SOAR playbooks.
 - **Compliance:** no notifications for gap due dates or evidence expiry. The ISMS Statement of Applicability is not yet linked to assessment results, which belongs in the ISMS module pass.
 
 ## Environment gotchas (important)

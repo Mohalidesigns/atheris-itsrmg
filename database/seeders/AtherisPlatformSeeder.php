@@ -27,7 +27,6 @@ use App\Models\FairRun;
 use App\Models\FairScenario;
 use App\Models\FeatureFlag;
 use App\Models\FrameworkClause;
-use App\Models\IncidentNotification;
 use App\Models\Issue;
 use App\Models\IssueEvent;
 use App\Models\Kri;
@@ -44,8 +43,6 @@ use App\Models\ReturnTemplate;
 use App\Models\ScimToken;
 use App\Models\ServiceDependency;
 use App\Models\SharedVendorDirectory;
-use App\Models\SiemIntegration;
-use App\Models\SiemSignal;
 use App\Models\SsoConnection;
 use App\Models\Tenant;
 use App\Models\TenantTheme;
@@ -100,7 +97,6 @@ class AtherisPlatformSeeder extends Seeder
         $this->circulars();
         $this->copilot();
         $this->tprm();
-        $this->siem();
         $this->notifications();
         $this->fair();
         $this->advisories();
@@ -828,71 +824,22 @@ class AtherisPlatformSeeder extends Seeder
         }
     }
 
-    private function siem(): void
-    {
-        if (SiemIntegration::count() > 0) {
-            return;
-        }
-        SiemIntegration::create(['organization_id' => $this->orgId, 'provider' => 'sentinel', 'config' => ['workspace' => 'atheris-ws'], 'status' => 'active', 'last_signal_at' => now()->subMinutes(12)]);
-        SiemIntegration::create(['organization_id' => $this->orgId, 'provider' => 'splunk_es', 'config' => ['host' => 'splunk.internal'], 'status' => 'active', 'last_signal_at' => now()->subMinutes(34)]);
-        SiemIntegration::create(['organization_id' => $this->orgId, 'provider' => 'wazuh', 'config' => ['manager' => 'wazuh.internal'], 'status' => 'active', 'last_signal_at' => now()->subMinutes(5)]);
-        SiemIntegration::create(['organization_id' => $this->orgId, 'provider' => 'qradar', 'config' => [], 'status' => 'degraded', 'last_signal_at' => now()->subHours(2)]);
-
-        $titles = [
-            'Brute force login attempt — 41.58.x.x',
-            'Suspicious PowerShell execution on FINACLE-APP-01',
-            'Lateral movement indicator on ATM-NETWORK-02',
-            'DNS tunneling suspected from internal host',
-            'Multiple failed MFA attempts for admin account',
-            'Unusual login geography (Ghana → NG)',
-            'Sensitive file exfiltration alert (DLP)',
-            'Beaconing traffic detected to known-bad C2',
-        ];
-        $providers = ['sentinel', 'splunk_es', 'wazuh'];
-        for ($i = 0; $i < 25; $i++) {
-            SiemSignal::create([
-                'organization_id' => $this->orgId,
-                'provider' => $providers[array_rand($providers)],
-                'external_id' => strtoupper(Str::random(10)),
-                'severity' => ['critical', 'high', 'medium', 'low'][rand(0, 3)],
-                'title' => $titles[array_rand($titles)],
-                'payload' => ['src_ip' => '41.58.1.'.rand(1, 250), 'user' => 'svc_app', 'rule' => 'R-'.rand(100, 999)],
-                'received_at' => now()->subMinutes(rand(1, 1440)),
-                'incident_id' => rand(0, 1) ? $this->realIdFor('Incident') : null,
-            ]);
-        }
-    }
-
+    /** Regulator templates. {{tokens}} are filled from the incident by NotificationDrafter. */
     private function notifications(): void
     {
-        if (NotificationTemplate::count() > 0) {
-            return;
-        }
         $tmpls = [
-            ['CBN', 'cbn_24h', 'CBN 24h Cyber Advisory', "Subject: Cyber Incident Advisory per CBN ITSM\n\nDear Director, Banking Supervision,\n\n1. Incident summary:\n2. Affected systems:\n3. Initial assessment of impact:\n4. Actions in progress:\n\nSigned,\nCISO"],
-            ['NDPC', 'ndpc_72h', 'NDPC 72h Breach Form (§39)', "NDPC Personal Data Breach Notification\n\nController:\nDPCO:\nDate of breach:\nCategories and volume:\nLikely consequences:\nMeasures taken:\n"],
-            ['NFIU', 'nfiu_sar', 'NFIU Suspicious Activity Report', "NFIU SAR\n\nSubject:\nTransaction reference:\nSuspicion indicators:\nNarrative:\n"],
-            ['NAICOM', 'naicom_note', 'NAICOM Incident Note', "NAICOM Incident Note\n\nInsurer:\nIncident date:\nImpact:\nMitigations:\n"],
+            ['CBN', 'cbn_24h', 'CBN 24h Cyber Incident Report', "Subject: Cyber incident report — {{bank}} — {{incident.code}}\n\nThe Director, Banking Supervision Department\nCentral Bank of Nigeria\n\n1. Incident summary: {{incident.title}}. {{incident.description}}\n2. Type and severity: {{incident.type}} / {{incident.severity}}\n3. Detected: {{incident.detected_at}}\n4. Affected systems: {{incident.affected_systems}}\n5. Current status: {{incident.status}}\n6. Customer impact and actions in progress:\n\nIncident owner: {{incident.owner}}\nSigned for and on behalf of {{bank}},\nChief Information Security Officer"],
+            ['NDPC', 'ndpc_72h', 'NDPC 72h Personal Data Breach Notification', "Nigeria Data Protection Commission — Personal Data Breach Notification (NDPA 2023 s.40)\n\nData controller: {{bank}}\nReference: {{incident.code}}\nNature of the breach: {{incident.title}}\nWhen the controller became aware: {{incident.detected_at}}\nCategories of personal data: {{breach.data_types}}\nApproximate number of records: {{breach.records}}\nLikely consequences:\nMeasures taken or proposed:\nData Protection Officer contact:\n"],
+            ['NFIU', 'nfiu_sar', 'NFIU Suspicious Transaction Report', "NFIU Suspicious Transaction Report\n\nReporting entity: {{bank}}\nInternal reference: {{incident.code}}\nSubject(s):\nTransaction reference(s):\nGrounds for suspicion: {{incident.title}}. {{incident.description}}\nDate identified: {{incident.detected_at}}\n"],
+            ['NAICOM', 'naicom_note', 'NAICOM Incident Note', "NAICOM Incident Note\n\nEntity: {{bank}} (bancassurance)\nIncident: {{incident.code}} — {{incident.title}}\nDate detected: {{incident.detected_at}}\nImpact on policyholders:\nMitigations: \n"],
         ];
         foreach ($tmpls as [$reg, $key, $title, $body]) {
-            NotificationTemplate::create([
-                'regulator_code' => $reg, 'template_key' => $key,
-                'title' => $title, 'body_template' => $body,
-                'schema' => ['required' => ['summary', 'impact', 'timeline']], 'version' => '1.0',
+            NotificationTemplate::updateOrCreate(['template_key' => $key], [
+                'regulator_code' => $reg, 'title' => $title, 'body_template' => $body,
+                'schema' => ['required' => ['summary', 'impact', 'timeline']], 'version' => '1.1',
             ]);
         }
-        // Example draft notifications
-        $incidentId = DB::table('incidents')->value('id') ?: 1;
-        IncidentNotification::create([
-            'incident_id' => $incidentId, 'template_key' => 'cbn_24h',
-            'draft_body' => 'DRAFT — 24h advisory for incident #'.$incidentId,
-            'delivery_status' => 'draft', 'deadline_at' => now()->addHours(24),
-        ]);
-        IncidentNotification::create([
-            'incident_id' => $incidentId, 'template_key' => 'ndpc_72h',
-            'draft_body' => 'DRAFT — NDPC 72h breach form for incident #'.$incidentId,
-            'delivery_status' => 'in_review', 'deadline_at' => now()->addHours(72),
-        ]);
+        // Notifications themselves are per-incident tenant data: SecurityOperationsDemoSeeder.
     }
 
     private function fair(): void
@@ -941,49 +888,82 @@ class AtherisPlatformSeeder extends Seeder
         }
     }
 
+    /*
+     * Threat advisories, EPSS and CISA KEV are platform-wide reference data (no organization_id).
+     * The CVEs are real and match the banks' scanner findings so the prioritiser and "Am I affected?"
+     * have something to match. EPSS scores and KEV dates are an illustrative snapshot: production
+     * refreshes them from the FIRST EPSS and CISA KEV feeds.
+     */
     private function advisories(): void
     {
-        if (ThreatAdvisory::count() > 0) {
-            return;
-        }
-        $rows = [
-            ['ngcert', 'NGCERT-2026-01', 'Critical bug in popular banking middleware', ['CVE-2026-1111']],
-            ['ngcert', 'NGCERT-2026-02', 'USSD fraud campaign targeting Nigerian banks', []],
-            ['nitda', 'NITDA-2026-05', 'Phishing campaign impersonating NDPC', []],
-            ['us-cert', 'CISA-AA26-050A', 'Ransomware actor using stolen credentials', ['CVE-2026-2222', 'CVE-2026-2223']],
-            ['nitda', 'NITDA-2026-06', 'Zero-day in enterprise VPN appliance', ['CVE-2026-3333']],
+        // [cve, epss, percentile, kev date_added|null, known ransomware use, vendor, product]
+        $intel = [
+            ['CVE-2024-3400', 0.957, 0.999, '2024-04-12', false, 'Palo Alto Networks', 'PAN-OS'],
+            ['CVE-2023-4966', 0.961, 0.999, '2023-10-18', true, 'Citrix', 'NetScaler ADC and Gateway'],
+            ['CVE-2024-4577', 0.944, 0.999, '2024-06-12', true, 'PHP Group', 'PHP'],
+            ['CVE-2023-46747', 0.972, 0.999, '2023-10-31', false, 'F5', 'BIG-IP'],
+            ['CVE-2024-27198', 0.969, 0.999, '2024-03-07', false, 'JetBrains', 'TeamCity'],
+            ['CVE-2023-34362', 0.946, 0.999, '2023-06-02', true, 'Progress', 'MOVEit Transfer'],
+            ['CVE-2024-23897', 0.973, 0.999, '2024-08-19', true, 'Jenkins', 'Jenkins Command Line Interface'],
+            ['CVE-2024-21762', 0.902, 0.996, '2024-02-09', false, 'Fortinet', 'FortiOS'],
+            ['CVE-2023-3519', 0.912, 0.997, '2023-07-19', false, 'Citrix', 'NetScaler ADC and Gateway'],
+            ['CVE-2024-28986', 0.312, 0.968, '2024-08-15', false, 'SolarWinds', 'Web Help Desk'],
+            ['CVE-2024-21413', 0.615, 0.981, '2025-02-06', false, 'Microsoft', 'Outlook'],
+            ['CVE-2023-36884', 0.884, 0.995, '2023-07-17', false, 'Microsoft', 'Office and Windows HTML'],
+            ['CVE-2024-20353', 0.104, 0.947, '2024-04-24', false, 'Cisco', 'ASA and FTD'],
+            ['CVE-2024-20359', 0.021, 0.842, '2024-04-24', false, 'Cisco', 'ASA and FTD'],
+            ['CVE-2024-30088', 0.181, 0.957, '2024-10-15', false, 'Microsoft', 'Windows Kernel'],
+            ['CVE-2024-26169', 0.076, 0.931, '2024-06-13', true, 'Microsoft', 'Windows Error Reporting'],
+            ['CVE-2024-1086', 0.052, 0.917, '2024-05-30', true, 'Linux', 'Kernel'],
+            ['CVE-2023-44487', 0.812, 0.991, '2023-10-10', false, 'IETF', 'HTTP/2'],
+            ['CVE-2023-48795', 0.546, 0.977, null, false, null, null],
+            ['CVE-2024-2961', 0.087, 0.937, null, false, null, null],
+            ['CVE-2024-0727', 0.006, 0.734, null, false, null, null],
+            ['CVE-2023-5678', 0.004, 0.702, null, false, null, null],
+            ['CVE-2022-40897', 0.003, 0.664, null, false, null, null],
+            ['CVE-2023-2650', 0.005, 0.719, null, false, null, null],
+            ['CVE-2024-6387', 0.381, 0.972, null, false, null, null],
         ];
-        foreach ($rows as [$src, $id, $title, $cves]) {
-            ThreatAdvisory::create([
-                'source' => $src, 'advisory_id' => $id, 'title' => $title,
-                'body' => $title.' — indicators and mitigations.',
-                'published_at' => now()->subDays(rand(1, 30)),
-                'cves' => $cves, 'iocs' => ['ip' => ['41.58.1.1'], 'hash' => [Str::random(64)]],
-            ]);
+        // Replace the placeholder rows earlier versions of this seeder wrote.
+        DB::table('epss_cache')->where('cve_id', 'like', 'CVE-2026-%')->delete();
+        DB::table('kev_cache')->where('cve_id', 'like', 'CVE-2026-%')->delete();
+        foreach ($intel as [$cve, $epss, $pct, $kevDate, $ransomware, $vendor, $product]) {
+            DB::table('epss_cache')->updateOrInsert(['cve_id' => $cve], ['epss_score' => $epss, 'percentile' => $pct, 'updated_at' => now()]);
+            if ($kevDate) {
+                DB::table('kev_cache')->updateOrInsert(['cve_id' => $cve], [
+                    'date_added' => $kevDate, 'known_ransomware_use' => $ransomware,
+                    'vendor_project' => $vendor, 'product' => $product, 'updated_at' => now(),
+                ]);
+            }
         }
 
-        // EPSS + KEV demo rows
-        if (DB::table('epss_cache')->count() === 0) {
-            foreach (range(1, 20) as $i) {
-                DB::table('epss_cache')->insert([
-                    'cve_id' => 'CVE-2026-'.str_pad((string) (1000 + $i), 4, '0', STR_PAD_LEFT),
-                    'epss_score' => round(mt_rand(0, 10000) / 10000, 4),
-                    'percentile' => round(mt_rand(0, 10000) / 10000, 4),
-                    'updated_at' => now(),
-                ]);
-            }
-        }
-        if (DB::table('kev_cache')->count() === 0) {
-            foreach (range(1, 8) as $i) {
-                DB::table('kev_cache')->insert([
-                    'cve_id' => 'CVE-2026-'.str_pad((string) (2000 + $i), 4, '0', STR_PAD_LEFT),
-                    'date_added' => now()->subDays(rand(1, 60)),
-                    'known_ransomware_use' => rand(0, 1),
-                    'vendor_project' => 'Vendor '.$i,
-                    'product' => 'Product '.$i,
-                    'updated_at' => now(),
-                ]);
-            }
+        $rows = [
+            ['ngcert', 'NGCERT-ADV-2026-031', 'Citrix NetScaler session hijacking (Citrix Bleed) exploited against financial institutions',
+                'Unauthenticated memory disclosure lets attackers lift session tokens and bypass MFA. Patch, then kill all active and persistent sessions.',
+                ['CVE-2023-4966', 'CVE-2023-3519'], ['ip' => ['185.229.191.41'], 'domain' => ['citrix-update[.]net']], 6],
+            ['ngcert', 'NGCERT-ADV-2026-027', 'Active exploitation of PAN-OS GlobalProtect and FortiOS SSL-VPN edge devices',
+                'State-linked actors are exploiting VPN appliances for initial access to Nigerian banks. Apply vendor fixes and review device logs for implants.',
+                ['CVE-2024-3400', 'CVE-2024-21762'], ['ip' => ['45.153.241.17']], 11],
+            ['us-cert', 'CISA-AA26-071A', 'Ransomware affiliates chaining MOVEit, Jenkins and Windows privilege escalation',
+                'Joint advisory on a ransomware group using file-transfer and CI/CD flaws for access, then Windows Error Reporting EoP for privilege.',
+                ['CVE-2023-34362', 'CVE-2024-23897', 'CVE-2024-26169'], ['hash' => ['d6b1a4c3e0f9b2a8c7d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3']], 17],
+            ['nitda', 'NITDA-CERRT-2026-009', 'Phishing campaign impersonating the NDPC with fake breach-compliance notices', 'Emails demand payment of "NDPA registration fines". No CVE; block the sender domains and brief staff.',
+                [], ['domain' => ['ndpc-compliance[.]com.ng', 'ndpc-portal[.]org']], 4],
+            ['us-cert', 'CISA-AA26-058B', 'OpenSSH regreSSHion remote code execution on glibc Linux',
+                'A signal-handler race in sshd allows unauthenticated RCE as root on glibc-based Linux. Upgrade OpenSSH to 9.8p1 or later.',
+                ['CVE-2024-6387'], [], 23],
+            ['ngcert', 'NGCERT-ADV-2026-019', 'HTTP/2 Rapid Reset DDoS against Nigerian online banking portals',
+                'Record request rates against bank portals using HTTP/2 stream cancellation. Apply web server and CDN mitigations.',
+                ['CVE-2023-44487'], [], 35],
+        ];
+        // Earlier placeholder advisories quoted CVEs that do not exist.
+        DB::table('threat_advisories')->whereIn('advisory_id', ['NGCERT-2026-01', 'NGCERT-2026-02', 'NITDA-2026-05', 'NITDA-2026-06', 'CISA-AA26-050A'])->delete();
+        foreach ($rows as [$src, $id, $title, $body, $cves, $iocs, $daysAgo]) {
+            ThreatAdvisory::updateOrCreate(['advisory_id' => $id], [
+                'source' => $src, 'title' => $title, 'body' => $body,
+                'published_at' => now()->subDays($daysAgo),
+                'cves' => $cves, 'iocs' => $iocs,
+            ]);
         }
     }
 

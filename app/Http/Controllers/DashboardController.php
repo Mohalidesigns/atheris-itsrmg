@@ -25,6 +25,7 @@ use App\Models\Vulnerability;
 use App\Modules\CBNCSAT\Models\CsatAssessment;
 use App\Modules\CBNCSAT\Models\CsatMaStatement;
 use App\Services\ComplianceScoreService;
+use App\Services\SecurityOps\SecurityOpsMetrics;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -84,7 +85,7 @@ class DashboardController extends Controller
 
         // Vulnerability funnel
         $vulnsBySeverity = Vulnerability::when($orgId, fn ($q) => $q->where('organization_id', $orgId))
-            ->where('status', 'open')
+            ->outstanding()
             ->select('severity', DB::raw('count(*) as c'))
             ->groupBy('severity')->pluck('c', 'severity');
 
@@ -186,7 +187,16 @@ class DashboardController extends Controller
             'attestationByDept' => $attestationByDept,
             'csat' => $csat,
             'regulatory' => $orgId ? $this->regulatoryPulse((int) $orgId) : null,
+            'secops' => $orgId ? $this->secopsPulse() : null,
         ]);
+    }
+
+    /** Security Operations feed: exposure, live incidents and running regulatory clocks (tenant-scoped models). */
+    private function secopsPulse(): array
+    {
+        $metrics = app(SecurityOpsMetrics::class);
+
+        return ['stats' => $metrics->summary(), 'clocks' => $metrics->regulatoryClocks(5)];
     }
 
     /**

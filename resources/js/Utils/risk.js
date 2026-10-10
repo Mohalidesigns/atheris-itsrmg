@@ -64,7 +64,7 @@ export function toDateInput(value) {
 const THREAT_LABELS = {
     'ai-threat': 'AI Threat', api: 'API', c2: 'Command & Control', 'data-loss': 'Data Loss',
     'supply-chain': 'Supply Chain', 'third-party': 'Third Party',
-    ngcert: 'ngCERT', nitda: 'NITDA', cbn: 'CBN', 'mitre-attck': 'MITRE ATT&CK', 'ibm-x-force': 'IBM X-Force',
+    ngcert: 'ngCERT', nitda: 'NITDA', cbn: 'CBN', 'us-cert': 'CISA', 'au-cert': 'AusCERT', 'mitre-attck': 'MITRE ATT&CK', 'ibm-x-force': 'IBM X-Force',
 };
 
 export function threatLabel(value) {

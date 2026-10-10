@@ -24,13 +24,11 @@ use App\Models\FairRun;
 use App\Models\FairScenario;
 use App\Models\FeatureFlag;
 use App\Models\FrameworkClause;
-use App\Models\IncidentNotification;
 use App\Models\Issue;
 use App\Models\Kri;
 use App\Models\KriBreach;
 use App\Models\KriReading;
 use App\Models\MarketplaceItem;
-use App\Models\NotificationTemplate;
 use App\Models\Obligation;
 use App\Models\PricingTier;
 use App\Models\Risk;
@@ -38,12 +36,9 @@ use App\Models\RiskCategory;
 use App\Models\ScimToken;
 use App\Models\ServiceDependency;
 use App\Models\SharedVendorDirectory;
-use App\Models\SiemIntegration;
-use App\Models\SiemSignal;
 use App\Models\SsoConnection;
 use App\Models\Tenant;
 use App\Models\TenantTheme;
-use App\Models\ThreatAdvisory;
 use App\Models\TprmBreachEvent;
 use App\Models\TprmSecurityRating;
 use App\Models\Vendor;
@@ -360,42 +355,6 @@ class PlatformController extends Controller
         return Inertia::render('Tprm/SharedDirectory', compact('vendors'));
     }
 
-    /* -------------------------------- SIEM -------------------------------- */
-    public function siemIndex()
-    {
-        $integrations = SiemIntegration::get();
-        $signals = SiemSignal::orderByDesc('received_at')->take(50)->get();
-
-        return Inertia::render('Siem/Index', compact('integrations', 'signals'));
-    }
-
-    /* ------------------------ Regulatory Notifications ------------------------ */
-    public function notificationsIndex()
-    {
-        $templates = NotificationTemplate::get();
-        $notifications = IncidentNotification::orderByDesc('created_at')->take(50)->get();
-
-        return Inertia::render('Notifications/Index', compact('templates', 'notifications'));
-    }
-
-    public function notificationsDraft(Request $r)
-    {
-        $data = $r->validate([
-            'incident_id' => 'required|integer',
-            'template_key' => 'required|string',
-        ]);
-        $tmpl = NotificationTemplate::where('template_key', $data['template_key'])->firstOrFail();
-        $draft = IncidentNotification::create([
-            'incident_id' => $data['incident_id'],
-            'template_key' => $tmpl->template_key,
-            'draft_body' => $tmpl->body_template,
-            'delivery_status' => 'draft',
-            'deadline_at' => now()->addHours(24),
-        ]);
-
-        return redirect()->route('notifications.index')->with('success', 'Notification drafted');
-    }
-
     /* --------------------------------- FAIR --------------------------------- */
     public function fairIndex()
     {
@@ -450,27 +409,6 @@ class PlatformController extends Controller
         return redirect()->back()->with('success', $scenario->risk_id
             ? "Scenario linked to {$scenario->risk->risk_id_code}. Run the simulation to update its ALE."
             : 'Scenario unlinked.');
-    }
-
-    /* --------------------------- Vulnerability Prio --------------------------- */
-    public function vulnPrioritiserIndex()
-    {
-        $vulns = Vulnerability::take(100)->get()->map(function ($v) {
-            $v->epss = round(mt_rand(0, 10000) / 10000, 4);
-            $v->kev = $v->epss > 0.8;
-            $v->priority = round(($v->cvss_score ?? 5) * 10 + $v->epss * 100 + ($v->kev ? 50 : 0), 2);
-
-            return $v;
-        })->sortByDesc('priority')->values();
-
-        return Inertia::render('Vuln/Prioritiser', compact('vulns'));
-    }
-
-    public function threatAdvisoriesIndex()
-    {
-        $advisories = ThreatAdvisory::orderByDesc('published_at')->take(100)->get();
-
-        return Inertia::render('Threats/Advisories', compact('advisories'));
     }
 
     /* ------------------------------- Workflows ------------------------------- */

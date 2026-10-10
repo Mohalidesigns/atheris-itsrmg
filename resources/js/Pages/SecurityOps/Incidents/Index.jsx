@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import Pagination from '@/Components/Pagination';
+import { formatDate } from '@/Utils/risk';
 
 const severityColors = {
     critical: '#C53030',
@@ -122,6 +123,7 @@ export default function IncidentsIndex({ incidents, filters, statuses, types }) 
                                 className="text-sm border-gray-200 rounded-lg focus:ring-[#1A365D]/30 focus:border-[#1A365D]"
                             >
                                 <option value="">All Statuses</option>
+                                <option value="active">Active (not resolved)</option>
                                 {(statuses || ['reported', 'triaged', 'investigating', 'containing', 'contained', 'eradicating', 'recovering', 'resolved', 'closed', 'post_incident']).map(s => (
                                     <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
                                 ))}
@@ -197,7 +199,7 @@ export default function IncidentsIndex({ incidents, filters, statuses, types }) 
                                             {incident.assignee?.name || '--'}
                                         </td>
                                         <td className="px-4 py-3 text-[#718096]">
-                                            {incident.detected_at || '--'}
+                                            {formatDate(incident.detected_at, true)}
                                         </td>
                                     </tr>
                                 ))

@@ -14,12 +14,13 @@ class IncidentFactory extends Factory
     public function definition(): array
     {
         $detected = $this->faker->dateTimeBetween('-90 days', 'now');
+
         return [
             'organization_id' => Organization::factory(),
             'incident_id_code' => 'INC-'.strtoupper($this->faker->bothify('###')),
             'title' => $this->faker->sentence(6),
             'description' => $this->faker->paragraph(),
-            'type' => $this->faker->randomElement(['malware', 'phishing', 'data_leak', 'unauthorized_access', 'dos', 'insider_threat', 'other']),
+            'type' => $this->faker->randomElement(['malware', 'phishing', 'data_breach', 'unauthorized_access', 'denial_of_service', 'insider_threat', 'other']),
             'severity' => $this->faker->randomElement(['critical', 'high', 'medium', 'low']),
             'status' => $this->faker->randomElement(['detected', 'triaged', 'investigating', 'containing', 'eradicating', 'recovering', 'closed']),
             'source' => $this->faker->randomElement(['SIEM', 'SOC analyst', 'customer report', 'automated alert', 'ngCERT']),

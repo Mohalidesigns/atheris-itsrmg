@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -360,6 +360,49 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                                 </li>
                             ))}
                         </ul>
+                    </div>
+                </div>
+            )}
+
+            {secops && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Security Operations</h3>
+                        <Link href={route('security-ops.dashboard')} className="text-xs text-[#0A1F44] underline">SOC dashboard →</Link>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        <div className="grid grid-cols-2 gap-2 lg:col-span-2 sm:grid-cols-3">
+                            {[
+                                ['Known-exploited (KEV) open', secops.stats.vulns_kev, route('vuln-prioritiser.index', { kev: 1 }), secops.stats.vulns_kev > 0],
+                                ['Findings past SLA', secops.stats.vulns_sla_breached, route('vulnerabilities.index', { overdue: 1 }), secops.stats.vulns_sla_breached > 0],
+                                ['Active incidents', secops.stats.incidents_active, route('incidents.index', { status: 'active' }), secops.stats.incidents_critical > 0],
+                                ['New high/critical alerts', secops.stats.alerts_new_high, route('security-alerts.index', { status: 'new' }), secops.stats.alerts_new_high > 0],
+                                ['NDPA notices pending', secops.stats.ndpa_pending, route('data-breaches.index', { ndpa_pending: 1 }), secops.stats.ndpa_pending > 0],
+                                ['Notifications overdue', secops.stats.notifications_overdue, route('notifications.index', { status: 'overdue' }), secops.stats.notifications_overdue > 0],
+                            ].map(([label, n, href, alert]) => (
+                                <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                    <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                    <p className="text-[11px] text-[#718096]">{label}</p>
+                                </Link>
+                            ))}
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-semibold text-[#2D3748]">Regulatory clocks</h4>
+                            <ul className="mt-1 divide-y divide-gray-100 text-xs">
+                                {secops.clocks.length === 0 && <li className="py-2 text-[#718096]">No regulatory deadlines running.</li>}
+                                {secops.clocks.map((c) => (
+                                    <li key={`${c.kind}-${c.id}`} className="py-2">
+                                        <Link href={c.href} className="block hover:underline">
+                                            <span className="font-medium text-[#2D3748]">{c.label}</span>
+                                            <span className={`ml-1 ${c.overdue ? 'font-semibold text-[#B3261E]' : 'text-[#718096]'}`}>
+                                                {c.overdue ? 'overdue · ' : 'due '}{fmtDate(c.deadline_at)}
+                                            </span>
+                                            <p className="truncate text-[#718096]">{c.subject}</p>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 </div>
             )}

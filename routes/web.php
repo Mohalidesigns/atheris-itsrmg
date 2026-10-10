@@ -42,6 +42,7 @@ use App\Http\Controllers\RiskAssessmentController;
 use App\Http\Controllers\RiskController;
 use App\Http\Controllers\RiskTreatmentController;
 use App\Http\Controllers\SecurityAlertController;
+use App\Http\Controllers\SecurityOperationsController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ThreatController;
 use App\Http\Controllers\VendorAssessmentController;
@@ -72,6 +73,10 @@ Route::prefix('scim/v2')->group(function () {
     Route::put('/Users/{id}', [ScimController::class, 'putUser']);
     Route::delete('/Users/{id}', [ScimController::class, 'deleteUser']);
 });
+
+// SIEM / SOAR webhook ingest — HMAC-signed per connector, verified inside SiemIngestService
+Route::post('/siem/ingest/{integration}', [SecurityOperationsController::class, 'siemIngest'])
+    ->whereNumber('integration')->middleware('throttle:120,1')->name('siem.ingest');
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -220,6 +225,8 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:edit incidents')->name('incidents.add-event');
     Route::patch('/incidents/{incident}/status', [IncidentController::class, 'updateStatus'])
         ->middleware('permission:edit incidents')->name('incidents.update-status');
+    Route::post('/incidents/{incident}/procedure', [IncidentController::class, 'assignProcedure'])
+        ->middleware('permission:edit incidents')->name('incidents.procedure');
 
     // Vulnerability Tickets
     Route::resource('vulnerability-tickets', VulnerabilityTicketController::class)
@@ -238,6 +245,8 @@ Route::middleware('auth')->group(function () {
         ->middlewareFor('destroy', 'permission:delete security-alerts');
     Route::post('/security-alerts/{security_alert}/promote', [SecurityAlertController::class, 'promote'])
         ->middleware('permission:create incidents')->name('security-alerts.promote');
+    Route::post('/security-alerts/{security_alert}/link', [SecurityAlertController::class, 'linkIncident'])
+        ->middleware('permission:edit security-alerts')->name('security-alerts.link');
 
     // Data Breaches
     Route::resource('data-breaches', DataBreachController::class)
@@ -246,6 +255,8 @@ Route::middleware('auth')->group(function () {
         ->middlewareFor(['create', 'store'], 'permission:create data-breaches')
         ->middlewareFor(['edit', 'update'], 'permission:edit data-breaches')
         ->middlewareFor('destroy', 'permission:delete data-breaches');
+    Route::post('/data-breaches/{breach}/notified', [DataBreachController::class, 'recordNotification'])
+        ->middleware('permission:edit data-breaches')->name('data-breaches.notified');
 
     // Response Procedures (share the incidents permission set)
     Route::resource('response-procedures', ResponseProcedureController::class)
@@ -489,12 +500,22 @@ Route::middleware('auth')->group(function () {
         Route::get('/security-ratings', [PlatformController::class, 'securityRatingsIndex'])->name('security-ratings.index');
         Route::get('/shared-vendors', [PlatformController::class, 'sharedVendorsIndex'])->name('shared-vendors.index');
 
-        // Phase 5: SIEM
-        Route::get('/siem', [PlatformController::class, 'siemIndex'])->name('siem.index');
+        // Phase 5: SIEM (signed webhook ingest is registered outside auth, below SCIM)
+        Route::get('/siem', [SecurityOperationsController::class, 'siem'])->name('siem.index');
+        Route::post('/siem/signals/{signal}/alert', [SecurityOperationsController::class, 'siemRaiseAlert'])
+            ->middleware('permission:create security-alerts')->name('siem.signals.alert');
+        Route::post('/siem/integrations/{integration}/secret', [SecurityOperationsController::class, 'siemRotateSecret'])
+            ->middleware('permission:edit platform')->name('siem.integrations.secret');
 
-        // Phase 5: Regulatory Notifications
-        Route::get('/notifications', [PlatformController::class, 'notificationsIndex'])->name('notifications.index');
-        Route::post('/notifications/draft', [PlatformController::class, 'notificationsDraft'])->name('notifications.draft');
+        // Phase 5: Regulatory Notifications (draft → in review → approved → submitted)
+        Route::get('/notifications', [SecurityOperationsController::class, 'notifications'])->name('notifications.index');
+        Route::post('/notifications/draft', [SecurityOperationsController::class, 'notificationDraft'])
+            ->middleware('permission:create incidents')->name('notifications.draft');
+        Route::get('/notifications/{notification}', [SecurityOperationsController::class, 'notificationShow'])->name('notifications.show');
+        Route::put('/notifications/{notification}', [SecurityOperationsController::class, 'notificationUpdate'])
+            ->middleware('permission:edit incidents')->name('notifications.update');
+        Route::post('/notifications/{notification}/transition', [SecurityOperationsController::class, 'notificationTransition'])
+            ->middleware('permission:edit incidents')->name('notifications.transition');
 
         // Phase 5: FAIR
         Route::get('/fair', [PlatformController::class, 'fairIndex'])->name('fair.index');
@@ -502,8 +523,8 @@ Route::middleware('auth')->group(function () {
         Route::patch('/fair/{scenario}/link', [PlatformController::class, 'fairLink'])->name('fair.link')->middleware('permission:edit risks');
 
         // Phase 5: Vuln Prioritiser + Advisories
-        Route::get('/vuln-prioritiser', [PlatformController::class, 'vulnPrioritiserIndex'])->name('vuln-prioritiser.index');
-        Route::get('/threat-advisories', [PlatformController::class, 'threatAdvisoriesIndex'])->name('threat-advisories.index');
+        Route::get('/vuln-prioritiser', [SecurityOperationsController::class, 'prioritiser'])->name('vuln-prioritiser.index');
+        Route::get('/threat-advisories', [SecurityOperationsController::class, 'advisories'])->name('threat-advisories.index');
 
         // Phase 6: Doc Intelligence & Returns
         Route::get('/doc-intel', [RegulatoryIntelligenceController::class, 'docIntelIndex'])->name('doc-intel.index');

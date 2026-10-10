@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Events\Core\IncidentDeclared;
+use App\Models\Concerns\GeneratesSequentialCode;
 use App\Models\Concerns\HasTenantIdAlias;
 use App\Models\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -17,6 +18,7 @@ use Spatie\Activitylog\Support\LogOptions;
 class Incident extends Model
 {
     use BelongsToOrganization, HasFactory, LogsActivity, SoftDeletes;
+    use GeneratesSequentialCode;
     use HasTenantIdAlias;
 
     protected $fillable = [
@@ -25,6 +27,7 @@ class Incident extends Model
         'contained_at', 'resolved_at', 'closed_at', 'assigned_to',
         'lead_investigator_id', 'affected_systems', 'affected_users_count',
         'is_data_breach', 'root_cause', 'lessons_learned', 'tags',
+        'response_procedure_id',
     ];
 
     /**
@@ -56,8 +59,15 @@ class Incident extends Model
 
     public const STATUSES = [
         'detected', 'triaged', 'investigating', 'containing', 'eradicating',
-        'recovering', 'resolved', 'closed', 'post_incident_review',
+        'recovering', 'resolved', 'post_incident_review', 'closed',
     ];
+
+    /** Statuses in which the incident is still being worked. */
+    public const ACTIVE_STATUSES = [
+        'detected', 'triaged', 'investigating', 'containing', 'eradicating', 'recovering',
+    ];
+
+    public const SEVERITIES = ['critical', 'high', 'medium', 'low'];
 
     public const TYPES = [
         'malware', 'phishing', 'ransomware', 'data_breach', 'unauthorized_access',
@@ -86,26 +96,26 @@ class Incident extends Model
         return $this->hasMany(SecurityAlert::class);
     }
 
+    public function procedure(): BelongsTo
+    {
+        return $this->belongsTo(IncidentResponseProcedure::class, 'response_procedure_id');
+    }
+
+    public function notifications(): HasMany
+    {
+        return $this->hasMany(IncidentNotification::class);
+    }
+
+    /** The incident's data breach record (the earliest, should more than one be logged). */
     public function breach(): HasOne
     {
-        return $this->hasOne(DataBreach::class);
+        return $this->hasOne(DataBreach::class)->oldestOfMany();
     }
 
     // Helpers
     public static function generateNextCode(int $organizationId): string
     {
-        $last = static::withoutGlobalScopes()
-            ->where('organization_id', $organizationId)
-            ->orderByDesc('id')
-            ->value('incident_id_code');
-
-        if ($last && preg_match('/INC-(\d+)/', $last, $matches)) {
-            $next = (int) $matches[1] + 1;
-        } else {
-            $next = 1;
-        }
-
-        return 'INC-'.str_pad($next, 4, '0', STR_PAD_LEFT);
+        return static::nextSequentialCode($organizationId, 'incident_id_code', 'INC-');
     }
 
     public function getActivitylogOptions(): LogOptions

@@ -3,6 +3,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import Pagination from '@/Components/Pagination';
+import { formatDate } from '@/Utils/risk';
 
 const severityColors = {
     critical: '#C53030',
@@ -120,7 +121,7 @@ export default function VulnerabilitiesIndex({ vulnerabilities, filters, severit
                                 className="text-sm border-gray-200 rounded-lg focus:ring-[#1A365D]/30 focus:border-[#1A365D]"
                             >
                                 <option value="">All Statuses</option>
-                                {(statuses || ['open', 'in_progress', 'mitigated', 'resolved', 'closed', 'accepted']).map(s => (
+                                {(statuses || ['outstanding', 'open', 'in_progress', 'remediated', 'accepted', 'false_positive']).map(s => (
                                     <option key={s} value={s}>{s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
                                 ))}
                             </select>
@@ -177,7 +178,7 @@ export default function VulnerabilitiesIndex({ vulnerabilities, filters, severit
                                             {vuln.assignee?.name || '--'}
                                         </td>
                                         <td className="px-4 py-3 text-[#718096]">
-                                            {vuln.due_date || '--'}
+                                            {formatDate(vuln.due_date)}
                                         </td>
                                     </tr>
                                 ))

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GeneratesSequentialCode;
 use App\Models\Concerns\HasTenantIdAlias;
 use App\Models\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,6 +14,7 @@ use Spatie\Activitylog\Support\LogOptions;
 class DataBreach extends Model
 {
     use BelongsToOrganization, HasFactory, LogsActivity;
+    use GeneratesSequentialCode;
     use HasTenantIdAlias;
 
     protected $fillable = [
@@ -21,7 +23,7 @@ class DataBreach extends Model
         'status', 'ndpa_notification_required', 'ndpa_notified_at',
         'ndpa_notification_deadline', 'regulatory_body_notified',
         'individuals_notified', 'individuals_notified_at', 'root_cause',
-        'remedial_actions', 'assigned_to',
+        'remedial_actions', 'assigned_to', 'discovered_at',
     ];
 
     protected function casts(): array
@@ -31,6 +33,7 @@ class DataBreach extends Model
             'ndpa_notification_required' => 'boolean',
             'regulatory_body_notified' => 'boolean',
             'individuals_notified' => 'boolean',
+            'discovered_at' => 'datetime',
             'ndpa_notified_at' => 'datetime',
             'ndpa_notification_deadline' => 'datetime',
             'individuals_notified_at' => 'datetime',
@@ -51,18 +54,7 @@ class DataBreach extends Model
     // Helpers
     public static function generateNextCode(int $organizationId): string
     {
-        $last = static::withoutGlobalScopes()
-            ->where('organization_id', $organizationId)
-            ->orderByDesc('id')
-            ->value('breach_id_code');
-
-        if ($last && preg_match('/BRH-(\d+)/', $last, $matches)) {
-            $next = (int) $matches[1] + 1;
-        } else {
-            $next = 1;
-        }
-
-        return 'BRH-'.str_pad($next, 4, '0', STR_PAD_LEFT);
+        return static::nextSequentialCode($organizationId, 'breach_id_code', 'BRH-');
     }
 
     public function getActivitylogOptions(): LogOptions

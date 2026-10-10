@@ -14,7 +14,7 @@ export default function EditVulnerability({ vulnerability, users, assets = [], l
         cve_id: vulnerability.cve_id || '',
         source: vulnerability.source || '',
         assigned_to: vulnerability.assigned_to || '',
-        due_date: vulnerability.due_date || '',
+        due_date: vulnerability.due_date ? String(vulnerability.due_date).slice(0, 10) : '',
         status: vulnerability.status || 'open',
         asset_ids: linkedAssetIds || [],
     });

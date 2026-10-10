@@ -23,7 +23,7 @@ class ResponseProcedureController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
@@ -59,6 +59,9 @@ class ResponseProcedureController extends Controller
     {
         return Inertia::render('SecurityOps/ResponseProcedures/Show', [
             'procedure' => $responseProcedure,
+            'incidents' => Incident::where('response_procedure_id', $responseProcedure->id)
+                ->orderByDesc('detected_at')->take(20)
+                ->get(['id', 'incident_id_code', 'title', 'severity', 'status', 'detected_at']),
         ]);
     }
 
@@ -93,7 +96,7 @@ class ResponseProcedureController extends Controller
             'description' => 'nullable|string',
             'category' => 'nullable|string|max:255',
             'incident_types' => 'nullable|array',
-            'incident_types.*' => 'string|in:' . implode(',', Incident::TYPES),
+            'incident_types.*' => 'string|in:'.implode(',', Incident::TYPES),
             'steps' => 'nullable|array',
             'steps.*' => 'string',
             'escalation_contacts' => 'nullable|array',

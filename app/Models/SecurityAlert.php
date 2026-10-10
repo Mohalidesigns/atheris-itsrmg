@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\GeneratesSequentialCode;
 use App\Models\Concerns\HasTenantIdAlias;
 use App\Models\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SecurityAlert extends Model
 {
     use BelongsToOrganization, HasFactory;
+    use GeneratesSequentialCode;
     use HasTenantIdAlias;
 
     protected $fillable = [
@@ -45,17 +47,6 @@ class SecurityAlert extends Model
 
     public static function generateNextCode(int $organizationId): string
     {
-        $count = static::withoutGlobalScopes()
-            ->where('organization_id', $organizationId)
-            ->count();
-
-        do {
-            $code = 'ALR-'.str_pad(++$count, 4, '0', STR_PAD_LEFT);
-        } while (static::withoutGlobalScopes()
-            ->where('organization_id', $organizationId)
-            ->where('alert_id_code', $code)
-            ->exists());
-
-        return $code;
+        return static::nextSequentialCode($organizationId, 'alert_id_code', 'ALR-');
     }
 }

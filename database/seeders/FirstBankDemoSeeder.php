@@ -666,27 +666,38 @@ class FirstBankDemoSeeder extends Seeder
             ['CVE-2024-21762', 'Fortinet SSL VPN OOB Write', 'critical', 9.6],
             ['CVE-2024-28986', 'SolarWinds Web Help Desk RCE', 'critical', 9.8],
             ['CVE-2023-3519', 'Citrix ADC Code Injection', 'critical', 9.8],
+            ['CVE-2023-48795', 'OpenSSH Terrapin prefix truncation', 'medium', 5.9],
+            ['CVE-2024-0727', 'OpenSSL PKCS12 NULL dereference', 'medium', 5.5],
+            ['CVE-2023-44487', 'HTTP/2 Rapid Reset DoS', 'high', 7.5],
+            ['CVE-2024-2961', 'glibc iconv out-of-bounds write', 'high', 7.3],
+            ['CVE-2023-5678', 'OpenSSL DH excessive check time', 'medium', 5.3],
+            ['CVE-2022-40897', 'Python setuptools ReDoS', 'medium', 5.9],
+            ['CVE-2023-2650', 'OpenSSL ASN.1 OID translation DoS', 'medium', 6.5],
+            [null, 'TLS 1.0/1.1 still enabled on load balancer', 'low', 3.7],
+            [null, 'Missing HTTP security headers on staff portal', 'low', 3.1],
         ];
         $assetIds = Asset::where('organization_id', $this->orgId)->pluck('id')->toArray();
         for ($i = 0; $i < 120; $i++) {
             $cve = $cves[array_rand($cves)];
+            $assetId = $assetIds[array_rand($assetIds)];
             Vulnerability::create([
                 'organization_id' => $this->orgId,
                 'vuln_id_code' => 'FBN-VLN-'.str_pad((string) ($i + 1), 3, '0', STR_PAD_LEFT),
-                'cve_id' => $cve[0].'-v'.rand(1, 99),
+                'cve_id' => $cve[0],
                 'title' => $cve[1],
                 'description' => $cve[1].'. Detected on First Bank asset(s).',
                 'severity' => $cve[2],
                 'cvss_score' => $cve[3],
-                'cvss_vector' => 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
+                'cvss_vector' => $cve[3] >= 9 ? 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' : null,
                 'source' => ['tenable', 'qualys', 'defender', 'ngcert', 'manual'][rand(0, 4)],
                 'status' => $this->weighted(['open' => 40, 'in_progress' => 30, 'remediated' => 22, 'accepted' => 5, 'false_positive' => 3]),
-                'affected_assets' => [$assetIds[array_rand($assetIds)]],
-                'discovered_at' => $this->ts18m(),
+                'affected_assets' => [$assetId],
+                'discovered_at' => $discovered = now()->subDays(rand(2, 200)),
                 'assigned_to' => $uids[array_rand($uids)],
-                'due_date' => now()->addDays(rand(-60, 90)),
-                'tags' => [rand(0, 1) ? 'KEV' : null, rand(0, 1) ? 'EPSS>0.8' : null],
-            ]);
+                // Due per the remediation SLA from discovery: C 72h, H 14d, M 30d, L 90d.
+                'due_date' => $discovered->copy()->addHours(['critical' => 72, 'high' => 336, 'medium' => 720, 'low' => 2160][$cve[2]]),
+                'tags' => [$cve[0] ? 'scanner' : 'config-review'],
+            ])->assets()->syncWithoutDetaching([$assetId]);
         }
     }
 
@@ -723,8 +734,8 @@ class FirstBankDemoSeeder extends Seeder
             ['NIBSS NIP recon anomaly', 'other', 'high'],
             ['Phishing campaign targeting staff', 'phishing', 'medium'],
             ['Suspicious admin login from foreign IP', 'unauthorized_access', 'high'],
-            ['DDoS burst mitigated on FirstOnline', 'dos', 'medium'],
-            ['USB exfil attempt — branch', 'data_leak', 'high'],
+            ['DDoS burst mitigated on FirstOnline', 'denial_of_service', 'medium'],
+            ['USB exfil attempt — branch', 'data_breach', 'high'],
             ['ATM cash-out via compromised agent credentials', 'other', 'critical'],
             ['SIM-swap fraud — 12 customers affected', 'other', 'high'],
             ['Finacle DB patch failure — 3h outage', 'other', 'high'],
@@ -737,7 +748,7 @@ class FirstBankDemoSeeder extends Seeder
             ['CyberArk vault access anomaly', 'unauthorized_access', 'high'],
             ['GitLab self-managed RCE attempt (blocked)', 'other', 'high'],
             ['SWIFT alliance anomaly', 'unauthorized_access', 'critical'],
-            ['Data breach — 50k customer PII exposed', 'data_leak', 'critical'],
+            ['Data breach — 50k customer PII exposed', 'data_breach', 'critical'],
             ['USSD SS7 hijack attempt', 'other', 'high'],
             ['Deepfake voice request to wire NGN 500m', 'phishing', 'high'],
             ['Physical: break-in attempt at Abuja DR', 'other', 'medium'],
