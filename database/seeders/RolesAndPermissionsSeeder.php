@@ -89,6 +89,9 @@ class RolesAndPermissionsSeeder extends Seeder
         $complianceOfficer->givePermissionTo([
             'view risks', 'view assets', 'view reports', 'view vulnerabilities',
             'view csat', 'create csat', 'edit csat',
+            // Regulatory Intelligence: the Head of Compliance triages circulars, reviews extracted
+            // documents and prepares returns (ATH-VAL-004).
+            'view platform', 'create platform', 'edit platform',
         ]);
 
         // Security Analyst - security operations

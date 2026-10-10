@@ -108,6 +108,10 @@ class DatabaseSeeder extends Seeder
         // vulnerability tickets, response procedures)
         $this->call(DemoCrossLinkSeeder::class);
 
+        // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
+        // First Bank's compiled architecture returns (after stewardship so seal states are real)
+        $this->call(RegulatoryIntelligenceDemoSeeder::class);
+
         // Reusable assessment questions (IT Risk → Question Library)
         $this->call(QuestionLibrarySeeder::class);
 

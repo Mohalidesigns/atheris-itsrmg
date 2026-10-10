@@ -17,7 +17,6 @@ use App\Models\CopilotMessage;
 use App\Models\CoreBankingIntegration;
 use App\Models\CoreBankingSnapshot;
 use App\Models\CustomField;
-use App\Models\DocIntelligenceJob;
 use App\Models\DrExercise;
 use App\Models\DrRunbook;
 use App\Models\EvidenceVaultItem;
@@ -34,9 +33,6 @@ use App\Models\MarketplaceItem;
 use App\Models\NotificationTemplate;
 use App\Models\Obligation;
 use App\Models\PricingTier;
-use App\Models\RegulatoryCircular;
-use App\Models\ReturnRun;
-use App\Models\ReturnTemplate;
 use App\Models\Risk;
 use App\Models\RiskCategory;
 use App\Models\ScimToken;
@@ -111,26 +107,6 @@ class PlatformController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Copilot response received');
-    }
-
-    /* --------------------------- Regulatory Intel --------------------------- */
-    public function regIntelIndex(Request $r)
-    {
-        $regulator = $r->query('regulator');
-        $circulars = RegulatoryCircular::query()
-            ->when($regulator, fn ($q) => $q->where('regulator_code', $regulator))
-            ->orderByDesc('issued_at')
-            ->take(100)
-            ->get();
-        $counts = RegulatoryCircular::select('regulator_code', DB::raw('count(*) as c'))
-            ->groupBy('regulator_code')->pluck('c', 'regulator_code');
-
-        return Inertia::render('RegulatoryIntel/Index', compact('circulars', 'counts', 'regulator'));
-    }
-
-    public function regIntelShow(RegulatoryCircular $circular)
-    {
-        return Inertia::render('RegulatoryIntel/Show', ['circular' => $circular]);
     }
 
     public function obligationsIndex(Request $r)
@@ -495,58 +471,6 @@ class PlatformController extends Controller
         $advisories = ThreatAdvisory::orderByDesc('published_at')->take(100)->get();
 
         return Inertia::render('Threats/Advisories', compact('advisories'));
-    }
-
-    /* ---------------------------- Doc Intelligence ---------------------------- */
-    public function docIntelIndex()
-    {
-        $jobs = DocIntelligenceJob::orderByDesc('created_at')->take(50)->get();
-
-        return Inertia::render('DocIntel/Index', compact('jobs'));
-    }
-
-    public function docIntelUpload(Request $r)
-    {
-        DocIntelligenceJob::create([
-            'organization_id' => 1,
-            'doc_type' => $r->input('doc_type', 'circular'),
-            'source_file' => 'docs/demo-'.now()->timestamp.'.pdf',
-            'confidence' => 0.92,
-            'status' => 'awaiting_review',
-            'structured_output' => [
-                'regulator' => 'CBN',
-                'reference' => 'BSD/DIR/GEN/LAB/14/'.rand(1, 200),
-                'effective_date' => now()->toDateString(),
-                'summary' => 'Demo extracted summary of uploaded regulatory document.',
-            ],
-        ]);
-
-        return redirect()->route('doc-intel.index')->with('success', 'Document queued (demo)');
-    }
-
-    /* ------------------------------- Returns ------------------------------- */
-    public function returnsIndex()
-    {
-        $templates = ReturnTemplate::get();
-        $runs = ReturnRun::with('template')->orderByDesc('created_at')->take(50)->get();
-
-        return Inertia::render('Returns/Index', compact('templates', 'runs'));
-    }
-
-    public function returnsGenerate(Request $r)
-    {
-        $tmpl = ReturnTemplate::findOrFail($r->input('template_id'));
-        ReturnRun::create([
-            'organization_id' => 1,
-            'template_id' => $tmpl->id,
-            'period' => now()->format('Y-m'),
-            'status' => 'draft',
-            'pdf_path' => 'returns/demo-'.now()->timestamp.'.pdf',
-            'xlsx_path' => 'returns/demo-'.now()->timestamp.'.xlsx',
-            'data' => ['auto_populated' => true, 'overrides' => []],
-        ]);
-
-        return redirect()->route('returns.index')->with('success', "Return generated for {$tmpl->name}");
     }
 
     /* ------------------------------- Workflows ------------------------------- */

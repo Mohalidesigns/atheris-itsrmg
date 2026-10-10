@@ -10,6 +10,8 @@ use App\Models\Ea\TechComponent;
 use App\Models\Ea\Zone;
 use App\Models\LegalEntity;
 use App\Models\Vendor;
+use App\Modules\CBNCSAT\Models\CsatAssessment;
+use App\Modules\CBNCSAT\Models\CsatMaStatement;
 use App\Services\Ea\ControlInheritanceService;
 
 /**
@@ -79,6 +81,8 @@ class CsatMapper extends ReturnMapper
         $sections = [];
         $citations = [];
 
+        $selfAssessment = $this->selfAssessment($citations, $period);
+        $sections[] = $selfAssessment['section'];
         $sections[] = $this->assetInventory($citations, $entity);
         $sections[] = $this->connectionCatalogue($citations);
         $sections[] = $this->thirdPartyRegister($citations);
@@ -99,12 +103,92 @@ class CsatMapper extends ReturnMapper
                 'third_parties' => Vendor::count(),
                 'obsolete_components' => TechComponent::where('obsolescence_flag', true)->count(),
                 'security_zones' => Zone::count(),
+                'csat_statements_answered_percent' => $selfAssessment['answered_percent'],
                 'completeness' => $completeness,
             ],
             'citations' => $citations,
             'completeness' => $completeness,
             'evidence_confidence' => $this->confidenceFrom($citations),
         ];
+    }
+
+    /**
+     * RBCF §2.5 — the self-assessment itself, from the bank's CBN CSAT module.
+     *
+     * The architecture sections below evidence the instrument; this one reports where the
+     * instrument stands: the cycle's status, the maturity and inherent-risk results, and how much
+     * of the maturity questionnaire is answered. CSAT records sit outside the EA quality-seal
+     * regime, so they are cited for traceability but do not move evidence confidence.
+     *
+     * @return array{section: array, answered_percent: int}
+     */
+    private function selfAssessment(array &$citations, string $period): array
+    {
+        $year = (int) substr($period, 0, 4);
+        $assessment = CsatAssessment::query()
+            ->where('assessment_year', '<=', $year ?: now()->year)
+            ->orderByDesc('assessment_year')->orderByDesc('id')
+            ->first();
+
+        if (! $assessment) {
+            return ['answered_percent' => 0, 'section' => $this->section(
+                'RBCF-2.5',
+                'CBN Cybersecurity Self-Assessment status',
+                'RBCF §2.5: the annual self-assessment, signed by the CISO, establishing the current profile.',
+                ['assessment' => null],
+                0,
+                'No CBN CSAT assessment has been started for this period. Start one in CBN Cyber Assessment '
+                    .'before filing — the architecture sections alone are not the return.',
+            )];
+        }
+
+        $statements = max(1, CsatMaStatement::where('is_active', true)->count());
+        $answered = $assessment->maResponses()->whereNotNull('response')->count();
+        $answeredPercent = (int) min(100, round($answered / $statements * 100));
+        $domains = $assessment->maScores()->where('score_type', 'domain')->orderBy('scope_code')->get();
+        $approved = in_array($assessment->status, ['approved', 'submitted'], true);
+
+        $citations[] = [
+            'question_ref' => 'RBCF-2.5',
+            'entity_type' => CsatAssessment::class,
+            'entity_id' => $assessment->id,
+            'label' => "CBN CSAT {$assessment->assessment_year} — ".str_replace('_', ' ', $assessment->status),
+            'note' => "{$answered} of {$statements} maturity statements answered",
+            'sealable' => false,
+        ];
+
+        $caveats = collect([
+            $assessment->assessment_year !== $year
+                ? "The latest CSAT cycle is {$assessment->assessment_year}; no {$year} cycle exists yet."
+                : null,
+            ! $approved
+                ? 'The CSAT cycle is '.str_replace('_', ' ', $assessment->status).'. It must complete its approval '
+                    .'workflow and be CISO-signed before this return is filed.'
+                : null,
+        ])->filter()->implode(' ');
+
+        return ['answered_percent' => $answeredPercent, 'section' => $this->section(
+            'RBCF-2.5',
+            'CBN Cybersecurity Self-Assessment status',
+            'RBCF §2.5: the annual self-assessment, signed by the CISO, establishing the current profile.',
+            [
+                'assessment_year' => $assessment->assessment_year,
+                'status' => $assessment->status,
+                'approved' => $approved,
+                'overall_maturity' => $assessment->overall_maturity_level,
+                'composite_inherent_risk' => $assessment->composite_risk_level,
+                'statements_answered' => $answered,
+                'statements_total' => $statements,
+                'domains' => $domains->map(fn ($d) => [
+                    'code' => $d->scope_code,
+                    'name' => $d->scope_name,
+                    'achieved' => (int) $d->achieved_maturity_level,
+                    'target' => (int) $d->target_maturity_level,
+                ])->values(),
+            ],
+            $approved ? 100 : $answeredPercent,
+            $caveats ?: null,
+        )];
     }
 
     /** RBCF §3.1 and App. II §1.1(a) — "Know Your Environment". */
@@ -324,7 +408,7 @@ class CsatMapper extends ReturnMapper
 
     private function controlCoverage(array &$citations): array
     {
-        $service = new ControlInheritanceService();
+        $service = new ControlInheritanceService;
         $applications = EaApplication::limit(100)->get(['id', 'code', 'name']);
 
         $mapped = 0;

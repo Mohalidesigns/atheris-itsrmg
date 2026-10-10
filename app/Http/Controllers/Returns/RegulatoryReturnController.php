@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Returns;
 
 use App\Http\Controllers\Controller;
+use App\Models\Ea\Capability;
 use App\Models\LegalEntity;
 use App\Models\Returns\RegulatoryReturn;
 use App\Services\Returns\ReturnCompiler;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 /**
@@ -26,13 +29,11 @@ use Inertia\Inertia;
  */
 class RegulatoryReturnController extends Controller
 {
-    public function __construct(private ReturnCompiler $compiler)
-    {
-    }
+    public function __construct(private ReturnCompiler $compiler) {}
 
     public function index()
     {
-        Gate::authorize('viewAny', \App\Models\Ea\Capability::class);
+        Gate::authorize('viewAny', Capability::class);
 
         $returns = RegulatoryReturn::with('legalEntity:id,name,jurisdiction')
             ->orderByDesc('period')
@@ -138,18 +139,42 @@ class RegulatoryReturnController extends Controller
             ],
         ];
 
-        return collect($obligations)->map(function ($o) {
-            $due = $o['due'] ? \Illuminate\Support\Carbon::parse($o['due']) : null;
+        // The clock is the bank's own filing record: an annual deadline that has passed rolls to the
+        // next cycle once that period's return is signed or submitted, and only reads overdue when
+        // nothing has been filed for it.
+        $returns = RegulatoryReturn::orderByDesc('period')->get(['id', 'template', 'period', 'state']);
+        $filedStates = [RegulatoryReturn::SIGNED, RegulatoryReturn::SUBMITTED, RegulatoryReturn::ARCHIVED];
 
-            return $o + [
-                'days_remaining' => $due ? (int) round(now()->diffInDays($due, false)) : null,
-            ];
+        return collect($obligations)->map(function ($o) use ($returns, $filedStates) {
+            $due = $o['due'] ? Carbon::parse($o['due']) : null;
+            $period = $due ? (string) $due->year : null;
+            $return = ($o['template'] && $period)
+                ? $returns->first(fn ($r) => $r->template === $o['template'] && str_starts_with((string) $r->period, $period))
+                : null;
+            $filed = $return && in_array($return->state, $filedStates, true);
+
+            if ($due && $filed && $o['cadence'] === 'Annual' && $due->isPast()) {
+                $due = $due->copy()->addYear();
+                $period = (string) $due->year;
+                $return = $returns->first(fn ($r) => $r->template === $o['template'] && str_starts_with((string) $r->period, $period));
+                $filed = $return && in_array($return->state, $filedStates, true);
+            }
+
+            return array_merge($o, [
+                'due' => $due?->toDateString() ?? $o['due'],
+                'period' => $period,
+                'return_id' => $return?->id,
+                'return_state' => $return?->state,
+                'filed' => $filed,
+                // A filed obligation is not counting down to anything.
+                'days_remaining' => ($due && ! $filed) ? (int) round(now()->diffInDays($due, false)) : null,
+            ]);
         })->all();
     }
 
     public function show(RegulatoryReturn $return)
     {
-        Gate::authorize('viewAny', \App\Models\Ea\Capability::class);
+        Gate::authorize('viewAny', Capability::class);
 
         $return->load(['legalEntity', 'owner:id,name,email', 'previous:id,code,period']);
 
@@ -218,12 +243,14 @@ class RegulatoryReturnController extends Controller
 
     public function compile(Request $request)
     {
-        Gate::authorize('create', \App\Models\Ea\Capability::class);
+        Gate::authorize('create', Capability::class);
 
         $data = $request->validate([
             'template' => 'required|string|in:'.implode(',', array_keys(ReturnCompiler::TEMPLATES)),
             'period' => 'required|string|max:16',
-            'legal_entity_id' => 'nullable|integer|exists:legal_entities,id',
+            // Scoped: another bank's legal entity must not validate (it would silently compile group-level).
+            'legal_entity_id' => ['nullable', 'integer', Rule::exists('legal_entities', 'id')
+                ->where(fn ($q) => $q->where(fn ($w) => $w->where('organization_id', $request->user()->organization_id)->orWhereNull('organization_id')))],
         ]);
 
         $entity = $data['legal_entity_id'] ? LegalEntity::find($data['legal_entity_id']) : null;
@@ -241,7 +268,7 @@ class RegulatoryReturnController extends Controller
 
     public function sign(Request $request, RegulatoryReturn $return)
     {
-        Gate::authorize('approve', \App\Models\Ea\Capability::class);
+        Gate::authorize('approve', Capability::class);
 
         $data = $request->validate([
             'role' => 'required|string|max:64',
@@ -260,7 +287,7 @@ class RegulatoryReturnController extends Controller
 
     public function submit(RegulatoryReturn $return)
     {
-        Gate::authorize('approve', \App\Models\Ea\Capability::class);
+        Gate::authorize('approve', Capability::class);
 
         if ($return->state !== RegulatoryReturn::SIGNED) {
             return back()->with('error', 'Only a signed return can be marked submitted.');
@@ -274,7 +301,7 @@ class RegulatoryReturnController extends Controller
     /** The hash-sealed machine-readable artefact. */
     public function download(RegulatoryReturn $return)
     {
-        Gate::authorize('export', \App\Models\Ea\Capability::class);
+        Gate::authorize('export', Capability::class);
 
         if (! $return->archive_path || ! Storage::exists($return->archive_path)) {
             return back()->with('error', 'No sealed archive exists yet. Sign the return to generate one.');

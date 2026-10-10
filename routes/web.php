@@ -34,6 +34,7 @@ use App\Http\Controllers\PolicyController;
 use App\Http\Controllers\PolicyExceptionController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuestionLibraryController;
+use App\Http\Controllers\RegulatoryIntelligenceController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\ResponseProcedureController;
 use App\Http\Controllers\Returns\RegulatoryReturnController;
@@ -441,8 +442,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/copilot/send', [PlatformController::class, 'copilotSend'])->name('copilot.send');
 
         // Phase 4: Regulatory Intelligence
-        Route::get('/regulatory-intel', [PlatformController::class, 'regIntelIndex'])->name('reg-intel.index');
-        Route::get('/regulatory-intel/{circular}', [PlatformController::class, 'regIntelShow'])->name('reg-intel.show');
+        Route::get('/regulatory-intel', [RegulatoryIntelligenceController::class, 'regIntelIndex'])->name('reg-intel.index');
+        Route::get('/regulatory-intel/{circular}', [RegulatoryIntelligenceController::class, 'regIntelShow'])->name('reg-intel.show');
+        Route::post('/regulatory-intel/{circular}/assess', [RegulatoryIntelligenceController::class, 'regIntelAssess'])
+            ->middleware('permission:edit platform')->name('reg-intel.assess');
+        Route::post('/regulatory-intel/{circular}/impacts', [RegulatoryIntelligenceController::class, 'regIntelImpactStore'])
+            ->middleware('permission:edit platform')->name('reg-intel.impacts.store');
+        Route::delete('/regulatory-intel/{circular}/impacts/{impact}', [RegulatoryIntelligenceController::class, 'regIntelImpactDestroy'])
+            ->middleware('permission:edit platform')->name('reg-intel.impacts.destroy');
+        Route::post('/regulatory-intel/{circular}/editorial', [RegulatoryIntelligenceController::class, 'regIntelEditorial'])
+            ->middleware('permission:approve platform')->name('reg-intel.editorial');
         Route::get('/obligations', [PlatformController::class, 'obligationsIndex'])->name('obligations.index');
 
         // Phase 2: AUCS Browser
@@ -497,10 +506,29 @@ Route::middleware('auth')->group(function () {
         Route::get('/threat-advisories', [PlatformController::class, 'threatAdvisoriesIndex'])->name('threat-advisories.index');
 
         // Phase 6: Doc Intelligence & Returns
-        Route::get('/doc-intel', [PlatformController::class, 'docIntelIndex'])->name('doc-intel.index');
-        Route::post('/doc-intel/upload', [PlatformController::class, 'docIntelUpload'])->name('doc-intel.upload');
-        Route::get('/returns', [PlatformController::class, 'returnsIndex'])->name('returns.index');
-        Route::post('/returns/generate', [PlatformController::class, 'returnsGenerate'])->name('returns.generate');
+        Route::get('/doc-intel', [RegulatoryIntelligenceController::class, 'docIntelIndex'])->name('doc-intel.index');
+        Route::post('/doc-intel/upload', [RegulatoryIntelligenceController::class, 'docIntelUpload'])
+            ->middleware('permission:create platform')->name('doc-intel.upload');
+        Route::get('/doc-intel/{job}', [RegulatoryIntelligenceController::class, 'docIntelShow'])->name('doc-intel.show');
+        Route::get('/doc-intel/{job}/download', [RegulatoryIntelligenceController::class, 'docIntelDownload'])->name('doc-intel.download');
+        Route::patch('/doc-intel/{job}', [RegulatoryIntelligenceController::class, 'docIntelUpdate'])
+            ->middleware('permission:edit platform')->name('doc-intel.update');
+        Route::post('/doc-intel/{job}/accept', [RegulatoryIntelligenceController::class, 'docIntelAccept'])
+            ->middleware('permission:edit platform')->name('doc-intel.accept');
+        Route::post('/doc-intel/{job}/reject', [RegulatoryIntelligenceController::class, 'docIntelReject'])
+            ->middleware('permission:edit platform')->name('doc-intel.reject');
+
+        Route::get('/returns', [RegulatoryIntelligenceController::class, 'returnsIndex'])->name('returns.index');
+        Route::post('/returns/generate', [RegulatoryIntelligenceController::class, 'returnsGenerate'])
+            ->middleware('permission:create platform')->name('returns.generate');
+        Route::get('/returns/{run}', [RegulatoryIntelligenceController::class, 'returnsShow'])->name('returns.show');
+        Route::get('/returns/{run}/export', [RegulatoryIntelligenceController::class, 'returnsExport'])->name('returns.export');
+        Route::post('/returns/{run}/override', [RegulatoryIntelligenceController::class, 'returnsOverride'])
+            ->middleware('permission:edit platform')->name('returns.override');
+        Route::post('/returns/{run}/refresh', [RegulatoryIntelligenceController::class, 'returnsRefresh'])
+            ->middleware('permission:edit platform')->name('returns.refresh');
+        Route::post('/returns/{run}/transition', [RegulatoryIntelligenceController::class, 'returnsTransition'])
+            ->name('returns.transition');
 
         // Phase 7: Workflows
         Route::get('/workflows', [PlatformController::class, 'workflowsIndex'])->name('workflows.index');

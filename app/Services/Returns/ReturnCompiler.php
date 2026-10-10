@@ -2,6 +2,7 @@
 
 namespace App\Services\Returns;
 
+use App\Models\Ea\QualitySeal;
 use App\Models\LegalEntity;
 use App\Models\Returns\RegulatoryReturn;
 use App\Models\Returns\ReturnCitation;
@@ -40,7 +41,7 @@ class ReturnCompiler
 
     public function __construct(private ?QualitySealService $seals = null)
     {
-        $this->seals ??= new QualitySealService();
+        $this->seals ??= new QualitySealService;
     }
 
     public static function templateOptions(): array
@@ -77,7 +78,7 @@ class ReturnCompiler
         }
 
         /** @var ReturnMapper $mapper */
-        $mapper = new $mapperClass();
+        $mapper = new $mapperClass;
 
         $existing = RegulatoryReturn::where('template', $template)
             ->where('period', $period)
@@ -155,8 +156,10 @@ class ReturnCompiler
             $sealState = null;
             $completeness = null;
 
-            if (! empty($citation['entity_type']) && ! empty($citation['entity_id'])) {
-                $seal = \App\Models\Ea\QualitySeal::forEntity($citation['entity_type'], $citation['entity_id'])->first();
+            if (! ($citation['sealable'] ?? true)) {
+                $sealState = 'not_sealable';
+            } elseif (! empty($citation['entity_type']) && ! empty($citation['entity_id'])) {
+                $seal = QualitySeal::forEntity($citation['entity_type'], $citation['entity_id'])->first();
                 $sealState = $seal?->state ?? 'unsealed';
                 $completeness = $seal?->completeness;
             }

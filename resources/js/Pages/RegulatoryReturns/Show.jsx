@@ -73,14 +73,18 @@ function Value({ value }) {
     if (typeof value === 'object') {
         return (
             <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                {Object.entries(value).map(([k, v]) => (
-                    <div key={k} className="contents">
-                        <dt className="text-[#718096]">{k.replace(/_/g, ' ')}</dt>
-                        <dd className="text-[#2D3748]">
-                            {v === null || v === undefined ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                        </dd>
-                    </div>
-                ))}
+                {Object.entries(value).map(([k, v]) => {
+                    // Nested lists and maps render as their own table / list across the full width.
+                    const nested = v !== null && typeof v === 'object';
+                    return (
+                        <div key={k} className={nested ? 'col-span-2 mt-1' : 'contents'}>
+                            <dt className="text-[#718096]">{k.replace(/_/g, ' ')}</dt>
+                            <dd className={`text-[#2D3748] ${nested ? 'mt-1' : ''}`}>
+                                <Value value={v} />
+                            </dd>
+                        </div>
+                    );
+                })}
             </dl>
         );
     }

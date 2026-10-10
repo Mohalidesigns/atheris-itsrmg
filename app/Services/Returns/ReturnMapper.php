@@ -2,6 +2,7 @@
 
 namespace App\Services\Returns;
 
+use App\Models\Ea\QualitySeal;
 use App\Models\LegalEntity;
 
 /**
@@ -73,7 +74,10 @@ abstract class ReturnMapper
             return 0;
         }
 
-        $sealable = array_filter($citations, fn ($c) => ! empty($c['entity_type']) && ! empty($c['entity_id']));
+        // Records outside the quality-seal regime (e.g. a CSAT assessment) are cited for
+        // traceability with 'sealable' => false and neither raise nor dilute confidence.
+        $sealable = array_filter($citations, fn ($c) => ! empty($c['entity_type']) && ! empty($c['entity_id'])
+            && ($c['sealable'] ?? true));
 
         if (empty($sealable)) {
             return 0;
@@ -82,9 +86,9 @@ abstract class ReturnMapper
         $approved = 0;
 
         foreach ($sealable as $citation) {
-            $seal = \App\Models\Ea\QualitySeal::forEntity($citation['entity_type'], $citation['entity_id'])->first();
+            $seal = QualitySeal::forEntity($citation['entity_type'], $citation['entity_id'])->first();
 
-            if ($seal && $seal->state === \App\Models\Ea\QualitySeal::APPROVED && ! $seal->isExpired()) {
+            if ($seal && $seal->state === QualitySeal::APPROVED && ! $seal->isExpired()) {
                 $approved++;
             }
         }

@@ -6,13 +6,18 @@ use App\Models\Asset;
 use App\Models\BoardPackRun;
 use App\Models\BoardPackTemplate;
 use App\Models\CcmTenantTest;
+use App\Models\CircularAssessment;
 use App\Models\ComplianceAssessment;
 use App\Models\Control;
+use App\Models\DocIntelligenceJob;
 use App\Models\Gap;
 use App\Models\Incident;
 use App\Models\Kri;
 use App\Models\Obligation;
 use App\Models\Policy;
+use App\Models\RegulatoryCircular;
+use App\Models\ReturnRun;
+use App\Models\Returns\RegulatoryReturn;
 use App\Models\Risk;
 use App\Models\TprmSecurityRating;
 use App\Models\Vendor;
@@ -180,7 +185,44 @@ class DashboardController extends Controller
             'vendorScoreboard' => $vendorScoreboard,
             'attestationByDept' => $attestationByDept,
             'csat' => $csat,
+            'regulatory' => $orgId ? $this->regulatoryPulse((int) $orgId) : null,
         ]);
+    }
+
+    /**
+     * Regulatory Intelligence feed for the executive dashboard: circular triage backlog, documents
+     * waiting on a reviewer, and returns still to be filed. Every query names the organisation.
+     */
+    private function regulatoryPulse(int $orgId): array
+    {
+        $visible = RegulatoryCircular::withoutGlobalScopes()
+            ->where(fn ($q) => $q->where('organization_id', $orgId)
+                ->orWhere(fn ($p) => $p->whereNull('organization_id')->whereIn('status', RegulatoryCircular::TENANT_VISIBLE)));
+        $triaged = CircularAssessment::withoutGlobalScopes()->where('organization_id', $orgId)
+            ->whereIn('circular_id', (clone $visible)->select('id'));
+
+        $openRuns = ReturnRun::withoutGlobalScopes()->where('organization_id', $orgId)
+            ->where('status', '!=', ReturnRun::SUBMITTED)->with('template:id,name,regulator_code')
+            ->orderBy('period')->get();
+
+        return [
+            'unread' => (clone $visible)->count() - (clone $triaged)->where('status', '!=', CircularAssessment::UNREAD)->count(),
+            'awaiting_action' => (clone $triaged)->where('status', CircularAssessment::ASSESSED)->count(),
+            'overdue_actions' => (clone $triaged)->where('status', CircularAssessment::ASSESSED)
+                ->whereDate('due_date', '<', today())->count(),
+            'documents_to_review' => DocIntelligenceJob::withoutGlobalScopes()->where('organization_id', $orgId)
+                ->whereIn('status', ['extraction_done', 'awaiting_review'])->count(),
+            'returns_open' => $openRuns->count(),
+            'architecture_returns_open' => RegulatoryReturn::withoutGlobalScopes()->where('organization_id', $orgId)
+                ->whereNotIn('state', [RegulatoryReturn::SIGNED, RegulatoryReturn::SUBMITTED, RegulatoryReturn::ARCHIVED])->count(),
+            'returns' => $openRuns->take(5)->map(fn (ReturnRun $r) => [
+                'id' => $r->id,
+                'name' => $r->template?->name,
+                'regulator' => $r->template?->regulator_code,
+                'period' => $r->period,
+                'status' => $r->status,
+            ])->values(),
+        ];
     }
 
     public function boardPackExport()

@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -325,6 +325,44 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                     </ul>
                 </div>
             </div>
+
+            {regulatory && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Regulatory Intelligence</h3>
+                        <Link href={route('reg-intel.index')} className="text-xs text-[#0A1F44] underline">Circular feed →</Link>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        <div className="grid grid-cols-2 gap-2 lg:col-span-2 sm:grid-cols-3">
+                            {[
+                                ['Unread circulars', regulatory.unread, route('reg-intel.index', { status: 'unread' }), regulatory.unread > 0],
+                                ['Awaiting action', regulatory.awaiting_action, route('reg-intel.index', { status: 'assessed' }), false],
+                                ['Overdue circular actions', regulatory.overdue_actions, route('reg-intel.index', { status: 'assessed' }), regulatory.overdue_actions > 0],
+                                ['Documents to review', regulatory.documents_to_review, route('doc-intel.index', { status: 'awaiting_review' }), false],
+                                ['Returns not yet filed', regulatory.returns_open, route('returns.index'), false],
+                                ['Architecture returns open', regulatory.architecture_returns_open, route('regulatory-returns.index'), false],
+                            ].map(([label, n, href, alert]) => (
+                                <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                    <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                    <p className="text-[11px] text-[#718096]">{label}</p>
+                                </Link>
+                            ))}
+                        </div>
+                        <ul className="divide-y divide-gray-100 text-xs">
+                            {(regulatory.returns || []).length === 0 && <li className="py-2 text-[#718096]">Every return is filed.</li>}
+                            {(regulatory.returns || []).map((r) => (
+                                <li key={r.id} className="flex items-center justify-between py-2">
+                                    <Link href={route('returns.show', r.id)} className="min-w-0 truncate text-[#2D3748] hover:underline">
+                                        <span className="mr-1 rounded bg-[#0A1F44] px-1.5 py-0.5 text-[10px] text-white">{r.regulator}</span>
+                                        {r.name} · {r.period}
+                                    </Link>
+                                    <StatusBadge status={r.status === 'in_review' ? 'in_review' : r.status === 'approved' ? 'approved' : 'draft'} label={r.status.replace(/_/g, ' ')} />
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">

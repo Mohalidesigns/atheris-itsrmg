@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
@@ -28,12 +28,18 @@ import { DocumentCheckIcon } from '@heroicons/react/24/outline';
 
 const CONFIDENCE_TONE = { strong: 'pass', adequate: 'in_progress', weak: 'warn', insufficient: 'fail' };
 
-function CompileDialog({ show, onClose, templates, entities }) {
+function CompileDialog({ show, onClose, templates, entities, initialTemplate }) {
     const form = useForm({
         template: templates?.[0]?.value || '',
         period: String(new Date().getFullYear()),
         legal_entity_id: entities?.[0]?.value || '',
     });
+
+    // The calendar's Compile button opens the dialog on that obligation's template.
+    useEffect(() => {
+        if (show && initialTemplate) form.setData('template', initialTemplate);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [show, initialTemplate]);
 
     const selected = templates?.find((t) => t.value === form.data.template);
 
@@ -207,6 +213,15 @@ export default function ReturnsIndex({
                                 <td className="px-3 py-2 text-xs text-[#718096]">{c.cadence}</td>
                                 <td className="px-3 py-2 text-xs">
                                     {c.due || '—'}
+                                    {c.return_state && (
+                                        <span className="block text-[10px] text-[#718096]">
+                                            {c.return_id ? (
+                                                <Link href={route('regulatory-returns.show', c.return_id)} className="underline">
+                                                    {c.period} return {String(c.return_state).replace(/_/g, ' ')}
+                                                </Link>
+                                            ) : null}
+                                        </span>
+                                    )}
                                     {c.days_remaining !== null && c.days_remaining !== undefined && (
                                         <span
                                             className={`block text-[10px] ${c.days_remaining < 0 ? 'text-[#B3261E]' : c.days_remaining <= 90 ? 'text-[#8A6400]' : 'text-[#718096]'}`}
@@ -218,13 +233,13 @@ export default function ReturnsIndex({
                                     )}
                                 </td>
                                 <td className="px-3 py-2 text-right">
-                                    {c.template && perms.canCreate && (
+                                    {c.template && perms.canCreate && !c.filed && (
                                         <button
                                             type="button"
-                                            onClick={() => setCompiling(true)}
+                                            onClick={() => setCompiling(c.template)}
                                             className="rounded border border-gray-200 px-2 py-1 text-xs font-medium text-[#0A1F44] hover:bg-gray-50"
                                         >
-                                            Compile
+                                            {c.return_id ? 'Recompile' : 'Compile'}
                                         </button>
                                     )}
                                 </td>
@@ -306,10 +321,11 @@ export default function ReturnsIndex({
             )}
 
             <CompileDialog
-                show={compiling}
+                show={Boolean(compiling)}
                 onClose={() => setCompiling(false)}
                 templates={templates}
                 entities={entities}
+                initialTemplate={typeof compiling === 'string' ? compiling : null}
             />
         </AuthenticatedLayout>
     );

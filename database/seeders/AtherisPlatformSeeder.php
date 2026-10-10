@@ -20,7 +20,6 @@ use App\Models\CopilotMessage;
 use App\Models\CoreBankingIntegration;
 use App\Models\CoreBankingSnapshot;
 use App\Models\CustomField;
-use App\Models\DocIntelligenceJob;
 use App\Models\DrExercise;
 use App\Models\DrRunbook;
 use App\Models\EvidenceVaultItem;
@@ -41,7 +40,6 @@ use App\Models\Organization;
 use App\Models\PricingTier;
 use App\Models\RegulatoryCircular;
 use App\Models\RegulatoryReference;
-use App\Models\ReturnRun;
 use App\Models\ReturnTemplate;
 use App\Models\ScimToken;
 use App\Models\ServiceDependency;
@@ -60,6 +58,7 @@ use App\Models\Workflow;
 use App\Models\WorkflowInstance;
 use App\Models\WorkflowTask;
 use App\Services\FairMonteCarloService;
+use App\Services\ReturnsCentre\ReturnRunPopulator;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -105,7 +104,6 @@ class AtherisPlatformSeeder extends Seeder
         $this->notifications();
         $this->fair();
         $this->advisories();
-        $this->docIntel();
         $this->returns();
         $this->workflows();
         $this->coreBanking();
@@ -989,34 +987,13 @@ class AtherisPlatformSeeder extends Seeder
         }
     }
 
-    private function docIntel(): void
-    {
-        if (DocIntelligenceJob::count() > 0) {
-            return;
-        }
-        $types = ['circular', 'ndpc_decision', 'audit_report', 'vendor_ddq'];
-        for ($i = 0; $i < 8; $i++) {
-            DocIntelligenceJob::create([
-                'organization_id' => $this->orgId,
-                'doc_type' => $types[array_rand($types)],
-                'source_file' => 'docs/demo/'.Str::uuid().'.pdf',
-                'ocr_text' => 'Extracted OCR text sample...',
-                'structured_output' => [
-                    'regulator' => 'CBN', 'reference' => 'BSD/DIR/GEN/LAB/14/'.rand(1, 100),
-                    'effective_date' => now()->subDays(rand(1, 100))->toDateString(),
-                    'summary' => 'Demo structured extraction from the uploaded document.',
-                ],
-                'confidence' => round(mt_rand(8500, 9900) / 10000, 4),
-                'status' => ['awaiting_review', 'accepted', 'extraction_done'][rand(0, 2)],
-            ]);
-        }
-    }
-
+    /*
+     * Document Intelligence jobs and Returns Centre runs are seeded per bank by
+     * RegulatoryIntelligenceDemoSeeder: real uploaded documents run through the extractor, and
+     * runs populated from each bank's own register. Only the platform-wide templates live here.
+     */
     private function returns(): void
     {
-        if (ReturnTemplate::count() > 0) {
-            return;
-        }
         $tmpls = [
             ['CBN', 'cbn_crms_it', 'CBN CRMS IT Return'],
             ['CBN', 'cbn_cyber_sa', 'Annual Cyber Self-Assessment'],
@@ -1024,25 +1001,10 @@ class AtherisPlatformSeeder extends Seeder
             ['NDIC', 'ndic_outsource', 'NDIC Outsourcing Notification'],
         ];
         foreach ($tmpls as [$reg, $code, $name]) {
-            $t = ReturnTemplate::create([
-                'regulator_code' => $reg, 'return_code' => $code, 'name' => $name,
-                'schema' => ['fields' => [['key' => 'institution', 'type' => 'text'], ['key' => 'period', 'type' => 'text']]],
+            ReturnTemplate::updateOrCreate(['return_code' => $code], [
+                'regulator_code' => $reg, 'name' => $name,
+                'schema' => ['fields' => ReturnRunPopulator::CATALOGUE[$code]['fields']],
                 'version' => '1.0', 'effective_from' => now()->subMonths(6), 'navy_variant' => true,
-            ]);
-            ReturnRun::create([
-                'organization_id' => $this->orgId, 'template_id' => $t->id,
-                'period' => now()->subMonth()->format('Y-m'),
-                'status' => 'submitted',
-                'pdf_path' => 'returns/'.$code.'-'.now()->subMonth()->format('Y-m').'.pdf',
-                'xlsx_path' => 'returns/'.$code.'-'.now()->subMonth()->format('Y-m').'.xlsx',
-                'data' => ['auto_populated' => true],
-                'submitted_at' => now()->subWeeks(3),
-            ]);
-            ReturnRun::create([
-                'organization_id' => $this->orgId, 'template_id' => $t->id,
-                'period' => now()->format('Y-m'),
-                'status' => 'draft',
-                'data' => ['auto_populated' => true],
             ]);
         }
     }
