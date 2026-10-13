@@ -10,6 +10,7 @@ use App\Jobs\Ea\RunSurveyCampaigns;
 use App\Jobs\Ea\SyncAssetCatalogue;
 use App\Jobs\Ea\SyncCveFeed;
 use App\Jobs\Ea\SyncEolFeed;
+use App\Services\Change\ChangeWorkflow;
 use App\Services\Ea\ArchiMateExchange;
 use App\Services\Issues\IssueWorkflow;
 use Illuminate\Foundation\Inspiring;
@@ -65,3 +66,10 @@ Artisan::command('issues:escalate', function (IssueWorkflow $workflow) {
     $this->info($workflow->escalateOverdue().' escalation(s) raised.');
 })->purpose('Escalate open issues whose remediation SLA has been breached');
 Schedule::command('issues:escalate')->hourly()->name('issues.escalate')->withoutOverlapping();
+
+/* =====================  Change Management ===================== */
+// Overdue approval reminders to the current approvers and the change manager, once per 24 h.
+Artisan::command('changes:sweep', function (ChangeWorkflow $workflow) {
+    $this->info($workflow->sweepOverdueApprovals().' overdue approval reminder(s) sent.');
+})->purpose('Remind approvers of overdue change approvals');
+Schedule::command('changes:sweep')->hourly()->name('changes.sweep')->withoutOverlapping();

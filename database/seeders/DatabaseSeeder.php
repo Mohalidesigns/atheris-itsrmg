@@ -116,6 +116,10 @@ class DatabaseSeeder extends Seeder
         // trail, ITSM connectors and tickets (after SecOps so findings and SLA policies are final)
         $this->call(IssuesDemoSeeder::class);
 
+        // Change Management: approval policy, CAB/ECAB, freeze windows, standard templates and a
+        // change register per bank linked to the records above (ATH-CHG-001 §10)
+        $this->call(ChangeManagementDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

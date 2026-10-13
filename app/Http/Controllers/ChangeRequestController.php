@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-
+/**
+ * The old Policy Management "Change Requests" stub. The module now lives at /changes
+ * (App\Http\Controllers\Change\*); the route name is kept because the navigation and the route
+ * smoke test reference it.
+ */
 class ChangeRequestController extends Controller
 {
     public function index()
     {
-        return Inertia::render('Policies/ChangeRequests/Index');
+        return redirect()->route('changes.index');
     }
 }

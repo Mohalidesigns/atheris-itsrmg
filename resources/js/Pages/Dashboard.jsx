@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -447,6 +447,60 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                                             <span className="ml-1 font-semibold text-[#B3261E]">{i.days_overdue} d over</span>
                                             {i.escalation_level > 0 && <span className="ml-1 text-[#8A6400]">· L{i.escalation_level}</span>}
                                             <p className="truncate text-[#718096]">{i.title}{i.owner ? ` · ${i.owner}` : ' · unassigned'}</p>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {changes && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Change Management</h3>
+                        <Link href={route('changes.index')} className="text-xs text-[#0A1F44] underline">Change Register →</Link>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        <div className="lg:col-span-2">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                {[
+                                    ['Awaiting approval', changes.stats.awaiting_approval, route('changes.index', { status: 'in_approval' }), false],
+                                    ['Scheduled next 7 days', changes.stats.scheduled_7d, route('changes.index', { status: 'upcoming' }), false],
+                                    ['Emergency last 30 d', changes.stats.emergency_30d, route('changes.index', { type: 'emergency' }), changes.stats.unauthorised_emergency > 0],
+                                    ['Change success rate (90 d)', changes.stats.success_rate_pct === null || changes.stats.success_rate_pct === undefined ? '—' : `${changes.stats.success_rate_pct}%`, route('changes.index', { status: 'closed' }), changes.stats.success_rate_pct !== null && changes.stats.success_rate_pct !== undefined && changes.stats.success_rate_pct < 90],
+                                    ['Failed / backed out (90 d)', changes.stats.failed_or_backed_out_90d, route('changes.index', { status: 'failed' }), changes.stats.failed_or_backed_out_90d > 0],
+                                    ['Overdue approvals', changes.stats.overdue_approvals, route('changes.approvals'), changes.stats.overdue_approvals > 0],
+                                ].map(([label, n, href, alert]) => (
+                                    <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                        <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                        <p className="text-[11px] text-[#718096]">{label}</p>
+                                    </Link>
+                                ))}
+                            </div>
+                            <p className="mt-3 text-[11px] text-[#718096]">
+                                {changes.stats.open ?? 0} open · {changes.stats.implementing ?? 0} implementing · {changes.stats.cab_pending ?? 0} at CAB/ECAB
+                                {changes.stats.emergency_ratio_pct !== null && changes.stats.emergency_ratio_pct !== undefined ? ` · emergency ratio ${changes.stats.emergency_ratio_pct}%` : ''}
+                                {changes.stats.mean_lead_time_days !== null && changes.stats.mean_lead_time_days !== undefined ? ` · mean approval lead time ${changes.stats.mean_lead_time_days} d` : ''}
+                                {changes.stats.unauthorised_emergency > 0 && <span className="ml-1 font-semibold text-[#B3261E]">· {changes.stats.unauthorised_emergency} unauthorised emergency</span>}
+                            </p>
+                        </div>
+                        <div>
+                            <Link href={route('changes.approvals')} className={`mb-2 block rounded-lg border px-3 py-2 ${changes.myApprovals > 0 ? 'border-[#C9A86A] bg-[#C9A86A]/10' : 'border-gray-100'} hover:bg-gray-50`}>
+                                <p className="text-xl font-bold text-[#0A1F44]">{changes.myApprovals ?? 0}</p>
+                                <p className="text-[11px] text-[#718096]">My approvals waiting</p>
+                            </Link>
+                            <h4 className="text-xs font-semibold text-[#2D3748]">Next scheduled</h4>
+                            <ul className="mt-1 divide-y divide-gray-100 text-xs">
+                                {(changes.upcoming || []).length === 0 && <li className="py-2 text-[#718096]">Nothing on the forward schedule.</li>}
+                                {(changes.upcoming || []).map((c) => (
+                                    <li key={c.id} className="py-2">
+                                        <Link href={route('changes.show', c.id)} className="block hover:underline">
+                                            <span className="font-mono text-[#2D3748]">{c.change_code}</span>
+                                            <span className="ml-1"><StatusBadge status={c.risk_level} label={humanize(c.risk_level)} /></span>
+                                            {c.change_type === 'emergency' && <span className="ml-1 font-semibold text-[#B3261E]">Emergency</span>}
+                                            <p className="truncate text-[#718096]">{c.title}{c.scheduled_start_at ? ` · ${new Date(c.scheduled_start_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}</p>
                                         </Link>
                                     </li>
                                 ))}

@@ -130,6 +130,19 @@ const navigation = [
         ],
     },
     {
+        name: 'Change Management',
+        icon: ArrowPathIcon,
+        children: [
+            { name: 'Change Register', href: 'changes.index', permission: 'view changes' },
+            { name: 'My Approvals', href: 'changes.approvals', permission: 'view changes' },
+            { name: 'Change Calendar', href: 'changes.calendar', permission: 'view changes' },
+            { name: 'CAB & ECAB', href: 'changes.cab.index', permission: 'view changes' },
+            { name: 'Standard Changes', href: 'changes.templates', permission: 'view changes' },
+            { name: 'Approval Policy', href: 'changes.policy', permission: 'view changes' },
+            { name: 'Freeze Windows', href: 'changes.freeze.index', permission: 'view changes' },
+        ],
+    },
+    {
         name: 'Asset Management',
         icon: ServerStackIcon,
         children: [
@@ -156,7 +169,6 @@ const navigation = [
             { name: 'Policies', href: 'policies.index', permission: 'view policies' },
             { name: 'Control Standards', href: 'control-standards.index', permission: 'view controls' },
             { name: 'Policy Attestations', href: 'policy-attestations.index', permission: 'view policy-attestations' },
-            { name: 'Change Requests', href: 'change-requests.index', permission: 'view policies' },
             { name: 'Exceptions', href: 'policy-exceptions.index', permission: 'view policies' },
         ],
     },

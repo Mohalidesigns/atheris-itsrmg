@@ -49,8 +49,8 @@ class RouteSmokeTest extends TestCase
 
             $response = $this->actingAs($admin)->get('/'.ltrim($uri, '/'));
             $tested++;
-            if ($response->status() >= 500) {
-                $failures[] = $uri.' => '.$response->status();
+            if ($response->getStatusCode() >= 500) {
+                $failures[] = $uri.' => '.$response->getStatusCode();
             }
         }
 

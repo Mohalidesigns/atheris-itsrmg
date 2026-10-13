@@ -29,6 +29,27 @@ export default function StatusBadge({ status, label }) {
         green: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
         amber: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
         red: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
+        // Change Management (ATH-CHG-001 §8)
+        submitted: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
+        in_approval: 'bg-[#C9A86A]/15 text-[#8A6400] border-[#C9A86A]/40',
+        scheduled: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
+        implementing: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
+        implemented: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
+        review: 'bg-[#C9A86A]/15 text-[#8A6400] border-[#C9A86A]/40',
+        backed_out: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
+        failed: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
+        cancelled: 'bg-gray-100 text-gray-600 border-gray-300',
+        rejected: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
+        pending: 'bg-[#C9A86A]/15 text-[#8A6400] border-[#C9A86A]/40',
+        skipped: 'bg-gray-100 text-gray-600 border-gray-300',
+        expired: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
+        standard: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
+        normal: 'bg-[#0A1F44]/10 text-[#0A1F44] border-[#0A1F44]/30',
+        emergency: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
+        held: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
+        deferred: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
+        more_info: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
+        done: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
     };
     const klass = map[status] || 'bg-gray-100 text-gray-700 border-gray-300';
     return (

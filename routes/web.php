@@ -8,6 +8,10 @@ use App\Http\Controllers\Auth\SamlController;
 use App\Http\Controllers\Auth\ScimController;
 use App\Http\Controllers\BcpController;
 use App\Http\Controllers\BusinessAssetController;
+use App\Http\Controllers\Change\ChangeCabController;
+use App\Http\Controllers\Change\ChangePolicyController;
+use App\Http\Controllers\Change\ChangeRequestController as ChangeManagementController;
+use App\Http\Controllers\Change\ChangeTaskController;
 use App\Http\Controllers\ChangeRequestController;
 use App\Http\Controllers\ComplianceController;
 use App\Http\Controllers\ControlController;
@@ -317,7 +321,7 @@ Route::middleware('auth')->group(function () {
     Route::resource('policy-attestations', PolicyAttestationController::class)->only(['index', 'show'])
         ->middleware('permission:view policy-attestations');
 
-    // Change Requests
+    // Change Requests (legacy stub) — redirects to the Change Management module at /changes
     Route::get('/change-requests', [ChangeRequestController::class, 'index'])
         ->middleware('permission:view policies')->name('change-requests.index');
 
@@ -463,6 +467,63 @@ Route::middleware('auth')->group(function () {
             Route::post('/itsm/{connection}/test', [IssueController::class, 'itsmTest'])->name('itsm.test');
             Route::post('/itsm/{connection}/secret', [IssueController::class, 'itsmRotateSecret'])->name('itsm.secret');
         });
+    });
+
+    // Change Management: register, approvals, forward schedule, CAB/ECAB, policy, templates, freeze windows (ATH-CHG-001 §7)
+    Route::middleware('permission:view changes')->prefix('changes')->name('changes.')->group(function () {
+        Route::get('/', [ChangeManagementController::class, 'index'])->name('index');
+        Route::get('/create', [ChangeManagementController::class, 'create'])->middleware('permission:create changes')->name('create');
+        Route::post('/', [ChangeManagementController::class, 'store'])->middleware('permission:create changes')->name('store');
+        Route::get('/approvals', [ChangeManagementController::class, 'approvals'])->name('approvals');
+        Route::get('/calendar', [ChangeManagementController::class, 'calendar'])->name('calendar');
+        Route::get('/export', [ChangeManagementController::class, 'export'])->middleware('permission:export changes')->name('export');
+
+        // CAB & ECAB
+        Route::get('/cab', [ChangeCabController::class, 'index'])->name('cab.index');
+        Route::get('/cab/meetings/{meeting}', [ChangeCabController::class, 'meetingsShow'])->whereNumber('meeting')->name('cab.meetings.show');
+        Route::middleware('permission:approve changes')->group(function () {
+            Route::post('/cab/boards', [ChangeCabController::class, 'boardsStore'])->name('cab.boards.store');
+            Route::put('/cab/boards/{board}', [ChangeCabController::class, 'boardsUpdate'])->whereNumber('board')->name('cab.boards.update');
+            Route::post('/cab/boards/{board}/members', [ChangeCabController::class, 'membersStore'])->whereNumber('board')->name('cab.members.store');
+            Route::delete('/cab/members/{member}', [ChangeCabController::class, 'membersDestroy'])->whereNumber('member')->name('cab.members.destroy');
+            Route::post('/cab/meetings', [ChangeCabController::class, 'meetingsStore'])->name('cab.meetings.store');
+            Route::put('/cab/meetings/{meeting}', [ChangeCabController::class, 'meetingsUpdate'])->whereNumber('meeting')->name('cab.meetings.update');
+            Route::post('/cab/meetings/{meeting}/items', [ChangeCabController::class, 'itemsStore'])->whereNumber('meeting')->name('cab.meetings.items.store');
+            Route::put('/cab/meeting-items/{item}', [ChangeCabController::class, 'itemsUpdate'])->whereNumber('item')->name('cab.meetings.items.update');
+        });
+
+        // Approval policy
+        Route::get('/policy', [ChangePolicyController::class, 'policy'])->name('policy');
+        Route::middleware('permission:approve changes')->group(function () {
+            Route::post('/policy', [ChangePolicyController::class, 'policyStore'])->name('policy.store');
+            Route::put('/policy/{stage}', [ChangePolicyController::class, 'policyUpdate'])->whereNumber('stage')->name('policy.update');
+            Route::delete('/policy/{stage}', [ChangePolicyController::class, 'policyDestroy'])->whereNumber('stage')->name('policy.destroy');
+        });
+
+        // Standard change templates
+        Route::get('/templates', [ChangePolicyController::class, 'templates'])->name('templates');
+        Route::post('/templates', [ChangePolicyController::class, 'templatesStore'])->middleware('permission:create changes')->name('templates.store');
+        Route::put('/templates/{template}', [ChangePolicyController::class, 'templatesUpdate'])->whereNumber('template')->middleware('permission:edit changes')->name('templates.update');
+        Route::post('/templates/{template}/approve', [ChangePolicyController::class, 'templatesApprove'])->whereNumber('template')->middleware('permission:approve changes')->name('templates.approve');
+
+        // Freeze windows
+        Route::get('/freeze-windows', [ChangePolicyController::class, 'freezeIndex'])->name('freeze.index');
+        Route::middleware('permission:approve changes')->group(function () {
+            Route::post('/freeze-windows', [ChangePolicyController::class, 'freezeStore'])->name('freeze.store');
+            Route::put('/freeze-windows/{window}', [ChangePolicyController::class, 'freezeUpdate'])->whereNumber('window')->name('freeze.update');
+            Route::delete('/freeze-windows/{window}', [ChangePolicyController::class, 'freezeDestroy'])->whereNumber('window')->name('freeze.destroy');
+        });
+
+        // One change (static paths above are matched first; {change} is numeric)
+        Route::get('/{change}', [ChangeManagementController::class, 'show'])->whereNumber('change')->name('show');
+        Route::put('/{change}', [ChangeManagementController::class, 'update'])->whereNumber('change')->name('update');
+        Route::post('/{change}/transition', [ChangeManagementController::class, 'transition'])->whereNumber('change')->name('transition');
+        Route::post('/{change}/decide', [ChangeManagementController::class, 'decide'])->whereNumber('change')->name('decide');
+        Route::post('/{change}/vote', [ChangeManagementController::class, 'vote'])->whereNumber('change')->name('vote');
+        Route::post('/{change}/schedule', [ChangeManagementController::class, 'schedule'])->whereNumber('change')->name('schedule');
+        Route::post('/{change}/tasks', [ChangeTaskController::class, 'store'])->whereNumber('change')->name('tasks.store');
+        Route::put('/{change}/tasks/{task}', [ChangeTaskController::class, 'update'])->whereNumber('change')->whereNumber('task')->name('tasks.update');
+        Route::post('/{change}/comment', [ChangeManagementController::class, 'comment'])->whereNumber('change')->name('comment');
     });
 
     /* ========================================================

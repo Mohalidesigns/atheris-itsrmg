@@ -36,8 +36,9 @@ Validate each sidebar module end to end, in order. For every module:
 | 4 | Regulatory Intelligence | `4591bce` | `docs/ATH-VAL-004_Regulatory_Intelligence_Validation_Report.md` | `tests/Feature/RegulatoryIntelligence/RegulatoryIntelligenceModuleTest.php` (14) |
 | 5 | Security Operations | `86041ee` | `docs/ATH-VAL-005_Security_Operations_Validation_Report.md` | `tests/Feature/SecurityOperations/SecurityOperationsModuleTest.php` (12) |
 | 6 | Issues & Remediation | see `git log` | `docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md` | `tests/Feature/Issues/IssuesModuleTest.php` (12) |
+| — | Change Management (new module) | uncommitted | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **231 tests (11 Oct 2026)**: 229 passed, 1 skipped (the route smoke test, which runs separately and passed), and 1 failure from a stale assertion in the new Issues test, since corrected and passing in the 13 Oct full run.
+Last full suite: **252 tests, 251 passed, 1 skipped, 2,198 assertions (13 Oct 2026, local, PHP 8.4; the cloud mirror matched)**. The one skip is the route smoke test, which runs separately and passed over 201 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -71,6 +72,13 @@ Last full suite: **231 tests (11 Oct 2026)**: 229 passed, 1 skipped (the route s
 - **Decision:** vulnerability tickets stay SecOps work orders; Issues link to the vulnerability and own ITSM sync (link, not absorb).
 - **Demo data:** `IssuesDemoSeeder` (after SecurityOperationsDemoSeeder) fixes First Bank issues that pointed at Kano's risks, and rebuilds dates, SLAs, escalations, timelines and tickets per bank.
 - **Dashboard:** console KPIs and an executive-dashboard Issues panel, both from `IssueMetrics`.
+
+### Change Management highlights (new module, 13 Oct 2026)
+
+- **Why it exists:** a selling feature — ITIL 4 / ISO 20000 / COBIT BAI06 change enablement with risk-based approval routing, CAB and ECAB, freeze windows, conflict detection, retrospective emergency authorisation and mandatory PIR, with segregation of duties enforced in code. Contract: `docs/ATH-CHG-001_…`; build record: `docs/ATH-CHG-002_…`.
+- **Shape:** `app/Models/Change/*`, `app/Services/Change/*` (workflow, router, risk scorer, freeze checker, conflict detector, metrics, policy seeder), `app/Http/Controllers/Change/*`, 37 `changes.*` routes, hourly `changes:sweep`, `resources/js/Pages/Changes/*` (10 pages), dashboard "Change pulse" panel, `ChangeManagementDemoSeeder` (28 changes per bank), new `Change Manager` role + `changemanager@atheris.ng`.
+- **Old stub:** `Pages/Policies/ChangeRequests/Index.jsx` was deleted; `change-requests.index` now redirects to `changes.index`.
+- **Tests:** 21 passed / 816 assertions. Each test takes ~10 s because the full migration set runs on in-memory SQLite — normal.
 
 ## Next phase: module 7, Asset Management
 

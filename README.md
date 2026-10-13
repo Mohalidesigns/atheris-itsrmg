@@ -15,9 +15,10 @@ Each sidebar module is validated end to end, in order: its features, forms, tabl
 | 5 | Security Operations | Done | [ATH-VAL-005](docs/ATH-VAL-005_Security_Operations_Validation_Report.md) |
 | 6 | Issues & Remediation | Done | [ATH-VAL-006](docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md) |
 | 7 | Asset Management | **Next** | — |
+| — | Change Management (new module, built to [ATH-CHG-001](docs/ATH-CHG-001_Change_Management_Module_Specification_v1.0.md)) | Built & validated | [ATH-CHG-002](docs/ATH-CHG-002_Change_Management_Build_Update.md) |
 | 8+ | Vendor Management → Policy Management → ISMS → PCI → Business Continuity → Continuous Monitoring → KRIs & Dashboards → rest of sidebar | To do | — |
 
-Last full PHP suite: 231 tests on 11 Oct 2026: 229 passed, 1 skipped (the route smoke test, run separately), 1 failure from a stale assertion in the new Issues test, since corrected and passing in the 13 Oct full run.
+Last full PHP suite: 252 tests, 251 passed, 1 skipped (the route smoke test, run separately over 201 routes), 2,198 assertions (13 Oct 2026, local, PHP 8.4).
 
 ## Quick start
 

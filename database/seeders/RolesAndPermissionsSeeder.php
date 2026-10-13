@@ -39,6 +39,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'monitoring',
             'reports',
             'issues',
+            'changes',
             'users',
             'organizations',
             'audit-trail',
@@ -76,6 +77,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view controls', 'view frameworks', 'view assets', 'view reports',
             'view vulnerabilities', 'view incidents',
             'view ea', 'view platform',
+            // Change Management: sits on the CAB for Risk (ATH-CHG-001 §6).
+            'view changes', 'create changes', 'edit changes', 'approve changes',
         ]);
 
         // Compliance Officer - compliance + controls + evidence + frameworks
@@ -92,6 +95,8 @@ class RolesAndPermissionsSeeder extends Seeder
             // Regulatory Intelligence: the Head of Compliance triages circulars, reviews extracted
             // documents and prepares returns (ATH-VAL-004).
             'view platform', 'create platform', 'edit platform',
+            // Change Management: CAB member for Compliance.
+            'view changes', 'create changes', 'approve changes',
         ]);
 
         // Security Analyst - security operations
@@ -105,6 +110,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $securityAnalyst->givePermissionTo([
             'view risks', 'view controls', 'view assets', 'view reports',
             'view platform',
+            'view changes', 'create changes', 'edit changes',
         ]);
 
         // Auditor - view + export on everything, create/edit on evidence and issues
@@ -124,6 +130,23 @@ class RolesAndPermissionsSeeder extends Seeder
         }
 
         $this->seedArchitectRoles($actions);
+        $this->seedChangeManagerRole($actions);
+    }
+
+    /**
+     * Change Management (ATH-CHG-001 §6): the Change Manager is the change authority — every
+     * `changes` permission plus read access to the records a change is raised against.
+     */
+    private function seedChangeManagerRole(array $actions): void
+    {
+        $changeManager = Role::firstOrCreate(['name' => 'Change Manager']);
+        foreach ($actions as $action) {
+            $changeManager->givePermissionTo("{$action} changes");
+        }
+        $changeManager->givePermissionTo([
+            'view assets', 'view risks', 'view incidents', 'view vulnerabilities',
+            'view issues', 'view ea', 'view platform',
+        ]);
     }
 
     /**
@@ -151,6 +174,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view vendors', 'view vulnerabilities', 'view incidents',
             'view bcp-plans', 'view reports', 'view csat', 'view platform',
             'view issues', 'create issues', 'edit issues',
+            'view changes', 'create changes', 'edit changes',
         ]);
 
         // Solution Architect — authors solution designs and submits them to the
@@ -161,6 +185,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $solutionArchitect->givePermissionTo([
             'view risks', 'view controls', 'view assets', 'view vendors',
             'view reports', 'view issues', 'create issues',
+            'view changes', 'create changes', 'edit changes',
         ]);
 
         // Application Owner — accountable for their own applications. Read and
@@ -170,6 +195,8 @@ class RolesAndPermissionsSeeder extends Seeder
         $applicationOwner->givePermissionTo(['view ea', 'edit ea', 'export ea']);
         $applicationOwner->givePermissionTo([
             'view assets', 'view vendors', 'view incidents', 'view issues',
+            // Business-owner approval stage on changes to their applications.
+            'view changes', 'create changes', 'edit changes', 'approve changes',
         ]);
 
         // Data Steward — maintains the data architecture layer (logical
@@ -179,6 +206,7 @@ class RolesAndPermissionsSeeder extends Seeder
         $dataSteward->givePermissionTo([
             'view risks', 'view controls', 'view data-breaches',
             'view policies', 'view reports', 'view issues', 'create issues',
+            'view changes', 'create changes', 'edit changes',
         ]);
     }
 }

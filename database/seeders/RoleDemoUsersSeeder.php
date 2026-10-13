@@ -20,6 +20,7 @@ use Spatie\Permission\Models\Role;
  *   security@atheris.ng        → Security Analyst
  *   auditor@atheris.ng         → Auditor
  *   viewer@atheris.ng          → Viewer
+ *   changemanager@atheris.ng   → Change Manager
  *
  * Users are attached to the Kano Heritage Bank organization (the fully
  * populated demo dataset) so every module shows real data for each role.
@@ -47,6 +48,7 @@ class RoleDemoUsersSeeder extends Seeder
             ['Dubem Okafor',    'security@atheris.ng',    'Security Analyst',   'SOC Analyst',               'Security Operations'],
             ['Ronke Ajayi',     'auditor@atheris.ng',     'Auditor',            'Senior IT Auditor',         'Internal Audit'],
             ['Bashir Tanko',    'viewer@atheris.ng',      'Viewer',             'Business Stakeholder',      'Operations'],
+            ['Nasir Abdulkadir', 'changemanager@atheris.ng', 'Change Manager',   'IT Change Manager',         'IT Service Management'],
         ];
 
         foreach ($users as [$name, $email, $role, $title, $dept]) {

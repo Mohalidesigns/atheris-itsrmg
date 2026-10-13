@@ -24,6 +24,8 @@ use App\Models\Vendor;
 use App\Models\Vulnerability;
 use App\Modules\CBNCSAT\Models\CsatAssessment;
 use App\Modules\CBNCSAT\Models\CsatMaStatement;
+use App\Services\Change\ChangeApprovalRouter;
+use App\Services\Change\ChangeMetrics;
 use App\Services\ComplianceScoreService;
 use App\Services\Issues\IssueMetrics;
 use App\Services\SecurityOps\SecurityOpsMetrics;
@@ -190,7 +192,20 @@ class DashboardController extends Controller
             'regulatory' => $orgId ? $this->regulatoryPulse((int) $orgId) : null,
             'secops' => $orgId ? $this->secopsPulse() : null,
             'issues' => $orgId ? $this->issuesPulse() : null,
+            'changes' => $orgId ? $this->changesPulse($request->user()) : null,
         ]);
+    }
+
+    /** Change Management feed: approval backlog, the next scheduled changes and the user's own inbox (tenant-scoped models). */
+    private function changesPulse($user): array
+    {
+        $metrics = app(ChangeMetrics::class);
+
+        return [
+            'stats' => $metrics->summary(),
+            'upcoming' => $metrics->upcoming(5),
+            'myApprovals' => app(ChangeApprovalRouter::class)->pendingFor($user)->count(),
+        ];
     }
 
     /** Issues & Remediation feed: open CAPA load, SLA breaches and escalations (tenant-scoped model). */
