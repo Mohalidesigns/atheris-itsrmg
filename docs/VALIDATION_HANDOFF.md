@@ -1,7 +1,7 @@
 # Atheris ITSRM&G — Module Validation Programme: Handoff
 
 **Repo:** `https://github.com/Mohalidesigns/atheris-itsrmg` (private), branch `main`
-**Last commit:** see `git log` — module 6 "Issues & Remediation: end-to-end validation fixes"
+**Last commit:** see `git log` — module 7 "Asset Management: end-to-end validation fixes"
 
 ## The brief (from the user)
 
@@ -35,10 +35,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 3 | Compliance | `493f44b` | `docs/ATH-VAL-003_Compliance_Validation_Report.md` | `tests/Feature/Compliance/ComplianceModuleTest.php` (12) |
 | 4 | Regulatory Intelligence | `4591bce` | `docs/ATH-VAL-004_Regulatory_Intelligence_Validation_Report.md` | `tests/Feature/RegulatoryIntelligence/RegulatoryIntelligenceModuleTest.php` (14) |
 | 5 | Security Operations | `86041ee` | `docs/ATH-VAL-005_Security_Operations_Validation_Report.md` | `tests/Feature/SecurityOperations/SecurityOperationsModuleTest.php` (12) |
-| 6 | Issues & Remediation | see `git log` | `docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md` | `tests/Feature/Issues/IssuesModuleTest.php` (12) |
-| — | Change Management (new module) | uncommitted | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
+| 6 | Issues & Remediation | `44f0102` | `docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md` | `tests/Feature/Issues/IssuesModuleTest.php` (12) |
+| 7 | Asset Management | see `git log` | `docs/ATH-VAL-007_Asset_Management_Validation_Report.md` | `tests/Feature/Assets/AssetManagementModuleTest.php` (12) |
+| — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **252 tests, 251 passed, 1 skipped, 2,198 assertions (13 Oct 2026, local, PHP 8.4; the cloud mirror matched)**. The one skip is the route smoke test, which runs separately and passed over 201 GET routes.
+Last full suite: **264 tests, 263 passed, 1 skipped, 2,413 assertions (13 Oct 2026, local, PHP 8.4)**. The one skip is the route smoke test, which runs separately and passed over 203 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -73,6 +74,32 @@ Last full suite: **252 tests, 251 passed, 1 skipped, 2,198 assertions (13 Oct 20
 - **Demo data:** `IssuesDemoSeeder` (after SecurityOperationsDemoSeeder) fixes First Bank issues that pointed at Kano's risks, and rebuilds dates, SLAs, escalations, timelines and tickets per bank.
 - **Dashboard:** console KPIs and an executive-dashboard Issues panel, both from `IssueMetrics`.
 
+### Asset Management highlights (module 7)
+
+- **Security:**
+  - `AssetSyncJob` is now strict-scoped. Discovery history was visible to every bank, and the stub wrote jobs to org 1.
+  - Index sort is whitelisted.
+  - Every picker is tenant-checked: owner, custodian, services, review owner, CSV owner e-mails, supporting assets, dependency providers.
+  - Business Assets writes require the bank's own row, because the EA tenant scope also admits NULL-org rows.
+  - `AssetApplicationClient`'s catalogue cache is now keyed per bank. It used to serve one bank's assets to all.
+- **Decision:** business architecture stays canonical in EA. Service → service dependencies are `serving` edges (provider → consumer) in `ea_relationships`; `RelationshipValidator` now allows business-service serving business-service. Asset → service links are a GRC pivot, `asset_business_service`, because assets are not ArchiMate elements and `ea_relationships` is exported to Archi.
+- **Discovery** (`AssetDiscoveryService`): five sandbox connectors (AD, Entra, AWS, Tenable, Qualys) and a real CSV import with a template. One reconciler: match on (source, external_id), then de-duplicate on hostname/IP, then create. True counts and row errors. Connector finds go to a review queue: accept needs an owner, reject needs a reason and retires the asset.
+- **Criticality:** an asset inherits the criticality of the most critical service it supports (`criticality_inherited`). `effective_criticality` is the higher of that and the owner's rating, and the vulnerability prioritiser now uses it.
+- **Business services:** validated against the bank's `ea_capabilities` (validation used to hit the retired table, so no capability could be saved). Supporting assets, upstream and downstream dependencies, cycle refusal, RTO-conflict warning, per-bank `BS-` codes. A layered capability → service → asset graph replaces the hard-coded "Kano Heritage Core" hub.
+- **Register:**
+  - hygiene tiles and filters: effective criticality, unowned, past end of life, end of life ≤ 90 days, unmapped, stale;
+  - source filter and CSV export;
+  - per-bank codes (`KHB-AST-0001`);
+  - custodian, provenance, change requests, audit trail and archive on the asset page;
+  - Edit dates fixed.
+- **Demo data:** `AssetManagementDemoSeeder` runs after Change Management. It does the following per bank:
+  - coherent owners and departments;
+  - runs the real sandbox connectors twice, plus a CSV import with rejected rows;
+  - builds a reviewed queue;
+  - creates 16 services per bank (First Bank's on BIAN capabilities), with dependency chains and deliberate gaps;
+  - links 29 First Bank EA applications to their assets without model events, so seals are kept.
+- **Dashboard:** an Asset Management panel and end-of-life watch, from `AssetMetrics`, which also feeds the register and Discovery.
+
 ### Change Management highlights (new module, 13 Oct 2026)
 
 - **Why it exists:** a selling feature — ITIL 4 / ISO 20000 / COBIT BAI06 change enablement with risk-based approval routing, CAB and ECAB, freeze windows, conflict detection, retrospective emergency authorisation and mandatory PIR, with segregation of duties enforced in code. Contract: `docs/ATH-CHG-001_…`; build record: `docs/ATH-CHG-002_…`.
@@ -80,56 +107,58 @@ Last full suite: **252 tests, 251 passed, 1 skipped, 2,198 assertions (13 Oct 20
 - **Old stub:** `Pages/Policies/ChangeRequests/Index.jsx` was deleted; `change-requests.index` now redirects to `changes.index`.
 - **Tests:** 21 passed / 816 assertions. Each test takes ~10 s because the full migration set runs on in-memory SQLite — normal.
 
-## Next phase: module 7, Asset Management
+## Next phase: module 8, Vendor Management
 
 ### Start a new session here
 
 Paste this as the first message of the new session:
 
-> Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 7, Asset Management, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
+> Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 8, Vendor Management, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
 
-Before you start: the dev database is now **PostgreSQL** (see Environment gotchas); check it is up. Start the dev server with the Browser pane's `preview_start` using the `atheris` entry (port 8010), and check `ls -lO` for iCloud `dataless` files if reads hang (see Environment gotchas).
+Before you start, check the dev database (PostgreSQL) is up. Start the dev server with the Browser pane's `preview_start` using the `atheris` entry (port 8010). If another chat already runs it, open `http://127.0.0.1:8010` with `preview_start {url}`. If reads hang, check `ls -lO` for iCloud `dataless` files.
 
 ### Scope
 
-Sidebar group `Asset Management` (`resources/js/Config/navigation.js`):
+Sidebar group `Vendor Management` (`resources/js/Config/navigation.js`):
 
 | Page | Route | Controller | Page component | Gate |
 |---|---|---|---|---|
-| IT Assets | `assets.*` (full resource) | `AssetController` | `Assets/*` | `view assets` |
-| Asset Discovery | `asset-discovery.index`, `asset-discovery.sync` | `PlatformController` stub | `Assets/Discovery.jsx` | `view platform` |
-| Business Services | `business-services.index`, `business-services.graph` | `PlatformController` stub | `BusinessServices/*` | `view platform` |
-| Business Assets | `business-assets.*` (full resource) | `BusinessAssetController` | `Assets/BusinessAssets/*` | `view assets` |
+| Vendor Register | `vendors.*` (full resource) | `VendorController` | `Vendors/*` | `view vendors` |
+| Vendor Assessments | `vendor-assessments.*` (full resource) | `VendorAssessmentController` | `VendorAssessments/*` | `view vendor-assessments` |
+| Security Ratings | `security-ratings.index` | `PlatformController` stub | `Tprm/Ratings.jsx` | `view platform` |
+| Shared Vendor Directory | `shared-vendors.index` | `PlatformController` stub | `Tprm/SharedDirectory.jsx` | `view platform` |
 
-### Recon findings (11 Oct 2026, dev MySQL)
+### Recon findings (13 Oct 2026, dev PostgreSQL)
 
-- **Tenancy:** `App\Models\Asset` has `BelongsToOrganization`. `App\Models\BusinessService`, `ServiceDependency`, `BusinessCapability` and `AssetSyncJob` have **no tenant-scope trait**, although all their tables have `organization_id`. Business Services, the graph, Asset Discovery and Business Assets (which uses `BusinessService`) are therefore likely cross-tenant, as Issues was. Verify in the browser as First Bank.
-- **Stub writes:** `PlatformController::assetDiscoverySync` writes `organization_id => 1` and invents `records_imported` / `records_updated` with `rand()`.
-- **Data:**
-  - assets: Kano 51, First Bank 70.
-  - `business_services`: 5, all Kano. First Bank has none.
-  - `business_capabilities` and `service_dependencies`: 0 rows each, so the service graph has nothing to draw.
-  - `asset_sync_jobs`: 5, all Kano.
-- **Overlap to resolve:** EA has its own capabilities (`ea_capabilities`) and business services (`App\Models\Ea\BusinessService`), and `ea.sync.assets` syncs assets into EA. Decide whether the GRC Business Services page should read the EA model or stay separate; record the decision in the report, as module 6 did for vulnerability tickets.
-- **Dashboards to check:** asset criticality feeds the vulnerability prioritiser (module 5) and the risk page's Assets tab. Make sure changes keep those consistent.
-- `DashboardController::boardPackExport` still hard-codes org 1 (KRIs & Dashboards pass, not this one).
+- **Tenancy:**
+  - `Vendor` and `VendorAssessment` have `BelongsToOrganization`. Data: vendors Kano 35 / First Bank 57; assessments 25 / 40.
+  - `TprmSecurityRating` and `TprmBreachEvent` have **no `organization_id`** and no scope. `securityRatingsIndex` sends every rating, grouped by vendor_id, plus 50 breach events in the payload, whichever bank owns the vendor. Expect a cross-tenant leak, as in modules 5-7.
+  - `SharedVendorDirectory` (8 rows) is platform-shared by design. Check that nothing a bank writes leaks into it.
+- **Stub pages:** Security Ratings and the Shared Directory are read-only `PlatformController` stubs gated on `view platform`. Move them to a module controller and gate them on vendor permissions, as module 7 did for Discovery and Business Services.
+- **Cross-module links to check:**
+  - EA `vendor-concentration` (`EaController`) and the 33 platform-shared `Vendor → EaApplication` `serving` edges (`organization_id IS NULL`);
+  - Regulatory Intelligence's DDQ intake, where an accepted DDQ updates its vendor (module 4);
+  - the executive dashboard's `vendorScoreboard`.
+- **Asset Management follow-up:** decide whether assets link to vendors directly. Today vendors serve EA applications only; see ATH-VAL-007 §7.
 
 ### Deliverables
 
-- `tests/Feature/Assets/AssetManagementModuleTest.php`
-- `docs/ATH-VAL-007_Asset_Management_Validation_Report.md`
-- A deterministic per-bank demo seeder if data needs rebuilding (pattern: `IssuesDemoSeeder`, `SecurityOperationsDemoSeeder`), wired into `DatabaseSeeder` at the right point.
-- Update this handoff: done table, suite count, highlights, next module (Vendor Management).
+- `tests/Feature/Vendors/VendorManagementModuleTest.php`
+- `docs/ATH-VAL-008_Vendor_Management_Validation_Report.md`
+- A deterministic per-bank demo seeder if data needs rebuilding, wired into `DatabaseSeeder` after `AssetManagementDemoSeeder`.
+- Update this handoff: done table, suite count, highlights, next module (Policy Management).
 
-**Remaining sidebar order after that:** Vendor Management → Policy Management → ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest of the sidebar.
+**Remaining sidebar order after that:** Policy Management → ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest of the sidebar.
 
-### Patterns from modules 5-6 to reuse
+### Patterns from modules 5-7 to reuse
 
 - **Stub pages:** move `PlatformController` stubs into a module controller, with services under `app/Services/<Module>/`, and a `<Module>Metrics` service shared by the module page and the executive dashboard (`DashboardController` + `Pages/Dashboard.jsx` panel).
 - **Tenancy:** strict `BelongsToOrganization` on the model, so route binding 404s across banks; pickers validated with tenant-scoped `Rule::exists` or the model's own scope.
 - **Codes:** `GeneratesSequentialCode` for per-bank codes.
 - **Workflow:** lifecycle transitions in a service with a `TRANSITIONS` map, with segregation of duties (the doer cannot approve or verify).
 - **Webhooks:** signed with `sha256=HMAC(secret, "{ts}.{body}")`, outside auth and CSRF (`routes/web.php` top plus `bootstrap/app.php` exceptions); secrets use the `encrypted` cast and are shown once.
+- **Sandbox integrations:** when no credentials exist, run the real code path against a deterministic catalogue, record `mode = sandbox`, and say so in the UI (module 6 ITSM, module 7 discovery). Demo seeders should drive the real service, as `AssetManagementDemoSeeder` does with the connectors, so demo history matches what the UI produces.
+- **EA overlap:** EA is canonical for business architecture. GRC pages read the EA models. Non-ArchiMate links (assets) go in GRC pivots, not `ea_relationships`. Write EA link fields with the query builder in seeders so stewardship seals are not broken.
 - **Timing:** a new module test takes about 9 minutes on its own (migrations dominate). The full suite takes about 30-35 minutes. The smoke test works as `SMOKE=1 DB_CONNECTION=sqlite DB_DATABASE=$PWD/database/database.sqlite php vendor/bin/phpunit --filter RouteSmokeTest` after a fresh seed of that file.
 
 ## Open follow-ups (not blocking)
@@ -142,6 +171,11 @@ Sidebar group `Asset Management` (`resources/js/Config/navigation.js`):
   - CISO email/phone encryption
 - **Regulatory Intelligence:** no OCR engine or LLM attached; Returns Centre exports CSV only; `KRI-COMP-CBN` still reads seeded values.
 - **Security Operations:** EPSS, KEV and advisories are seeded snapshots with no scheduled feed. Notifications record submission but are not delivered to a portal. No deadline reminders. No SOAR playbooks.
+- **Asset Management:**
+  - Discovery connectors are sandbox only: no credential settings, no API clients, not scheduled.
+  - Stale assets are reported but not auto-raised as issues.
+  - The BIA workflow that should own RTO/RPO belongs to Business Continuity.
+  - Change risk scoring still reads the owner's criticality, not the effective one.
 - **Issues & Remediation:** demo ITSM connectors are sandbox (live mode tested only with faked HTTP); no pre-breach reminders; verifiers cannot attach vault evidence; no bulk actions or CSV export; CCM failures, gaps and incident lessons do not auto-raise issues yet.
 - **Compliance:** no notifications for gap due dates or evidence expiry. The ISMS Statement of Applicability is not yet linked to assessment results, which belongs in the ISMS module pass.
 

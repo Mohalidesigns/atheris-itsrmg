@@ -14,11 +14,12 @@ Each sidebar module is validated end to end, in order: its features, forms, tabl
 | 4 | Regulatory Intelligence | Done | [ATH-VAL-004](docs/ATH-VAL-004_Regulatory_Intelligence_Validation_Report.md) |
 | 5 | Security Operations | Done | [ATH-VAL-005](docs/ATH-VAL-005_Security_Operations_Validation_Report.md) |
 | 6 | Issues & Remediation | Done | [ATH-VAL-006](docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md) |
-| 7 | Asset Management | **Next** | — |
+| 7 | Asset Management | Done | [ATH-VAL-007](docs/ATH-VAL-007_Asset_Management_Validation_Report.md) |
 | — | Change Management (new module, built to [ATH-CHG-001](docs/ATH-CHG-001_Change_Management_Module_Specification_v1.0.md)) | Built & validated | [ATH-CHG-002](docs/ATH-CHG-002_Change_Management_Build_Update.md) |
-| 8+ | Vendor Management → Policy Management → ISMS → PCI → Business Continuity → Continuous Monitoring → KRIs & Dashboards → rest of sidebar | To do | — |
+| 8 | Vendor Management | **Next** | — |
+| 9+ | Policy Management → ISMS → PCI → Business Continuity → Continuous Monitoring → KRIs & Dashboards → rest of sidebar | To do | — |
 
-Last full PHP suite: 252 tests, 251 passed, 1 skipped (the route smoke test, run separately over 201 routes), 2,198 assertions (13 Oct 2026, local, PHP 8.4).
+Last full PHP suite: 264 tests, 263 passed, 1 skipped (the route smoke test, run separately over 203 routes), 2,413 assertions (13 Oct 2026, local, PHP 8.4).
 
 ## Quick start
 

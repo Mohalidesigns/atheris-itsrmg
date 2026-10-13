@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -447,6 +447,54 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                                             <span className="ml-1 font-semibold text-[#B3261E]">{i.days_overdue} d over</span>
                                             {i.escalation_level > 0 && <span className="ml-1 text-[#8A6400]">· L{i.escalation_level}</span>}
                                             <p className="truncate text-[#718096]">{i.title}{i.owner ? ` · ${i.owner}` : ' · unassigned'}</p>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {assets && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Asset Management</h3>
+                        <Link href={route('assets.index')} className="text-xs text-[#0A1F44] underline">Asset Register →</Link>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        <div className="lg:col-span-2">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                {[
+                                    ['Critical assets', assets.stats.by_criticality?.critical, route('assets.index', { criticality: 'critical' }), false],
+                                    ['Critical with open crit/high vulns', assets.stats.critical_with_open_vulns, route('vuln-prioritiser.index'), assets.stats.critical_with_open_vulns > 0],
+                                    ['Past end of life', assets.stats.eol_passed, route('assets.index', { flag: 'eol_passed' }), assets.stats.eol_passed > 0],
+                                    ['Unowned', assets.stats.unowned, route('assets.index', { flag: 'unowned' }), assets.stats.unowned > 0],
+                                    ['Discovered, awaiting review', assets.stats.pending_review, route('asset-discovery.index'), assets.stats.pending_review > 0],
+                                    ['Crit/high not mapped to a service', assets.stats.important_unmapped, route('assets.index', { flag: 'unmapped' }), assets.stats.important_unmapped > 0],
+                                ].map(([label, n, href, alert]) => (
+                                    <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                        <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                        <p className="text-[11px] text-[#718096]">{label}</p>
+                                    </Link>
+                                ))}
+                            </div>
+                            <p className="mt-3 text-[11px] text-[#718096]">
+                                {assets.stats.total} live assets · {assets.stats.inherited_uplift} rated up by the services they support · {assets.stats.services_without_assets} of {assets.stats.services} business services have no supporting asset
+                            </p>
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-semibold text-[#2D3748]">End-of-life watch</h4>
+                            <ul className="mt-1 divide-y divide-gray-100 text-xs">
+                                {assets.eol.length === 0 && <li className="py-2 text-[#718096]">Nothing reaches end of life in the next 90 days.</li>}
+                                {assets.eol.map((a) => (
+                                    <li key={a.id} className="py-2">
+                                        <Link href={route('assets.show', a.id)} className="block hover:underline">
+                                            <span className="font-mono text-[#2D3748]">{a.code}</span>
+                                            <span className={`ml-1 font-semibold ${a.days < 0 ? 'text-[#B3261E]' : 'text-[#8A6400]'}`}>
+                                                {a.days < 0 ? `${-a.days} d past EOL` : `EOL in ${a.days} d`}
+                                            </span>
+                                            <p className="truncate text-[#718096]">{a.name} · {a.criticality}</p>
                                         </Link>
                                     </li>
                                 ))}

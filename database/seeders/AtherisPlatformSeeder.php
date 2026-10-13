@@ -41,7 +41,6 @@ use App\Models\RegulatoryCircular;
 use App\Models\RegulatoryReference;
 use App\Models\ReturnTemplate;
 use App\Models\ScimToken;
-use App\Models\ServiceDependency;
 use App\Models\SharedVendorDirectory;
 use App\Models\SsoConnection;
 use App\Models\Tenant;
@@ -334,26 +333,18 @@ class AtherisPlatformSeeder extends Seeder
             ])->id;
         }
         // Processes
-        foreach ($svcIds as $sid) {
-            for ($p = 1; $p <= 2; $p++) {
+        foreach ($svcIds as $i => $sid) {
+            [, $name, $crit] = $svcMap[$i];
+            foreach (['Customer request handling', 'Settlement & reconciliation'] as $p) {
                 BusinessProcess::create([
                     'organization_id' => $this->orgId, 'service_id' => $sid,
-                    'name' => 'Process '.$p.' for service '.$sid,
-                    'criticality' => ['critical', 'high', 'medium'][rand(0, 2)],
+                    'name' => "{$name} — {$p}",
+                    'criticality' => $crit,
                 ]);
             }
         }
-        // Dependencies
-        for ($i = 0; $i < 20; $i++) {
-            $src = $svcIds[array_rand($svcIds)];
-            $tgt = $svcIds[array_rand($svcIds)];
-            if ($src !== $tgt) {
-                ServiceDependency::firstOrCreate([
-                    'source_type' => 'service', 'source_id' => $src,
-                    'target_type' => 'service', 'target_id' => $tgt,
-                ], ['organization_id' => $this->orgId, 'relation_type' => 'depends_on']);
-            }
-        }
+        // Dependencies are canonical EA edges (provider serves consumer); the per-bank chains are
+        // built by AssetManagementDemoSeeder.
     }
 
     private function issues(): void

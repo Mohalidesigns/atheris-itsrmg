@@ -3,6 +3,8 @@
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\AssetController;
+use App\Http\Controllers\Assets\AssetDiscoveryController;
+use App\Http\Controllers\Assets\BusinessServiceMapController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\Auth\SamlController;
 use App\Http\Controllers\Auth\ScimController;
@@ -274,7 +276,26 @@ Route::middleware('auth')->group(function () {
         ->middlewareFor(['edit', 'update'], 'permission:edit incidents')
         ->middlewareFor('destroy', 'permission:delete incidents');
 
-    // Asset Management
+    // Asset Management (ATH-VAL-007). Literal paths come before the resource so they are not
+    // captured as {asset}.
+    Route::middleware('permission:view assets')->group(function () {
+        Route::get('/assets/export', [AssetController::class, 'export'])->middleware('permission:export assets')->name('assets.export');
+        Route::put('/assets/{asset}/services', [AssetController::class, 'services'])->middleware('permission:edit assets')->name('assets.services');
+        Route::post('/assets/{asset}/review', [AssetController::class, 'review'])->middleware('permission:edit assets')->name('assets.review');
+
+        Route::get('/asset-discovery', [AssetDiscoveryController::class, 'index'])->name('asset-discovery.index');
+        Route::post('/asset-discovery/sync', [AssetDiscoveryController::class, 'sync'])->middleware('permission:create assets')->name('asset-discovery.sync');
+        Route::post('/asset-discovery/import', [AssetDiscoveryController::class, 'import'])->middleware('permission:create assets')->name('asset-discovery.import');
+        Route::get('/asset-discovery/template', [AssetDiscoveryController::class, 'template'])->name('asset-discovery.template');
+
+        Route::get('/business-services', [BusinessServiceMapController::class, 'index'])->name('business-services.index');
+        Route::get('/business-services/graph', [BusinessServiceMapController::class, 'graph'])->name('business-services.graph');
+
+        Route::put('/business-assets/{business_asset}/assets', [BusinessAssetController::class, 'assets'])->middleware('permission:edit assets')->name('business-assets.assets');
+        Route::post('/business-assets/{business_asset}/dependencies', [BusinessAssetController::class, 'storeDependency'])->middleware('permission:edit assets')->name('business-assets.dependencies.store');
+        Route::delete('/business-assets/{business_asset}/dependencies/{relationship}', [BusinessAssetController::class, 'destroyDependency'])->middleware('permission:edit assets')->whereNumber('relationship')->name('business-assets.dependencies.destroy');
+    });
+
     Route::resource('assets', AssetController::class)
         ->middleware('permission:view assets')
         ->middlewareFor(['create', 'store'], 'permission:create assets')
@@ -549,14 +570,6 @@ Route::middleware('auth')->group(function () {
 
         // Phase 2: AUCS Browser
         Route::get('/aucs', [PlatformController::class, 'aucsIndex'])->name('aucs.index');
-
-        // Phase 2: Asset Discovery
-        Route::get('/asset-discovery', [PlatformController::class, 'assetDiscoveryIndex'])->name('asset-discovery.index');
-        Route::post('/asset-discovery/sync', [PlatformController::class, 'assetDiscoverySync'])->name('asset-discovery.sync');
-
-        // Phase 2: Business Services & graph
-        Route::get('/business-services', [PlatformController::class, 'businessServicesIndex'])->name('business-services.index');
-        Route::get('/business-services/graph', [PlatformController::class, 'businessServicesGraph'])->name('business-services.graph');
 
         // Phase 3: CCM
         Route::get('/ccm', [PlatformController::class, 'ccmIndex'])->name('ccm.index');

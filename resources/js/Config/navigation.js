@@ -147,8 +147,8 @@ const navigation = [
         icon: ServerStackIcon,
         children: [
             { name: 'IT Assets', href: 'assets.index', permission: 'view assets' },
-            { name: 'Asset Discovery', href: 'asset-discovery.index', permission: 'view platform' },
-            { name: 'Business Services', href: 'business-services.index', permission: 'view platform' },
+            { name: 'Asset Discovery', href: 'asset-discovery.index', permission: 'view assets' },
+            { name: 'Business Services', href: 'business-services.index', permission: 'view assets' },
             { name: 'Business Assets', href: 'business-assets.index', permission: 'view assets' },
         ],
     },

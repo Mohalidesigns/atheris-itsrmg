@@ -24,6 +24,7 @@ use App\Models\Vendor;
 use App\Models\Vulnerability;
 use App\Modules\CBNCSAT\Models\CsatAssessment;
 use App\Modules\CBNCSAT\Models\CsatMaStatement;
+use App\Services\Assets\AssetMetrics;
 use App\Services\Change\ChangeApprovalRouter;
 use App\Services\Change\ChangeMetrics;
 use App\Services\ComplianceScoreService;
@@ -165,7 +166,7 @@ class DashboardController extends Controller
             'risks' => Risk::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->active()->count(),
             'risks_above_appetite' => Risk::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->active()->where('risk_appetite', 'above')->count(),
             'controls' => Control::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
-            'assets' => Asset::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
+            'assets' => Asset::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->where('status', '!=', 'decommissioned')->count(),
             'vendors' => Vendor::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'policies' => Policy::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'incidents' => Incident::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
@@ -192,6 +193,7 @@ class DashboardController extends Controller
             'regulatory' => $orgId ? $this->regulatoryPulse((int) $orgId) : null,
             'secops' => $orgId ? $this->secopsPulse() : null,
             'issues' => $orgId ? $this->issuesPulse() : null,
+            'assets' => $orgId ? $this->assetsPulse() : null,
             'changes' => $orgId ? $this->changesPulse($request->user()) : null,
         ]);
     }
@@ -206,6 +208,14 @@ class DashboardController extends Controller
             'upcoming' => $metrics->upcoming(5),
             'myApprovals' => app(ChangeApprovalRouter::class)->pendingFor($user)->count(),
         ];
+    }
+
+    /** Asset Management feed: register hygiene, inherited criticality and the end-of-life watch (tenant-scoped models). */
+    private function assetsPulse(): array
+    {
+        $metrics = app(AssetMetrics::class);
+
+        return ['stats' => $metrics->summary(), 'eol' => $metrics->eolWatch(5)];
     }
 
     /** Issues & Remediation feed: open CAPA load, SLA breaches and escalations (tenant-scoped model). */

@@ -2,6 +2,7 @@
 
 namespace App\Models\Ea;
 
+use App\Models\Asset;
 use App\Models\Concerns\BelongsToTenant;
 use App\Models\Concerns\HasQualitySeal;
 use App\Models\Concerns\WritesAuditLog;
@@ -41,6 +42,14 @@ class BusinessService extends Model
     public function owner()
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    /** Physical assets (Asset Management register) that support this service. */
+    public function assets()
+    {
+        return $this->belongsToMany(Asset::class, 'asset_business_service', 'business_service_id', 'asset_id')
+            ->withPivot('role')
+            ->withTimestamps();
     }
 
     /**

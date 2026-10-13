@@ -103,7 +103,9 @@ class RelationshipValidator
             'technology-interface' => ['application-component', 'node'],
         ],
         'serving' => [
-            'business-service' => ['business-actor', 'business-role', 'business-process'],
+            // A service serving another service is how a BIA dependency chain reads (NIP serves
+            // Mobile Banking); ArchiMate 3.2 permits serving between same-layer services.
+            'business-service' => ['business-actor', 'business-role', 'business-process', 'business-service'],
             'application-service' => ['business-process', 'application-component'],
             'technology-service' => ['application-component', 'application-service'],
             'application-component' => ['business-process', 'application-component'],

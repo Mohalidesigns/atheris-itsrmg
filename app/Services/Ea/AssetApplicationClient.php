@@ -31,7 +31,11 @@ class AssetApplicationClient
         if ($this->breakerOpen()) {
             return ['rows' => [], 'cached' => false, 'circuit' => 'open'];
         }
-        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, function () {
+        // Keyed per bank: the catalogue is read through the tenant-scoped Asset model, so one
+        // shared key served the first bank's assets to every other bank for five minutes.
+        $key = self::CACHE_KEY.':'.(auth()->user()?->organization_id ?? 'none');
+
+        return Cache::remember($key, self::CACHE_TTL, function () {
             try {
                 if (! class_exists(\App\Models\Asset::class) || ! \Schema::hasTable('assets')) {
                     return ['rows' => [], 'cached' => true, 'circuit' => 'closed', 'reason' => 'assets-table-absent'];

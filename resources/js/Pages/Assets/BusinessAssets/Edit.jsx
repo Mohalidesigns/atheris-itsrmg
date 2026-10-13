@@ -50,7 +50,7 @@ export default function EditBusinessAsset({ service, capabilities = [], users = 
                                 <select value={data.capability_id} onChange={e => setData('capability_id', e.target.value)}
                                     className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm">
                                     <option value="">None</option>
-                                    {capabilities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    {capabilities.map(c => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
                                 </select>
                                 <InputError message={errors.capability_id} className="mt-1" />
                             </div>

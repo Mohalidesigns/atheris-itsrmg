@@ -57,18 +57,20 @@ class BusinessService extends EaBusinessService
     {
         static::creating(function (self $model) {
             if (config('ea.canonical_business_architecture', true)) {
-                $model->code ??= static::nextCode();
+                $model->code ??= static::nextCode($model->organization_id ?? auth()->user()?->organization_id);
             }
         });
     }
 
-    private static function nextCode(): string
+    /** Codes are unique per bank (organization_id, code), so the series is per bank too. */
+    private static function nextCode(?int $organizationId): string
     {
-        $sequence = EaBusinessService::withoutGlobalScopes()->count() + 1;
+        $scoped = fn () => EaBusinessService::withoutGlobalScopes()->where('organization_id', $organizationId);
+        $sequence = $scoped()->count() + 1;
 
         do {
             $code = 'BS-'.str_pad((string) $sequence++, 3, '0', STR_PAD_LEFT);
-        } while (EaBusinessService::withoutGlobalScopes()->where('code', $code)->exists());
+        } while ($scoped()->where('code', $code)->exists());
 
         return $code;
     }

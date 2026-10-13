@@ -2,13 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AssetSyncJob;
 use App\Models\AucsControl;
 use App\Models\AucsFrameworkMapping;
 use App\Models\BoardPackRun;
 use App\Models\BoardPackTemplate;
-use App\Models\BusinessCapability;
-use App\Models\BusinessService;
 use App\Models\CcmTenantTest;
 use App\Models\CcmTestRun;
 use App\Models\ContentInstall;
@@ -33,7 +30,6 @@ use App\Models\PricingTier;
 use App\Models\Risk;
 use App\Models\RiskCategory;
 use App\Models\ScimToken;
-use App\Models\ServiceDependency;
 use App\Models\SharedVendorDirectory;
 use App\Models\SsoConnection;
 use App\Models\Tenant;
@@ -46,7 +42,6 @@ use App\Models\Workflow;
 use App\Models\WorkflowInstance;
 use App\Services\FairMonteCarloService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -135,52 +130,6 @@ class PlatformController extends Controller
         $frameworkCodes = FrameworkClause::distinct('framework_code')->pluck('framework_code');
 
         return Inertia::render('Aucs/Index', compact('controls', 'domains', 'mappingsByControl', 'frameworkCodes', 'domain'));
-    }
-
-    /* ---------------------------- Asset Discovery ---------------------------- */
-    public function assetDiscoveryIndex()
-    {
-        $jobs = AssetSyncJob::orderByDesc('started_at')->take(50)->get();
-        $summary = AssetSyncJob::select('source', DB::raw('count(*) as c'),
-            DB::raw('SUM(records_imported) as imported'))->groupBy('source')->get();
-
-        return Inertia::render('Assets/Discovery', compact('jobs', 'summary'));
-    }
-
-    public function assetDiscoverySync(Request $r)
-    {
-        $source = $r->input('source', 'manual');
-        AssetSyncJob::create([
-            'organization_id' => 1,
-            'source' => $source,
-            'status' => 'completed',
-            'records_imported' => rand(20, 500),
-            'records_updated' => rand(5, 50),
-            'output_summary' => "Dry-run sync from {$source}: sample payload ingested",
-            'started_at' => now()->subMinutes(2),
-            'finished_at' => now(),
-        ]);
-
-        return redirect()->route('asset-discovery.index')->with('success', "Sync queued for {$source}");
-    }
-
-    /* ---------------------------- Business Services ---------------------------- */
-    public function businessServicesIndex()
-    {
-        $services = BusinessService::with('capability', 'processes')->get();
-        $capabilities = BusinessCapability::orderBy('name')->get();
-        $dependencies = ServiceDependency::get();
-
-        return Inertia::render('BusinessServices/Index', compact('services', 'capabilities', 'dependencies'));
-    }
-
-    public function businessServicesGraph()
-    {
-        $services = BusinessService::get();
-        $dependencies = ServiceDependency::get();
-        $capabilities = BusinessCapability::get();
-
-        return Inertia::render('BusinessServices/Graph', compact('services', 'dependencies', 'capabilities'));
     }
 
     /* ------------------------------- Risk Graph ------------------------------- */
