@@ -19,7 +19,6 @@ use App\Models\RegulatoryCircular;
 use App\Models\ReturnRun;
 use App\Models\Returns\RegulatoryReturn;
 use App\Models\Risk;
-use App\Models\TprmSecurityRating;
 use App\Models\Vendor;
 use App\Models\Vulnerability;
 use App\Modules\CBNCSAT\Models\CsatAssessment;
@@ -30,6 +29,7 @@ use App\Services\Change\ChangeMetrics;
 use App\Services\ComplianceScoreService;
 use App\Services\Issues\IssueMetrics;
 use App\Services\SecurityOps\SecurityOpsMetrics;
+use App\Services\Vendors\VendorMetrics;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -104,20 +104,8 @@ class DashboardController extends Controller
             'days_to_due' => (int) today()->diffInDays($o->nextDue(), false),
         ])->sortBy('next_due')->values()->take(15);
 
-        // Vendor scoreboard — top 10 vendors with latest ratings
-        $vendorScoreboard = Vendor::when($orgId, fn ($q) => $q->where('organization_id', $orgId))
-            ->limit(10)->get()
-            ->map(function ($v) {
-                $r = TprmSecurityRating::where('vendor_id', $v->id)->orderByDesc('captured_at')->first();
-
-                return [
-                    'id' => $v->id, 'name' => $v->name,
-                    'risk_level' => $v->risk_level,
-                    'grade' => $r?->grade ?? '—',
-                    'rating_value' => $r?->rating_value,
-                    'delta' => $r?->delta_from_previous ?? 0,
-                ];
-            });
+        // Vendor scoreboard: tier 1-2 vendors with their latest rating, worst first (tenant-scoped).
+        $vendorScoreboard = $orgId ? app(VendorMetrics::class)->scoreboard(10) : [];
 
         // Policy attestation coverage per department
         $attestationByDept = DB::table('policy_attestations as pa')
@@ -167,7 +155,7 @@ class DashboardController extends Controller
             'risks_above_appetite' => Risk::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->active()->where('risk_appetite', 'above')->count(),
             'controls' => Control::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'assets' => Asset::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->where('status', '!=', 'decommissioned')->count(),
-            'vendors' => Vendor::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
+            'vendors' => Vendor::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->where('status', '!=', 'terminated')->count(),
             'policies' => Policy::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'incidents' => Incident::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'vulns' => Vulnerability::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
@@ -194,6 +182,7 @@ class DashboardController extends Controller
             'secops' => $orgId ? $this->secopsPulse() : null,
             'issues' => $orgId ? $this->issuesPulse() : null,
             'assets' => $orgId ? $this->assetsPulse() : null,
+            'vendors' => $orgId ? app(VendorMetrics::class)->summary() : null,
             'changes' => $orgId ? $this->changesPulse($request->user()) : null,
         ]);
     }

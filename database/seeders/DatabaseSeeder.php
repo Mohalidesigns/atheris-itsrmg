@@ -126,6 +126,11 @@ class DatabaseSeeder extends Seeder
         // (ATH-VAL-007; after EA stewardship, written without model events so seals are untouched)
         $this->call(AssetManagementDemoSeeder::class);
 
+        // Vendor Management: NDPA processor and CBN outsourcing facts, owners, computed tiers and
+        // review clocks, Shared Directory links, six months of sandbox ratings and a triaged breach
+        // watch (ATH-VAL-008; before Regulatory Intelligence so vendor return figures are final)
+        $this->call(VendorManagementDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

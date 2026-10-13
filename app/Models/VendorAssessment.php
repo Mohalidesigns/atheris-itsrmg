@@ -17,6 +17,7 @@ class VendorAssessment extends Model
         'organization_id', 'vendor_id', 'title', 'assessment_type',
         'overall_score', 'status', 'assessed_by', 'assessment_date',
         'findings', 'recommendations', 'next_review_date',
+        'completed_at', 'residual_rating', 'breach_event_id',
     ];
 
     protected function casts(): array
@@ -25,6 +26,7 @@ class VendorAssessment extends Model
             'assessment_date' => 'date',
             'next_review_date' => 'date',
             'overall_score' => 'decimal:2',
+            'completed_at' => 'datetime',
         ];
     }
 
@@ -41,5 +43,25 @@ class VendorAssessment extends Model
     public function assessor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assessed_by');
+    }
+
+    public function breachEvent(): BelongsTo
+    {
+        return $this->belongsTo(TprmBreachEvent::class, 'breach_event_id');
+    }
+
+    /** Residual rating implied by a 0-100 score (config tprm.residual_bands). */
+    public static function residualFor(?float $score): ?string
+    {
+        if ($score === null) {
+            return null;
+        }
+        foreach (config('tprm.residual_bands') as $band => $floor) {
+            if ($score >= $floor) {
+                return $band;
+            }
+        }
+
+        return 'critical';
     }
 }

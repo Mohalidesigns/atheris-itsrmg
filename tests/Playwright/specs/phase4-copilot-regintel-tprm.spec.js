@@ -31,6 +31,7 @@ test.describe('Phase 4 — Copilot / Regulatory Intelligence / TPRM', () => {
 
     test('Vendor Security Ratings page lists vendor grades', async ({ page }) => {
         await page.goto('/security-ratings');
-        await expect(page.getByText(/Continuous Security Ratings/i)).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Continuous monitoring/i })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Ratings by vendor/i })).toBeVisible();
     });
 });

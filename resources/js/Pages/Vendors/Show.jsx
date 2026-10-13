@@ -1,212 +1,199 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
-import { useState } from 'react';
-import { PencilIcon } from '@heroicons/react/24/outline';
+import StatusBadge from '@/Components/StatusBadge';
+import { TierBadge, GradeBadge, Sparkline, fmtDate, isPast } from '@/Components/Vendors/VendorBadges';
+import { Head, Link, router } from '@inertiajs/react';
+import { PencilIcon, TrashIcon, PlusIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-const riskLevelColors = {
-    critical: { bg: '#FEE2E2', text: '#C53030' },
-    high: { bg: '#FED7AA', text: '#DD6B20' },
-    medium: { bg: '#FEF3C7', text: '#D4AF37' },
-    low: { bg: '#D1FAE5', text: '#2D7D46' },
-};
+const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-const statusColors = {
-    active: { bg: '#D1FAE5', text: '#2D7D46' },
-    inactive: { bg: '#E2E8F0', text: '#718096' },
-    under_review: { bg: '#FEF3C7', text: '#D4AF37' },
-    terminated: { bg: '#FEE2E2', text: '#C53030' },
-};
-
-const assessmentStatusColors = {
-    pending: { bg: '#FEF3C7', text: '#D4AF37' },
-    in_progress: { bg: '#DBEAFE', text: '#1A365D' },
-    completed: { bg: '#D1FAE5', text: '#2D7D46' },
-};
-
-function TabButton({ active, children, onClick }) {
-    return (
-        <button
-            onClick={onClick}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                active
-                    ? 'border-[#D4AF37] text-[#1A365D]'
-                    : 'border-transparent text-[#718096] hover:text-[#2D3748] hover:border-gray-300'
-            }`}
-        >
-            {children}
-        </button>
-    );
+function formatCurrency(value, currency = 'NGN') {
+    if (!value) return null;
+    try {
+        return new Intl.NumberFormat('en-NG', { style: 'currency', currency: currency || 'NGN' }).format(value);
+    } catch {
+        return `${currency} ${Number(value).toLocaleString()}`;
+    }
 }
 
 function DetailRow({ label, value }) {
     return (
-        <div className="py-3 grid grid-cols-3 gap-4 border-b border-gray-50 last:border-0">
+        <div className="py-2.5 grid grid-cols-3 gap-4 border-b border-gray-50 last:border-0">
             <dt className="text-sm font-medium text-[#718096]">{label}</dt>
             <dd className="text-sm text-[#2D3748] col-span-2">{value || '--'}</dd>
         </div>
     );
 }
 
-function formatCurrency(value, currency = 'NGN') {
-    if (!value) return '--';
-    return new Intl.NumberFormat('en-NG', { style: 'currency', currency }).format(value);
+function Card({ title, right, children, className = '' }) {
+    return (
+        <div className={`bg-white rounded-xl border border-gray-100 shadow-sm ${className}`}>
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[#2D3748]">{title}</h3>
+                {right}
+            </div>
+            {children}
+        </div>
+    );
 }
 
-export default function ShowVendor({ vendor }) {
-    const [activeTab, setActiveTab] = useState('details');
+export default function ShowVendor({ vendor, tiering, applications = [], reviewMonths = {}, can = {} }) {
+    const overdue = isPast(vendor.next_review_date);
+    const latest = vendor.ratings?.length ? vendor.ratings[vendor.ratings.length - 1] : null;
+    const gaps = [
+        vendor.processes_personal_data && !vendor.dpa_signed_at && 'Processes personal data without a signed data-processing agreement (NDPA 2023).',
+        vendor.material_outsourcing && !vendor.regulator_notified_at && 'Material outsourcing arrangement not yet notified to the CBN.',
+        overdue && `Reassessment overdue since ${fmtDate(vendor.next_review_date)}.`,
+        isPast(vendor.contract_end) && vendor.status === 'active' && `Contract ended ${fmtDate(vendor.contract_end)} but the vendor is still active.`,
+        !vendor.owner_id && 'No relationship owner.',
+    ].filter(Boolean);
 
-    const riskColors = riskLevelColors[vendor.risk_level] || riskLevelColors.medium;
-    const statColors = statusColors[vendor.status] || statusColors.active;
+    const destroy = () => {
+        if (confirm(`Delete ${vendor.name}? Only possible for a vendor with no assessments and no architecture links.`)) {
+            router.delete(route('vendors.destroy', vendor.id));
+        }
+    };
 
     return (
         <AuthenticatedLayout header={
             <div className="flex items-center gap-3">
-                <span className="font-mono-data text-sm bg-[#1A365D]/5 text-[#1A365D] px-2 py-0.5 rounded font-semibold">
-                    {vendor.vendor_code}
-                </span>
+                <span className="font-mono-data text-sm bg-[#1A365D]/5 text-[#1A365D] px-2 py-0.5 rounded font-semibold">{vendor.vendor_code}</span>
                 <span>{vendor.name}</span>
             </div>
         }>
             <Head title={`${vendor.vendor_code} - ${vendor.name}`} />
 
-            {/* Header Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-4">
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                    <p className="text-xs text-[#718096] uppercase font-medium">Risk Level</p>
-                    <div className="mt-1">
-                        <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-semibold rounded-full capitalize"
-                            style={{ backgroundColor: riskColors.bg, color: riskColors.text }}>
-                            {vendor.risk_level}
-                        </span>
-                    </div>
+                    <p className="text-xs text-[#718096] uppercase font-medium">Tier</p>
+                    <div className="mt-1"><TierBadge tier={vendor.tier} /></div>
+                    <p className="mt-1 text-[11px] text-[#718096]">Reassess every {reviewMonths[vendor.tier] ?? '—'} months</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                    <p className="text-xs text-[#718096] uppercase font-medium">Status</p>
-                    <div className="mt-1">
-                        <span className="inline-flex items-center px-2.5 py-0.5 text-xs font-semibold rounded-full capitalize"
-                            style={{ backgroundColor: statColors.bg, color: statColors.text }}>
-                            {vendor.status?.replace('_', ' ')}
-                        </span>
-                    </div>
+                    <p className="text-xs text-[#718096] uppercase font-medium">Bank's risk rating</p>
+                    <div className="mt-1"><StatusBadge status={vendor.risk_level} label={cap(vendor.risk_level)} /></div>
+                    <p className="mt-1 text-[11px] text-[#718096]">{cap(vendor.status)}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                    <p className="text-xs text-[#718096] uppercase font-medium">Contract Value</p>
-                    <p className="mt-1 text-sm font-medium text-[#2D3748]">
-                        {formatCurrency(vendor.contract_value, vendor.contract_currency)}
-                    </p>
+                    <p className="text-xs text-[#718096] uppercase font-medium">Security rating</p>
+                    <div className="mt-1 flex items-center gap-2"><GradeBadge grade={latest?.grade} value={latest?.rating_value} /><Sparkline values={(vendor.ratings || []).map((r) => r.rating_value)} /></div>
+                    <p className="mt-1 text-[11px] text-[#718096]">{latest ? `${fmtDate(latest.captured_at)} · ${latest.provider}` : vendor.domain ? 'Awaiting first capture' : 'No domain on record'}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
-                    <p className="text-xs text-[#718096] uppercase font-medium">Data Access Level</p>
-                    <p className="mt-1 text-sm font-medium text-[#2D3748] capitalize">
-                        {vendor.data_access_level || 'Not set'}
-                    </p>
+                    <p className="text-xs text-[#718096] uppercase font-medium">Next review</p>
+                    <p className={`mt-1 text-sm font-semibold ${overdue ? 'text-[#B3261E]' : 'text-[#2D3748]'}`}>{fmtDate(vendor.next_review_date) || '--'}</p>
+                    <p className="mt-1 text-[11px] text-[#718096]">Last assessed {fmtDate(vendor.last_assessed) || 'never'}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
+                    <p className="text-xs text-[#718096] uppercase font-medium">Relationship owner</p>
+                    <p className={`mt-1 text-sm font-medium ${vendor.owner ? 'text-[#2D3748]' : 'text-[#B3261E]'}`}>{vendor.owner?.name || 'Unassigned'}</p>
+                    {vendor.owner?.job_title && <p className="text-[11px] text-[#718096]">{vendor.owner.job_title}</p>}
                 </div>
             </div>
 
-            {/* Action Buttons */}
+            {gaps.length > 0 && (
+                <div className="mb-4 rounded-xl border border-[#E5A100]/40 bg-[#FFF8E6] p-3 text-sm text-[#8A6400]">
+                    <p className="flex items-center gap-1 font-semibold"><ExclamationTriangleIcon className="h-4 w-4" /> Needs attention</p>
+                    <ul className="mt-1 list-disc pl-6 text-xs">{gaps.map((g) => <li key={g}>{g}</li>)}</ul>
+                </div>
+            )}
+
             <div className="flex gap-2 mb-4">
-                <Link
-                    href={route('vendors.edit', vendor.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 text-[#718096]"
-                >
-                    <PencilIcon className="w-4 h-4" />
-                    Edit
-                </Link>
+                {can.edit && (
+                    <Link href={route('vendors.edit', vendor.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 text-[#718096]">
+                        <PencilIcon className="w-4 h-4" /> Edit
+                    </Link>
+                )}
+                {can.assess && (
+                    <Link href={route('vendor-assessments.create', { vendor_id: vendor.id })} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-[#0A1F44] rounded-lg text-[#0A1F44] hover:bg-[#0A1F44] hover:text-white">
+                        <PlusIcon className="w-4 h-4" /> New assessment
+                    </Link>
+                )}
+                {can.delete && (
+                    <button type="button" onClick={destroy} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-[#C53030]/30 rounded-lg hover:bg-[#C53030]/5 text-[#C53030]">
+                        <TrashIcon className="w-4 h-4" /> Delete
+                    </button>
+                )}
             </div>
 
-            {/* Tabs */}
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-                <div className="border-b border-gray-100 px-4 flex gap-1">
-                    {['details', 'assessments'].map(tab => (
-                        <TabButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)}>
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                            {tab === 'assessments' && vendor.assessments?.length > 0 && (
-                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-full">{vendor.assessments.length}</span>
-                            )}
-                        </TabButton>
-                    ))}
-                </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <Card title="Why this tier" className="lg:col-span-1">
+                    <div className="px-5 py-3 text-sm">
+                        <p className="text-[#2D3748]"><strong>{tiering.points}</strong> points → Tier {tiering.tier}</p>
+                        <ul className="mt-2 space-y-1 text-xs text-[#718096]">
+                            {tiering.reasons.length === 0 && <li>No tiering factors recorded.</li>}
+                            {tiering.reasons.map((r) => <li key={r}>{r}</li>)}
+                        </ul>
+                    </div>
+                </Card>
 
-                <div className="p-6">
-                    {activeTab === 'details' && (
-                        <div>
-                            <h4 className="text-sm font-semibold text-[#2D3748] mb-2">General Information</h4>
-                            <DetailRow label="Description" value={vendor.description} />
-                            <DetailRow label="Category" value={vendor.category} />
-                            <DetailRow label="Country" value={vendor.country} />
-                            <DetailRow label="Website" value={vendor.website ? (
-                                <a href={vendor.website} target="_blank" rel="noopener noreferrer" className="text-[#1A365D] hover:underline">
-                                    {vendor.website}
-                                </a>
-                            ) : null} />
-                            <DetailRow label="Services Provided" value={vendor.services_provided} />
+                <Card title="Regulatory facts" className="lg:col-span-2">
+                    <div className="px-5 py-2">
+                        <DetailRow label="Access to bank data" value={cap(vendor.data_access_level) || 'Not recorded'} />
+                        <DetailRow label="Personal data (NDPA)" value={vendor.processes_personal_data ? (vendor.dpa_signed_at ? `Processor · DPA signed ${fmtDate(vendor.dpa_signed_at)}` : <span className="text-[#B3261E]">Processor · no DPA on file</span>) : 'Not a processor'} />
+                        <DetailRow label="Outsourcing (CBN)" value={vendor.material_outsourcing ? (vendor.regulator_notified_at ? `Material · CBN notified ${fmtDate(vendor.regulator_notified_at)}` : <span className="text-[#B3261E]">Material · CBN not notified</span>) : 'Not material'} />
+                        <DetailRow label="Shared Directory" value={vendor.directory_entry ? `${vendor.directory_entry.legal_name} · baseline DDQ ${vendor.directory_entry.baseline_ddq_version}` : 'Not linked'} />
+                    </div>
+                </Card>
 
-                            <h4 className="text-sm font-semibold text-[#2D3748] mt-6 mb-2">Contact</h4>
-                            <DetailRow label="Contact Name" value={vendor.contact_name} />
-                            <DetailRow label="Contact Email" value={vendor.contact_email} />
-                            <DetailRow label="Contact Phone" value={vendor.contact_phone} />
+                <Card title="Contract & contact" className="lg:col-span-2">
+                    <div className="px-5 py-2">
+                        <DetailRow label="Description" value={vendor.description} />
+                        <DetailRow label="Services" value={vendor.services_provided} />
+                        <DetailRow label="Contract" value={[fmtDate(vendor.contract_start), fmtDate(vendor.contract_end)].filter(Boolean).join(' → ')} />
+                        <DetailRow label="Value" value={formatCurrency(vendor.contract_value, vendor.contract_currency)} />
+                        <DetailRow label="SLA" value={vendor.sla_details} />
+                        <DetailRow label="Contact" value={[vendor.contact_name, vendor.contact_email, vendor.contact_phone].filter(Boolean).join(' · ')} />
+                        <DetailRow label="Website / domain" value={[vendor.website, vendor.domain].filter(Boolean).join(' · ')} />
+                    </div>
+                </Card>
 
-                            <h4 className="text-sm font-semibold text-[#2D3748] mt-6 mb-2">Contract</h4>
-                            <DetailRow label="Contract Start" value={vendor.contract_start ? new Date(vendor.contract_start).toLocaleDateString() : null} />
-                            <DetailRow label="Contract End" value={vendor.contract_end ? new Date(vendor.contract_end).toLocaleDateString() : null} />
-                            <DetailRow label="Contract Value" value={formatCurrency(vendor.contract_value, vendor.contract_currency)} />
-                            <DetailRow label="SLA Details" value={vendor.sla_details} />
-
-                            <h4 className="text-sm font-semibold text-[#2D3748] mt-6 mb-2">Assessment</h4>
-                            <DetailRow label="Last Assessed" value={vendor.last_assessed ? new Date(vendor.last_assessed).toLocaleDateString() : null} />
-                            <DetailRow label="Next Review Date" value={vendor.next_review_date ? new Date(vendor.next_review_date).toLocaleDateString() : null} />
-                        </div>
+                <Card title="Applications supplied" right={<span className="text-xs text-[#718096]">{applications.length}</span>}>
+                    {applications.length === 0 ? <p className="px-5 py-6 text-center text-xs text-[#718096]">No application in the architecture repository names this vendor.</p> : (
+                        <ul className="divide-y divide-gray-50">
+                            {applications.map((a) => (
+                                <li key={a.id} className="px-5 py-2 flex items-center justify-between text-sm">
+                                    <Link href={route('ea.applications.show', a.id)} className="text-[#2D3748] hover:underline">{a.name}</Link>
+                                    <StatusBadge status={a.criticality} label={cap(a.criticality)} />
+                                </li>
+                            ))}
+                        </ul>
                     )}
+                </Card>
 
-                    {activeTab === 'assessments' && (
-                        <div>
-                            {vendor.assessments?.length === 0 ? (
-                                <p className="text-[#718096] text-sm py-8 text-center">No assessments recorded yet.</p>
-                            ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                        <thead>
-                                            <tr className="border-b border-gray-100">
-                                                <th className="px-3 py-2 text-left font-medium text-[#718096]">Title</th>
-                                                <th className="px-3 py-2 text-left font-medium text-[#718096]">Type</th>
-                                                <th className="px-3 py-2 text-center font-medium text-[#718096]">Score</th>
-                                                <th className="px-3 py-2 text-left font-medium text-[#718096]">Status</th>
-                                                <th className="px-3 py-2 text-left font-medium text-[#718096]">Assessed By</th>
-                                                <th className="px-3 py-2 text-left font-medium text-[#718096]">Date</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-50">
-                                            {vendor.assessments.map(assessment => {
-                                                const aColors = assessmentStatusColors[assessment.status] || assessmentStatusColors.pending;
-                                                return (
-                                                    <tr key={assessment.id} className="hover:bg-gray-50/50">
-                                                        <td className="px-3 py-2 font-medium text-[#2D3748]">{assessment.title}</td>
-                                                        <td className="px-3 py-2 text-[#718096] capitalize">{assessment.assessment_type?.replace('_', ' ')}</td>
-                                                        <td className="px-3 py-2 text-center">
-                                                            {assessment.overall_score !== null ? (
-                                                                <span className="font-mono-data font-semibold text-[#1A365D]">{assessment.overall_score}%</span>
-                                                            ) : '--'}
-                                                        </td>
-                                                        <td className="px-3 py-2">
-                                                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full capitalize"
-                                                                style={{ backgroundColor: aColors.bg, color: aColors.text }}>
-                                                                {assessment.status?.replace('_', ' ')}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-3 py-2 text-[#718096]">{assessment.assessor?.name || '--'}</td>
-                                                        <td className="px-3 py-2 text-[#718096]">
-                                                            {new Date(assessment.assessment_date).toLocaleDateString()}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
+                <Card title="Assessments" className="lg:col-span-2" right={<span className="text-xs text-[#718096]">{(vendor.assessments || []).length}</span>}>
+                    {(vendor.assessments || []).length === 0 ? <p className="px-5 py-6 text-center text-xs text-[#718096]">No assessment on record.</p> : (
+                        <ul className="divide-y divide-gray-50">
+                            {vendor.assessments.map((a) => (
+                                <li key={a.id} className="px-5 py-2 flex items-center justify-between text-sm">
+                                    <div>
+                                        <Link href={route('vendor-assessments.show', a.id)} className="text-[#2D3748] hover:underline">{a.title}</Link>
+                                        <p className="text-[11px] text-[#718096]">{cap(a.assessment_type)} · {fmtDate(a.assessment_date)} · {a.assessor?.name || '—'}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs">
+                                        {a.overall_score != null && <span className="font-mono-data">{Number(a.overall_score).toFixed(0)}</span>}
+                                        {a.residual_rating && <span className="text-[#718096]">residual {a.residual_rating}</span>}
+                                        <StatusBadge status={a.status} label={cap(a.status)} />
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
                     )}
-                </div>
+                </Card>
+
+                <Card title="Breach watch" right={<Link href={route('security-ratings.index', { events: 'all' })} className="text-xs text-[#0A1F44] underline">All events →</Link>}>
+                    {(vendor.breach_events || []).length === 0 ? <p className="px-5 py-6 text-center text-xs text-[#718096]">No breach-watch events for this vendor.</p> : (
+                        <ul className="divide-y divide-gray-50">
+                            {vendor.breach_events.map((b) => (
+                                <li key={b.id} className="px-5 py-2 text-xs">
+                                    <p className="text-sm text-[#2D3748]">{b.headline}</p>
+                                    <p className="text-[#718096]">{cap(b.event_type)} · {b.severity} · {fmtDate(b.discovered_at)} · <span className={b.status === 'new' ? 'font-semibold text-[#B3261E]' : ''}>{cap(b.status)}</span>
+                                        {b.reassessment && <> · <Link href={route('vendor-assessments.show', b.reassessment.id)} className="underline">reassessment</Link></>}
+                                    </p>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </Card>
             </div>
         </AuthenticatedLayout>
     );

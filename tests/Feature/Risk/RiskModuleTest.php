@@ -67,7 +67,10 @@ class RiskModuleTest extends TestCase
     public function test_risk_with_seeded_values_saves_without_changes(): void
     {
         // Seeded demo risks carry these values; saving them unchanged used to fail on risk_appetite.
-        $risk = $this->risk(['status' => 'mitigated', 'risk_appetite' => 'above', 'source' => 'regulator']);
+        // Residual starts at 3×3 so the 2×2 update below is always a real score change (the factory
+        // could otherwise produce 2×2 and the test would flake).
+        $risk = $this->risk(['status' => 'mitigated', 'risk_appetite' => 'above', 'source' => 'regulator',
+            'residual_likelihood' => 3, 'residual_impact' => 3, 'residual_score' => 9, 'residual_rating' => Risk::calculateRating(9)]);
 
         $this->actingAs($this->manager)
             ->put(route('risks.update', $risk), [

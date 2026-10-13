@@ -158,8 +158,8 @@ const navigation = [
         children: [
             { name: 'Vendor Register', href: 'vendors.index', permission: 'view vendors' },
             { name: 'Vendor Assessments', href: 'vendor-assessments.index', permission: 'view vendor-assessments' },
-            { name: 'Security Ratings', href: 'security-ratings.index', permission: 'view platform' },
-            { name: 'Shared Vendor Directory', href: 'shared-vendors.index', permission: 'view platform' },
+            { name: 'Security Ratings', href: 'security-ratings.index', permission: 'view vendors' },
+            { name: 'Shared Vendor Directory', href: 'shared-vendors.index', permission: 'view vendors' },
         ],
     },
     {

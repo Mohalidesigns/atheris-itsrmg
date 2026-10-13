@@ -46,10 +46,7 @@ use App\Models\SsoConnection;
 use App\Models\Tenant;
 use App\Models\TenantTheme;
 use App\Models\ThreatAdvisory;
-use App\Models\TprmBreachEvent;
-use App\Models\TprmSecurityRating;
 use App\Models\User;
-use App\Models\Vendor;
 use App\Models\Workflow;
 use App\Models\WorkflowInstance;
 use App\Models\WorkflowTask;
@@ -740,61 +737,10 @@ class AtherisPlatformSeeder extends Seeder
 
     private function tprm(): void
     {
-        if (TprmSecurityRating::count() > 0) {
-            return;
-        }
-        $vendors = Vendor::limit(10)->get();
-        if ($vendors->isEmpty()) {
-            // Vendors are seeded later (KanoHeritageDemoSeeder); create a minimal
-            // set here so TPRM ratings/breach events never run on an empty table.
-            // These belong to the demo tenant like the rest of this seeder's
-            // output — `Organization::query()->value('id')` took whichever
-            // organisation happened to be first, which is Acme.
-            $vendors = collect([
-                ['code' => 'VDR-TPRM-001', 'name' => 'Interswitch Group', 'category' => 'Payment Processor', 'risk_level' => 'critical'],
-                ['code' => 'VDR-TPRM-002', 'name' => 'NIBSS Plc', 'category' => 'Payment Infrastructure', 'risk_level' => 'critical'],
-                ['code' => 'VDR-TPRM-003', 'name' => 'MainOne (Equinix)', 'category' => 'Data Centre / Connectivity', 'risk_level' => 'high'],
-                ['code' => 'VDR-TPRM-004', 'name' => 'Temenos T24 (Partner)', 'category' => 'Core Banking', 'risk_level' => 'critical'],
-                ['code' => 'VDR-TPRM-005', 'name' => 'Galaxy Backbone', 'category' => 'Cloud / Hosting', 'risk_level' => 'medium'],
-            ])->map(fn ($v) => Vendor::firstOrCreate(
-                ['name' => $v['name']],
-                [
-                    'organization_id' => $this->orgId,
-                    'vendor_code' => $v['code'],
-                    'category' => $v['category'],
-                    'risk_level' => $v['risk_level'],
-                    'status' => 'active',
-                ]
-            ));
-        }
-        foreach ($vendors as $v) {
-            $grade = ['A', 'B', 'B', 'C', 'D'][rand(0, 4)];
-            $rating = ['A' => 92, 'B' => 82, 'C' => 72, 'D' => 55][$grade];
-            TprmSecurityRating::create([
-                'vendor_id' => $v->id,
-                'provider' => 'securityscorecard',
-                'rating_value' => $rating,
-                'grade' => $grade,
-                'captured_at' => now()->subDays(rand(1, 30)),
-                'delta_from_previous' => rand(-10, 10),
-            ]);
-        }
-        $headlines = [
-            'Data incident disclosed — 2026-Q1',
-            'Ransomware group names vendor on leak site',
-            'CVE-2026-12345 reported affecting vendor stack',
-            'New domain squatting typosquat detected',
-        ];
-        for ($i = 0; $i < 6; $i++) {
-            $v = $vendors->random();
-            TprmBreachEvent::create([
-                'vendor_id' => $v->id,
-                'event_type' => ['breach', 'typosquat', 'cve', 'leak_site'][rand(0, 3)],
-                'headline' => $headlines[array_rand($headlines)],
-                'url' => 'https://example.com/news/'.Str::random(10),
-                'discovered_at' => now()->subDays(rand(1, 60)),
-            ]);
-        }
+        // Security ratings and breach-watch events are per bank and are produced by
+        // VendorManagementDemoSeeder through the sandbox rating provider (ATH-VAL-008). Writing
+        // them here, without an organisation and against placeholder vendors that the bank
+        // seeders later replace, left orphaned rows every bank could see.
 
         // Shared vendor directory
         if (SharedVendorDirectory::count() === 0) {

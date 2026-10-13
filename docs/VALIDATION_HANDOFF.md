@@ -36,10 +36,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 4 | Regulatory Intelligence | `4591bce` | `docs/ATH-VAL-004_Regulatory_Intelligence_Validation_Report.md` | `tests/Feature/RegulatoryIntelligence/RegulatoryIntelligenceModuleTest.php` (14) |
 | 5 | Security Operations | `86041ee` | `docs/ATH-VAL-005_Security_Operations_Validation_Report.md` | `tests/Feature/SecurityOperations/SecurityOperationsModuleTest.php` (12) |
 | 6 | Issues & Remediation | `44f0102` | `docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md` | `tests/Feature/Issues/IssuesModuleTest.php` (12) |
-| 7 | Asset Management | see `git log` | `docs/ATH-VAL-007_Asset_Management_Validation_Report.md` | `tests/Feature/Assets/AssetManagementModuleTest.php` (12) |
+| 7 | Asset Management | `f337190` | `docs/ATH-VAL-007_Asset_Management_Validation_Report.md` | `tests/Feature/Assets/AssetManagementModuleTest.php` (12) |
+| 8 | Vendor Management | see `git log` | `docs/ATH-VAL-008_Vendor_Management_Validation_Report.md` | `tests/Feature/Vendors/VendorManagementModuleTest.php` (10) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **264 tests, 263 passed, 1 skipped, 2,413 assertions (13 Oct 2026, local, PHP 8.4)**. The one skip is the route smoke test, which runs separately and passed over 203 GET routes.
+Last full suite: **274 tests, 2,573 assertions, 1 skipped (13 Oct 2026, local, PHP 8.4)**. One failure was a pre-existing flake in `RiskModuleTest` (factory could generate the same residual values as the update); it is pinned and the file re-runs green. The skip is the route smoke test, which runs separately and passed over 203 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -107,50 +108,47 @@ Last full suite: **264 tests, 263 passed, 1 skipped, 2,413 assertions (13 Oct 20
 - **Old stub:** `Pages/Policies/ChangeRequests/Index.jsx` was deleted; `change-requests.index` now redirects to `changes.index`.
 - **Tests:** 21 passed / 816 assertions. Each test takes ~10 s because the full migration set runs on in-memory SQLite — normal.
 
-## Next phase: module 8, Vendor Management
+### Vendor Management highlights (module 8)
 
-### Start a new session here
+- **Security:**
+  - `tprm_security_ratings` and `tprm_breach_events` now have `organization_id`, backfilled from the vendor, with orphans pruned. Every bank used to see every rating and headline.
+  - 33 First Bank vendor→application EA edges written with NULL org (so platform-shared) take their vendor's org; `EaWedgeDemoSeeder` is fixed.
+  - Tenant-checked assessment vendor and owner pickers; whitelisted sort.
+- **Access:** Risk Manager (each bank's Vendor Risk Manager) gains vendor and assessment view/create/edit; Compliance Officer (DPCO) gains view. Neither could open the module before.
+- **Tiering** (`VendorTiering`): computed from material outsourcing (CBN), data access, NDPA processor, criticality of EA applications supplied, the bank's rating and substitutability. Tier sets the review cadence (12/24/36 months, `config/tprm.php`). A never-assessed vendor is due onboarding within 30 days.
+- **Assessments:** completing one needs a score and findings. It records the residual rating and resets the vendor's last-assessed and next-review dates.
+- **Monitoring:**
+  - The sandbox rating provider (`SecurityRatingService`) captures once per vendor per day, with deltas and grades.
+  - Breach watch triage: reassess (opens an incident-driven assessment), acknowledge, or dismiss with a reason.
+  - Shared Directory: link a vendor, or add an entry to the register.
+- **Dashboard:** the Third-Party Risk card is fed by `VendorMetrics`.
+- **Demo data:** `VendorManagementDemoSeeder` runs after Asset Management. The platform seeder no longer writes ratings or breach events.
 
-Paste this as the first message of the new session:
+## Next phase: module 9, Policy Management
 
-> Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 8, Vendor Management, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
+Paste as the first message of a new session:
 
-Before you start, check the dev database (PostgreSQL) is up. Start the dev server with the Browser pane's `preview_start` using the `atheris` entry (port 8010). If another chat already runs it, open `http://127.0.0.1:8010` with `preview_start {url}`. If reads hang, check `ls -lO` for iCloud `dataless` files.
+> Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 9, Policy Management, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
 
-### Scope
+**Scope** (sidebar `Policy Management`):
 
-Sidebar group `Vendor Management` (`resources/js/Config/navigation.js`):
+| Page | Route | Controller | Gate |
+|---|---|---|---|
+| Policies | `policies.*` (+ `policies.publish`) | `PolicyController` | `view policies` |
+| Control Standards | `control-standards.index` | `ControlStandardController` | `view controls` |
+| Policy Attestations | `policy-attestations.*` (index, show) | `PolicyAttestationController` | `view policy-attestations` |
+| Exceptions | `policy-exceptions.index` | `PolicyExceptionController` | `view policies` |
 
-| Page | Route | Controller | Page component | Gate |
-|---|---|---|---|---|
-| Vendor Register | `vendors.*` (full resource) | `VendorController` | `Vendors/*` | `view vendors` |
-| Vendor Assessments | `vendor-assessments.*` (full resource) | `VendorAssessmentController` | `VendorAssessments/*` | `view vendor-assessments` |
-| Security Ratings | `security-ratings.index` | `PlatformController` stub | `Tprm/Ratings.jsx` | `view platform` |
-| Shared Vendor Directory | `shared-vendors.index` | `PlatformController` stub | `Tprm/SharedDirectory.jsx` | `view platform` |
+**Deliverables:** `tests/Feature/Policies/PolicyManagementModuleTest.php`, `docs/ATH-VAL-009_Policy_Management_Validation_Report.md`, and a demo seeder if needed, wired after `VendorManagementDemoSeeder`.
 
-### Recon findings (13 Oct 2026, dev PostgreSQL)
+**Remaining order after that:** ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest.
 
-- **Tenancy:**
-  - `Vendor` and `VendorAssessment` have `BelongsToOrganization`. Data: vendors Kano 35 / First Bank 57; assessments 25 / 40.
-  - `TprmSecurityRating` and `TprmBreachEvent` have **no `organization_id`** and no scope. `securityRatingsIndex` sends every rating, grouped by vendor_id, plus 50 breach events in the payload, whichever bank owns the vendor. Expect a cross-tenant leak, as in modules 5-7.
-  - `SharedVendorDirectory` (8 rows) is platform-shared by design. Check that nothing a bank writes leaks into it.
-- **Stub pages:** Security Ratings and the Shared Directory are read-only `PlatformController` stubs gated on `view platform`. Move them to a module controller and gate them on vendor permissions, as module 7 did for Discovery and Business Services.
-- **Cross-module links to check:**
-  - EA `vendor-concentration` (`EaController`) and the 33 platform-shared `Vendor → EaApplication` `serving` edges (`organization_id IS NULL`);
-  - Regulatory Intelligence's DDQ intake, where an accepted DDQ updates its vendor (module 4);
-  - the executive dashboard's `vendorScoreboard`.
-- **Asset Management follow-up:** decide whether assets link to vendors directly. Today vendors serve EA applications only; see ATH-VAL-007 §7.
+**Open from module 8:**
+- No live rating or breach-feed providers, no DDQ question sets, no directory admin.
+- Fourth parties and exit plans are not modelled; no review or contract reminders.
+- `KRI-TPR-BREACH` and `CCM-TPR-RATE-018` don't read the TPRM tables yet; that belongs to the KRIs pass.
 
-### Deliverables
-
-- `tests/Feature/Vendors/VendorManagementModuleTest.php`
-- `docs/ATH-VAL-008_Vendor_Management_Validation_Report.md`
-- A deterministic per-bank demo seeder if data needs rebuilding, wired into `DatabaseSeeder` after `AssetManagementDemoSeeder`.
-- Update this handoff: done table, suite count, highlights, next module (Policy Management).
-
-**Remaining sidebar order after that:** Policy Management → ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest of the sidebar.
-
-### Patterns from modules 5-7 to reuse
+### Patterns from modules 5-8 to reuse
 
 - **Stub pages:** move `PlatformController` stubs into a module controller, with services under `app/Services/<Module>/`, and a `<Module>Metrics` service shared by the module page and the executive dashboard (`DashboardController` + `Pages/Dashboard.jsx` panel).
 - **Tenancy:** strict `BelongsToOrganization` on the model, so route binding 404s across banks; pickers validated with tenant-scoped `Rule::exists` or the model's own scope.

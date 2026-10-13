@@ -30,13 +30,9 @@ use App\Models\PricingTier;
 use App\Models\Risk;
 use App\Models\RiskCategory;
 use App\Models\ScimToken;
-use App\Models\SharedVendorDirectory;
 use App\Models\SsoConnection;
 use App\Models\Tenant;
 use App\Models\TenantTheme;
-use App\Models\TprmBreachEvent;
-use App\Models\TprmSecurityRating;
-use App\Models\Vendor;
 use App\Models\Vulnerability;
 use App\Models\Workflow;
 use App\Models\WorkflowInstance;
@@ -253,23 +249,6 @@ class PlatformController extends Controller
         $tiers = PricingTier::orderBy('annual_ngn')->get();
 
         return Inertia::render('Pricing/Index', compact('tiers'));
-    }
-
-    /* --------------------------------- TPRM --------------------------------- */
-    public function securityRatingsIndex()
-    {
-        $vendors = Vendor::with(['assessments'])->take(50)->get();
-        $ratings = TprmSecurityRating::orderByDesc('captured_at')->get()->groupBy('vendor_id');
-        $breaches = TprmBreachEvent::orderByDesc('discovered_at')->take(50)->get();
-
-        return Inertia::render('Tprm/Ratings', compact('vendors', 'ratings', 'breaches'));
-    }
-
-    public function sharedVendorsIndex()
-    {
-        $vendors = SharedVendorDirectory::orderBy('legal_name')->get();
-
-        return Inertia::render('Tprm/SharedDirectory', compact('vendors'));
     }
 
     /* --------------------------------- FAIR --------------------------------- */

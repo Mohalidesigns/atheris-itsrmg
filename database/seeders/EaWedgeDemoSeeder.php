@@ -193,7 +193,9 @@ class EaWedgeDemoSeeder extends Seeder
 
             $application->forceFill(['vendor_id' => $vendor->id])->save();
 
-            // Two-thirds of the estate sits behind the dominant integrator.
+            // Two-thirds of the estate sits behind the dominant integrator. The integrator is one
+            // bank's vendor: without its organisation the edge reads as platform-shared and
+            // appears in every bank's graph.
             if ($dominantIntegrator && $i % 3 !== 0) {
                 Relationship::firstOrCreate([
                     'source_type' => Vendor::class,
@@ -201,7 +203,7 @@ class EaWedgeDemoSeeder extends Seeder
                     'target_type' => EaApplication::class,
                     'target_id' => $application->id,
                     'relation_type' => 'serving',
-                ], ['attrs' => ['role' => 'integrator']]);
+                ], ['attrs' => ['role' => 'integrator'], 'organization_id' => $dominantIntegrator->organization_id]);
             }
         }
     }

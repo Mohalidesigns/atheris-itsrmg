@@ -5,6 +5,8 @@ use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\Assets\AssetDiscoveryController;
 use App\Http\Controllers\Assets\BusinessServiceMapController;
+use App\Http\Controllers\Vendors\SecurityRatingController;
+use App\Http\Controllers\Vendors\SharedDirectoryController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\Auth\SamlController;
 use App\Http\Controllers\Auth\ScimController;
@@ -309,7 +311,17 @@ Route::middleware('auth')->group(function () {
         ->middlewareFor(['edit', 'update'], 'permission:edit assets')
         ->middlewareFor('destroy', 'permission:delete assets');
 
-    // Vendor Management
+    // Vendor Management (ATH-VAL-008)
+    Route::middleware('permission:view vendors')->group(function () {
+        Route::get('/security-ratings', [SecurityRatingController::class, 'index'])->name('security-ratings.index');
+        Route::post('/security-ratings/refresh', [SecurityRatingController::class, 'refresh'])->middleware('permission:edit vendors')->name('security-ratings.refresh');
+        Route::post('/security-ratings/events/{event}/triage', [SecurityRatingController::class, 'triage'])->middleware('permission:edit vendors')->name('security-ratings.triage');
+        Route::get('/shared-vendors', [SharedDirectoryController::class, 'index'])->name('shared-vendors.index');
+        Route::post('/shared-vendors/{entry}/link', [SharedDirectoryController::class, 'link'])->middleware('permission:edit vendors')->name('shared-vendors.link');
+    });
+    Route::post('/vendor-assessments/{vendor_assessment}/complete', [VendorAssessmentController::class, 'complete'])
+        ->middleware('permission:edit vendor-assessments')->name('vendor-assessments.complete');
+
     Route::resource('vendors', VendorController::class)
         ->middleware('permission:view vendors')
         ->middlewareFor(['create', 'store'], 'permission:create vendors')
@@ -589,8 +601,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/pricing', [PlatformController::class, 'pricingIndex'])->name('pricing.index');
 
         // Phase 4: TPRM
-        Route::get('/security-ratings', [PlatformController::class, 'securityRatingsIndex'])->name('security-ratings.index');
-        Route::get('/shared-vendors', [PlatformController::class, 'sharedVendorsIndex'])->name('shared-vendors.index');
 
         // Phase 5: SIEM (signed webhook ingest is registered outside auth, below SCIM)
         Route::get('/siem', [SecurityOperationsController::class, 'siem'])->name('siem.index');

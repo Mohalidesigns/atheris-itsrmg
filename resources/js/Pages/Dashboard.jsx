@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -561,20 +561,38 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                     <div className="flex items-start justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-[#2D3748]">Top 10 Vendor Ratings</h3>
-                        <Link href={route('security-ratings.index')} className="text-xs text-[#0A1F44] underline">TPRM →</Link>
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Third-Party Risk</h3>
+                        <Link href={route('security-ratings.index')} className="text-xs text-[#0A1F44] underline">Ratings →</Link>
                     </div>
+                    {vendors && (
+                        <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+                            {[
+                                ['Tier 1', vendors.by_tier?.[1], route('vendors.index', { tier: 1 }), false],
+                                ['Reviews overdue', vendors.review_overdue, route('vendors.index', { flag: 'review_overdue' }), vendors.review_overdue > 0],
+                                ['No DPA (NDPA)', vendors.missing_dpa, route('vendors.index', { flag: 'missing_dpa' }), vendors.missing_dpa > 0],
+                                ['Contracts ≤ 90 d', vendors.contracts_expiring, route('vendors.index', { flag: 'contract_expiring' }), false],
+                                ['Rating D/F', vendors.poor_rating, route('security-ratings.index'), vendors.poor_rating > 0],
+                                ['Breach alerts', vendors.open_breach_events, route('security-ratings.index'), vendors.open_breach_events > 0],
+                            ].map(([label, n, href, alert]) => (
+                                <Link key={label} href={href} className="rounded-lg border border-gray-100 px-1 py-1.5 hover:bg-gray-50">
+                                    <p className={`text-base font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                    <p className="text-[10px] text-[#718096]">{label}</p>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                    <h4 className="text-xs font-semibold text-[#2D3748]">Lowest-rated Tier 1–2 vendors</h4>
                     <ul className="divide-y divide-gray-100 text-xs">
                         {vendorScoreboard.map((v) => (
                             <li key={v.id} className="py-2 flex items-center justify-between">
                                 <div className="min-w-0">
-                                    <p className="font-medium text-[#2D3748] truncate">{v.name}</p>
-                                    <StatusBadge status={v.risk_level} />
+                                    <Link href={route('vendors.show', v.id)} className="block font-medium text-[#2D3748] truncate hover:underline">{v.name}</Link>
+                                    <span className="text-[10px] text-[#718096]">Tier {v.tier} · </span><StatusBadge status={v.risk_level} />
                                 </div>
                                 <div className="flex items-center gap-2 ml-2">
                                     <span className="text-lg font-bold text-[#0A1F44]">{v.grade}</span>
                                     {v.rating_value && <span className="text-xs text-[#718096]">{v.rating_value}</span>}
-                                    {v.delta !== 0 && (
+                                    {v.delta !== 0 && v.delta !== null && (
                                         v.delta > 0
                                             ? <ArrowTrendingUpIcon className="w-3 h-3 text-[#2D7D46]" />
                                             : <ArrowTrendingDownIcon className="w-3 h-3 text-[#B3261E]" />

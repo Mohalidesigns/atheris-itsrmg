@@ -79,6 +79,9 @@ class RolesAndPermissionsSeeder extends Seeder
             'view ea', 'view platform',
             // Change Management: sits on the CAB for Risk (ATH-CHG-001 §6).
             'view changes', 'create changes', 'edit changes', 'approve changes',
+            // Vendor Management: the bank's Vendor Risk Manager holds this role (ATH-VAL-008).
+            'view vendors', 'create vendors', 'edit vendors',
+            'view vendor-assessments', 'create vendor-assessments', 'edit vendor-assessments',
         ]);
 
         // Compliance Officer - compliance + controls + evidence + frameworks
@@ -92,6 +95,8 @@ class RolesAndPermissionsSeeder extends Seeder
         $complianceOfficer->givePermissionTo([
             'view risks', 'view assets', 'view reports', 'view vulnerabilities',
             'view csat', 'create csat', 'edit csat',
+            // The DPCO holds this role and needs the processor register (NDPA s.29, ATH-VAL-008).
+            'view vendors', 'view vendor-assessments',
             // Regulatory Intelligence: the Head of Compliance triages circulars, reviews extracted
             // documents and prepares returns (ATH-VAL-004).
             'view platform', 'create platform', 'edit platform',
