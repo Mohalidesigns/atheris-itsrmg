@@ -354,7 +354,7 @@ class AtherisPlatformSeeder extends Seeder
 
     private function issues(): void
     {
-        if (Issue::count() > 5) {
+        if (Issue::withoutGlobalScopes()->where('organization_id', $this->orgId)->count() > 5) {
             return;
         }
         $sources = ['audit', 'control_test', 'risk', 'incident', 'vulnerability', 'assessment'];

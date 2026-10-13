@@ -1,7 +1,7 @@
 # Atheris ITSRM&G — Module Validation Programme: Handoff
 
 **Repo:** `https://github.com/Mohalidesigns/atheris-itsrmg` (private), branch `main`
-**Last commit:** see `git log` — module 5 "Security Operations: end-to-end validation fixes"
+**Last commit:** see `git log` — module 6 "Issues & Remediation: end-to-end validation fixes"
 
 ## The brief (from the user)
 
@@ -34,9 +34,10 @@ Validate each sidebar module end to end, in order. For every module:
 | 2 | CBN Cyber Assessment (CSAT) | `af5afd8` | `docs/ATH-VAL-002_CBN_Cyber_Assessment_Validation_Report.md` | `tests/Feature/Csat/CsatModuleTest.php` (9) |
 | 3 | Compliance | `493f44b` | `docs/ATH-VAL-003_Compliance_Validation_Report.md` | `tests/Feature/Compliance/ComplianceModuleTest.php` (12) |
 | 4 | Regulatory Intelligence | `4591bce` | `docs/ATH-VAL-004_Regulatory_Intelligence_Validation_Report.md` | `tests/Feature/RegulatoryIntelligence/RegulatoryIntelligenceModuleTest.php` (14) |
-| 5 | Security Operations | see `git log` | `docs/ATH-VAL-005_Security_Operations_Validation_Report.md` | `tests/Feature/SecurityOperations/SecurityOperationsModuleTest.php` (12) |
+| 5 | Security Operations | `86041ee` | `docs/ATH-VAL-005_Security_Operations_Validation_Report.md` | `tests/Feature/SecurityOperations/SecurityOperationsModuleTest.php` (12) |
+| 6 | Issues & Remediation | see `git log` | `docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md` | `tests/Feature/Issues/IssuesModuleTest.php` (12) |
 
-Last full suite: **219 tests, 0 failures**. The one skip is the route smoke test, which runs separately and passed.
+Last full suite: **231 tests (11 Oct 2026)**: 229 passed, 1 skipped (the route smoke test, which runs separately and passed), and 1 failure from a stale assertion in the new Issues test, since corrected and passing in the 13 Oct full run.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -61,16 +62,67 @@ Last full suite: **219 tests, 0 failures**. The one skip is the route smoke test
 - **Demo data:** `SecurityOperationsDemoSeeder` (after DemoCrossLink, before Regulatory Intelligence). Bank seeders have real CVEs and a medium/low mix.
 - **Dashboard:** the SecOps dashboard is rebuilt; the executive dashboard has a Security Operations panel. Both read `SecurityOpsMetrics`.
 
-## Next phase: module 6, Issues & Remediation
+### Issues & Remediation highlights (module 6)
 
-Sidebar group `Issues & Remediation`: Issues Console, SLA Policies, ITSM Integrations (`resources/js/Config/navigation.js`).
+- **Security:** `Issue` had no tenant scope, so both banks saw all 115 issues. It is now strict-scoped; SLA policies are read and written per bank; ITSM connectors are a per-bank table with encrypted token and webhook secret. Pickers (owner, source record) are tenant-checked. Work needs `edit issues` or being the owner; verify, SLA policy and connectors need `approve issues`.
+- **Lifecycle:** open → in_progress ⇄ blocked → remediated → verified → closed (`IssueWorkflow`). Remediating needs root cause and plan; the remediator cannot verify; reject and reopen need a reason. Escalation is a flag, not a status. Per-bank codes (`KHB-ISS-0026`). Full timeline in `issue_events`.
+- **SLA:** due time from the bank's severity policy (`moderate` → `medium`); blocked time pauses the clock; severity change re-bases it. Hourly `issues:escalate`: level 1 at breach, level 2 at 150%, notifying the chain by job title.
+- **ITSM:** Jira / ServiceNow / Freshservice connectors (live or sandbox), connection test, push from the issue, auto-push by severity, HMAC-signed `POST /itsm/webhook/{connection}` (outside auth/CSRF). A resolved ticket marks the issue remediated only if root cause and plan exist; verification stays human.
+- **Decision:** vulnerability tickets stay SecOps work orders; Issues link to the vulnerability and own ITSM sync (link, not absorb).
+- **Demo data:** `IssuesDemoSeeder` (after SecurityOperationsDemoSeeder) fixes First Bank issues that pointed at Kano's risks, and rebuilds dates, SLAs, escalations, timelines and tickets per bank.
+- **Dashboard:** console KPIs and an executive-dashboard Issues panel, both from `IssueMetrics`.
 
-**Known items to pick up there:**
-- ITSM Integrations is a `PlatformController` stub. Check its model for a tenant scope, and its writes for hard-coded `organization_id => 1` (PlatformController still has these at several places).
-- Vulnerability tickets have no ITSM sync. Decide whether Issues should absorb them or link to them.
-- `DashboardController::boardPackExport` still hard-codes org 1 (KRIs & Dashboards pass).
+## Next phase: module 7, Asset Management
 
-**Remaining sidebar order after that:** Asset Management → Vendor Management → Policy Management → ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest of the sidebar.
+### Start a new session here
+
+Paste this as the first message of the new session:
+
+> Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 7, Asset Management, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
+
+Before you start: XAMPP MySQL must be running (the user starts it). Start the dev server with the Browser pane's `preview_start` using the `atheris` entry (port 8010), and check `ls -lO` for iCloud `dataless` files if reads hang (see Environment gotchas).
+
+### Scope
+
+Sidebar group `Asset Management` (`resources/js/Config/navigation.js`):
+
+| Page | Route | Controller | Page component | Gate |
+|---|---|---|---|---|
+| IT Assets | `assets.*` (full resource) | `AssetController` | `Assets/*` | `view assets` |
+| Asset Discovery | `asset-discovery.index`, `asset-discovery.sync` | `PlatformController` stub | `Assets/Discovery.jsx` | `view platform` |
+| Business Services | `business-services.index`, `business-services.graph` | `PlatformController` stub | `BusinessServices/*` | `view platform` |
+| Business Assets | `business-assets.*` (full resource) | `BusinessAssetController` | `Assets/BusinessAssets/*` | `view assets` |
+
+### Recon findings (11 Oct 2026, dev MySQL)
+
+- **Tenancy:** `App\Models\Asset` has `BelongsToOrganization`. `App\Models\BusinessService`, `ServiceDependency`, `BusinessCapability` and `AssetSyncJob` have **no tenant-scope trait**, although all their tables have `organization_id`. Business Services, the graph, Asset Discovery and Business Assets (which uses `BusinessService`) are therefore likely cross-tenant, as Issues was. Verify in the browser as First Bank.
+- **Stub writes:** `PlatformController::assetDiscoverySync` writes `organization_id => 1` and invents `records_imported` / `records_updated` with `rand()`.
+- **Data:**
+  - assets: Kano 51, First Bank 70.
+  - `business_services`: 5, all Kano. First Bank has none.
+  - `business_capabilities` and `service_dependencies`: 0 rows each, so the service graph has nothing to draw.
+  - `asset_sync_jobs`: 5, all Kano.
+- **Overlap to resolve:** EA has its own capabilities (`ea_capabilities`) and business services (`App\Models\Ea\BusinessService`), and `ea.sync.assets` syncs assets into EA. Decide whether the GRC Business Services page should read the EA model or stay separate; record the decision in the report, as module 6 did for vulnerability tickets.
+- **Dashboards to check:** asset criticality feeds the vulnerability prioritiser (module 5) and the risk page's Assets tab. Make sure changes keep those consistent.
+- `DashboardController::boardPackExport` still hard-codes org 1 (KRIs & Dashboards pass, not this one).
+
+### Deliverables
+
+- `tests/Feature/Assets/AssetManagementModuleTest.php`
+- `docs/ATH-VAL-007_Asset_Management_Validation_Report.md`
+- A deterministic per-bank demo seeder if data needs rebuilding (pattern: `IssuesDemoSeeder`, `SecurityOperationsDemoSeeder`), wired into `DatabaseSeeder` at the right point.
+- Update this handoff: done table, suite count, highlights, next module (Vendor Management).
+
+**Remaining sidebar order after that:** Vendor Management → Policy Management → ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest of the sidebar.
+
+### Patterns from modules 5-6 to reuse
+
+- **Stub pages:** move `PlatformController` stubs into a module controller, with services under `app/Services/<Module>/`, and a `<Module>Metrics` service shared by the module page and the executive dashboard (`DashboardController` + `Pages/Dashboard.jsx` panel).
+- **Tenancy:** strict `BelongsToOrganization` on the model, so route binding 404s across banks; pickers validated with tenant-scoped `Rule::exists` or the model's own scope.
+- **Codes:** `GeneratesSequentialCode` for per-bank codes.
+- **Workflow:** lifecycle transitions in a service with a `TRANSITIONS` map, with segregation of duties (the doer cannot approve or verify).
+- **Webhooks:** signed with `sha256=HMAC(secret, "{ts}.{body}")`, outside auth and CSRF (`routes/web.php` top plus `bootstrap/app.php` exceptions); secrets use the `encrypted` cast and are shown once.
+- **Timing:** a new module test takes about 9 minutes on its own (migrations dominate). The full suite takes about 30-35 minutes. The smoke test works as `SMOKE=1 DB_CONNECTION=sqlite DB_DATABASE=$PWD/database/database.sqlite php vendor/bin/phpunit --filter RouteSmokeTest` after a fresh seed of that file.
 
 ## Open follow-ups (not blocking)
 
@@ -82,6 +134,7 @@ Sidebar group `Issues & Remediation`: Issues Console, SLA Policies, ITSM Integra
   - CISO email/phone encryption
 - **Regulatory Intelligence:** no OCR engine or LLM attached; Returns Centre exports CSV only; `KRI-COMP-CBN` still reads seeded values.
 - **Security Operations:** EPSS, KEV and advisories are seeded snapshots with no scheduled feed. Notifications record submission but are not delivered to a portal. No deadline reminders. No SOAR playbooks.
+- **Issues & Remediation:** demo ITSM connectors are sandbox (live mode tested only with faked HTTP); no pre-breach reminders; verifiers cannot attach vault evidence; no bulk actions or CSV export; CCM failures, gaps and incident lessons do not auto-raise issues yet.
 - **Compliance:** no notifications for gap due dates or evidence expiry. The ISMS Statement of Applicability is not yet linked to assessment results, which belongs in the ISMS module pass.
 
 ## Environment gotchas (important)
@@ -96,4 +149,5 @@ Sidebar group `Issues & Remediation`: Issues Console, SLA Policies, ITSM Integra
   - **Recommended:** move the project out of iCloud Documents.
 - **MySQL** is XAMPP: `/Applications/XAMPP/xamppfiles/bin/mysql -uroot it-security-risk`. The dev DB has been migrated and seeded in place, and includes the browser-test data (e.g. KHB-GAP-046, completed CBN assessment #10).
 - **Dev servers** come from `.claude/launch.json` (uncommitted): `atheris` on port 8010. The Vite dev server's port 5180 clashes with another project, so use `npm run build` (delete `public/hot`) and serve built assets.
+- **Fresh checkout / restore:** `storage/framework/{cache/data,views,sessions,testing}` and `bootstrap/cache` must exist or a dozen feature tests fail with "Please provide a valid cache path". `mkdir -p` them before running the suite.
 - **Tests:** ParaTest isn't installed, so run `php vendor/bin/phpunit`. Never name a test helper `result()`, because it clashes with a final method on PHPUnit's TestCase.

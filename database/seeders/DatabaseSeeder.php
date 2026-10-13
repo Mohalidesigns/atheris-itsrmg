@@ -112,6 +112,10 @@ class DatabaseSeeder extends Seeder
         // connectors, regulatory notifications and remediation tickets (before Returns Centre runs)
         $this->call(SecurityOperationsDemoSeeder::class);
 
+        // Issues & Remediation: in-bank sources, SLA clocks from policy, lifecycle and escalation
+        // trail, ITSM connectors and tickets (after SecOps so findings and SLA policies are final)
+        $this->call(IssuesDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

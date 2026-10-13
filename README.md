@@ -1,3 +1,37 @@
+# Atheris ITSRM&G
+
+A multi-tenant IT security risk and GRC platform for Nigerian banks: CBN-CSAT, NDPC and ITSB regulatory returns, Enterprise Architecture, TPRM, CCM, KRIs and more. Built with Laravel 13, Inertia 2, React 18 and Tailwind 3. Developer guidance is in [`CLAUDE.md`](CLAUDE.md).
+
+## Module validation programme
+
+Each sidebar module is validated end to end, in order: its features, forms, tables, modals and record relationships, and how it feeds the dashboards. Findings are fixed, written up and locked in with a feature test. The working handoff, including how to start the next module in a new session, is [`docs/VALIDATION_HANDOFF.md`](docs/VALIDATION_HANDOFF.md).
+
+| # | Module | Status | Report |
+|---|---|---|---|
+| 1 | IT Risk Management | Done | [ATH-VAL-001](docs/ATH-VAL-001_IT_Risk_Management_Validation_Report.md) |
+| 2 | CBN Cyber Assessment (CSAT) | Done | [ATH-VAL-002](docs/ATH-VAL-002_CBN_Cyber_Assessment_Validation_Report.md) |
+| 3 | Compliance | Done | [ATH-VAL-003](docs/ATH-VAL-003_Compliance_Validation_Report.md) |
+| 4 | Regulatory Intelligence | Done | [ATH-VAL-004](docs/ATH-VAL-004_Regulatory_Intelligence_Validation_Report.md) |
+| 5 | Security Operations | Done | [ATH-VAL-005](docs/ATH-VAL-005_Security_Operations_Validation_Report.md) |
+| 6 | Issues & Remediation | Done | [ATH-VAL-006](docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md) |
+| 7 | Asset Management | **Next** | — |
+| 8+ | Vendor Management → Policy Management → ISMS → PCI → Business Continuity → Continuous Monitoring → KRIs & Dashboards → rest of sidebar | To do | — |
+
+Last full PHP suite: 231 tests on 11 Oct 2026: 229 passed, 1 skipped (the route smoke test, run separately), 1 failure from a stale assertion in the new Issues test, since corrected and passing in the 13 Oct full run.
+
+## Quick start
+
+```bash
+composer install && npm install --legacy-peer-deps
+php artisan migrate:fresh --seed   # both demo banks; all demo passwords are "password"
+composer dev                       # serve + queue + logs + vite
+composer test                      # PHP suite
+```
+
+Demo logins: `admin@kanoheritage.ng` (Kano Heritage Bank, plus the platform layer) and `admin@firstbanknigeria.ng` (First Bank, plus the EA repository).
+
+---
+
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
 <p align="center">

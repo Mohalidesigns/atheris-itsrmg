@@ -11,6 +11,7 @@ use App\Jobs\Ea\SyncAssetCatalogue;
 use App\Jobs\Ea\SyncCveFeed;
 use App\Jobs\Ea\SyncEolFeed;
 use App\Services\Ea\ArchiMateExchange;
+use App\Services\Issues\IssueWorkflow;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -57,3 +58,10 @@ Artisan::command('ea:export-archimate {path?}', function (?string $path = null) 
     $r = $svc->exportToDisk($rel);
     $this->info("Exported {$r['element_count']} elements + {$r['relationship_count']} relationships to {$rel}. SHA-256: ".substr($r['sha256'], 0, 16).'…');
 })->purpose('Export the EA repository to ArchiMate Open Exchange XML');
+
+/* =====================  Issues & Remediation ===================== */
+// SLA breach → level 1 (CISO by default); 150% of the SLA window → level 2 (CRO).
+Artisan::command('issues:escalate', function (IssueWorkflow $workflow) {
+    $this->info($workflow->escalateOverdue().' escalation(s) raised.');
+})->purpose('Escalate open issues whose remediation SLA has been breached');
+Schedule::command('issues:escalate')->hourly()->name('issues.escalate')->withoutOverlapping();

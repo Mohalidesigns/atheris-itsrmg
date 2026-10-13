@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Atheris ITSRM&G — a multi-tenant IT security risk / GRC platform for Nigerian banks (CBN-CSAT, NDPC, ITSB regulatory returns, Enterprise Architecture repository, TPRM, CCM, KRIs, etc.). Laravel 13 (PHP 8.3+) + Inertia 2 + React 18 + Tailwind 3 + Vite. Auth/RBAC via Breeze + `spatie/laravel-permission`; auditing via `spatie/laravel-activitylog`; routes exposed to JS via Ziggy.
 
-The root `README.md` is the stock Laravel README. Product specs live in the root `ATH*`/`ATHERIS*`/`CBN_CSAT_*` markdown files and in `docs/` (notably `docs/ATH-EAR-002_...Rebuild_Plan_v1.0.md` for the EA module). `design-system.md` is the original UI brief, but its hex values are superseded by `tailwind.config.js` (navy `#0A1F44`, gold `#C9A86A`).
+The root `README.md` carries the module-validation progress table (the working handoff is `docs/VALIDATION_HANDOFF.md`); the stock Laravel text sits below it. Product specs live in the root `ATH*`/`ATHERIS*`/`CBN_CSAT_*` markdown files and in `docs/` (notably `docs/ATH-EAR-002_...Rebuild_Plan_v1.0.md` for the EA module). `design-system.md` is the original UI brief, but its hex values are superseded by `tailwind.config.js` (navy `#0A1F44`, gold `#C9A86A`).
 
 ## Commands
 

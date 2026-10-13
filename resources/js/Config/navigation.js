@@ -126,7 +126,7 @@ const navigation = [
         children: [
             { name: 'Issues Console', href: 'issues.index', permission: 'view issues' },
             { name: 'SLA Policies', href: 'issues.sla-policies', permission: 'view issues' },
-            { name: 'ITSM Integrations', href: 'itsm.index', permission: 'view platform' },
+            { name: 'ITSM Integrations', href: 'itsm.index', permission: 'view issues' },
         ],
     },
     {

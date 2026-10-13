@@ -372,13 +372,13 @@ export default function ShowRisk({ risk, threats = [], vulnerabilities = [], aud
                     )}
 
                     {tab === 'issues' && (
-                        issues.length === 0 ? <Empty>No remediation issues raised against this risk. <Link href={route('issues.index')} className="text-[#1A365D] underline">Open the issue tracker</Link>.</Empty> : (
+                        issues.length === 0 ? <Empty>No remediation issues raised against this risk. <Link href={route('issues.index', { source: 'risk' })} className="text-[#1A365D] underline">Open the Issues Console</Link>.</Empty> : (
                             <ul className="divide-y divide-gray-100">
                                 {issues.map((i) => (
                                     <li key={i.id} className="py-3 flex items-center justify-between">
                                         <div>
-                                            <p className="text-[#2D3748]">{i.title}</p>
-                                            <p className="text-xs text-[#718096]">Due {formatDate(i.due_date)} · {i.owner?.name || 'Unassigned'}</p>
+                                            <Link href={route('issues.show', i.id)} className="text-[#1A365D] hover:underline">{i.issue_code ? `${i.issue_code} · ` : ''}{i.title}</Link>
+                                            <p className="text-xs text-[#718096]">SLA due {formatDate(i.sla_due_at || i.due_date)} · {i.owner?.name || 'Unassigned'}</p>
                                         </div>
                                         <div className="flex gap-1">
                                             <StatusBadge status={i.severity} label={humanize(i.severity)} />

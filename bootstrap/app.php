@@ -31,13 +31,14 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
         ]);
-        // SCIM v2, SAML ACS/SLS and SIEM webhooks are programmatic; exempt from CSRF.
+        // SCIM v2, SAML ACS/SLS, SIEM and ITSM webhooks are programmatic; exempt from CSRF.
         $middleware->validateCsrfTokens(except: [
             'scim/v2/*',
             'auth/saml/*/acs',
             'auth/saml/*/sls',
             'ea/mcp/rpc',
             'siem/ingest/*',
+            'itsm/webhook/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

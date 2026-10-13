@@ -26,6 +26,7 @@ use App\Http\Controllers\GapController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\IsmsController;
+use App\Http\Controllers\IssueController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\PciController;
 use App\Http\Controllers\PlatformController;
@@ -77,6 +78,10 @@ Route::prefix('scim/v2')->group(function () {
 // SIEM / SOAR webhook ingest — HMAC-signed per connector, verified inside SiemIngestService
 Route::post('/siem/ingest/{integration}', [SecurityOperationsController::class, 'siemIngest'])
     ->whereNumber('integration')->middleware('throttle:120,1')->name('siem.ingest');
+
+// ITSM ticket-status webhook — HMAC-signed per connector, verified inside ItsmConnector
+Route::post('/itsm/webhook/{connection}', [IssueController::class, 'itsmWebhook'])
+    ->whereNumber('connection')->middleware('throttle:120,1')->name('itsm.webhook');
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -438,10 +443,26 @@ Route::middleware('auth')->group(function () {
     Route::get('/risks-graph', [PlatformController::class, 'risksGraph'])
         ->middleware('permission:view risks')->name('risks.graph');
 
-    // Phase 2: Issues Console
+    // Issues & Remediation: console, SLA policies, ITSM connectors (see ATH-VAL-006)
     Route::middleware('permission:view issues')->group(function () {
-        Route::get('/issues', [PlatformController::class, 'issuesIndex'])->name('issues.index');
-        Route::get('/issues/sla-policies', [PlatformController::class, 'issuesSlaPolicies'])->name('issues.sla-policies');
+        Route::get('/issues', [IssueController::class, 'index'])->name('issues.index');
+        Route::get('/issues/sla-policies', [IssueController::class, 'slaPolicies'])->name('issues.sla-policies');
+        Route::get('/itsm', [IssueController::class, 'itsm'])->name('itsm.index');
+        Route::post('/issues', [IssueController::class, 'store'])->middleware('permission:create issues')->name('issues.store');
+        Route::get('/issues/{issue}', [IssueController::class, 'show'])->whereNumber('issue')->name('issues.show');
+        // Owners may work their own issues without edit issues; the controller checks.
+        Route::put('/issues/{issue}', [IssueController::class, 'update'])->name('issues.update');
+        Route::post('/issues/{issue}/transition', [IssueController::class, 'transition'])->name('issues.transition');
+        Route::post('/issues/{issue}/escalate', [IssueController::class, 'escalate'])->name('issues.escalate');
+        Route::post('/issues/{issue}/comment', [IssueController::class, 'comment'])->name('issues.comment');
+        Route::post('/issues/{issue}/push', [IssueController::class, 'push'])->name('issues.push');
+        Route::middleware('permission:approve issues')->group(function () {
+            Route::put('/issues/sla-policies/{severity}', [IssueController::class, 'slaPolicyUpdate'])->name('issues.sla-policies.update');
+            Route::post('/itsm', [IssueController::class, 'itsmStore'])->name('itsm.store');
+            Route::put('/itsm/{connection}', [IssueController::class, 'itsmUpdate'])->name('itsm.update');
+            Route::post('/itsm/{connection}/test', [IssueController::class, 'itsmTest'])->name('itsm.test');
+            Route::post('/itsm/{connection}/secret', [IssueController::class, 'itsmRotateSecret'])->name('itsm.secret');
+        });
     });
 
     /* ========================================================
@@ -475,9 +496,6 @@ Route::middleware('auth')->group(function () {
         // Phase 2: Business Services & graph
         Route::get('/business-services', [PlatformController::class, 'businessServicesIndex'])->name('business-services.index');
         Route::get('/business-services/graph', [PlatformController::class, 'businessServicesGraph'])->name('business-services.graph');
-
-        // Phase 2: ITSM
-        Route::get('/itsm', [PlatformController::class, 'itsmIndex'])->name('itsm.index');
 
         // Phase 3: CCM
         Route::get('/ccm', [PlatformController::class, 'ccmIndex'])->name('ccm.index');

@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -398,6 +398,55 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                                                 {c.overdue ? 'overdue · ' : 'due '}{fmtDate(c.deadline_at)}
                                             </span>
                                             <p className="truncate text-[#718096]">{c.subject}</p>
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {issues && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Issues &amp; Remediation</h3>
+                        <Link href={route('issues.index')} className="text-xs text-[#0A1F44] underline">Issues Console →</Link>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                        <div className="lg:col-span-2">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                {[
+                                    ['Open issues', issues.stats.open, route('issues.index', { status: 'active' }), false],
+                                    ['Past SLA', issues.stats.overdue, route('issues.index', { status: 'overdue' }), issues.stats.overdue > 0],
+                                    ['Escalated', issues.stats.escalated, route('issues.index', { status: 'escalated' }), issues.stats.escalated > 0],
+                                    ['Critical open', issues.stats.open_critical, route('issues.index', { status: 'active', severity: 'critical' }), issues.stats.open_critical > 0],
+                                    ['Awaiting verification', issues.stats.awaiting_verification, route('issues.index', { status: 'remediated' }), false],
+                                    ['Fixed within SLA (180 d)', issues.stats.sla_compliance_pct === null ? '—' : `${issues.stats.sla_compliance_pct}%`, route('issues.sla-policies'), issues.stats.sla_compliance_pct !== null && issues.stats.sla_compliance_pct < 80],
+                                ].map(([label, n, href, alert]) => (
+                                    <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                        <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                        <p className="text-[11px] text-[#718096]">{label}</p>
+                                    </Link>
+                                ))}
+                            </div>
+                            {Object.keys(issues.bySource || {}).length > 0 && (
+                                <p className="mt-3 text-[11px] text-[#718096]">
+                                    Open by source: {Object.entries(issues.bySource).map(([k, v]) => `${k} ${v}`).join(' · ')}
+                                </p>
+                            )}
+                        </div>
+                        <div>
+                            <h4 className="text-xs font-semibold text-[#2D3748]">Most overdue</h4>
+                            <ul className="mt-1 divide-y divide-gray-100 text-xs">
+                                {issues.overdue.length === 0 && <li className="py-2 text-[#718096]">No issue is past its SLA.</li>}
+                                {issues.overdue.map((i) => (
+                                    <li key={i.id} className="py-2">
+                                        <Link href={route('issues.show', i.id)} className="block hover:underline">
+                                            <span className="font-mono text-[#2D3748]">{i.code}</span>
+                                            <span className="ml-1 font-semibold text-[#B3261E]">{i.days_overdue} d over</span>
+                                            {i.escalation_level > 0 && <span className="ml-1 text-[#8A6400]">· L{i.escalation_level}</span>}
+                                            <p className="truncate text-[#718096]">{i.title}{i.owner ? ` · ${i.owner}` : ' · unassigned'}</p>
                                         </Link>
                                     </li>
                                 ))}

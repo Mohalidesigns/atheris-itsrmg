@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class IssueEvent extends Model
 {
@@ -11,4 +12,9 @@ class IssueEvent extends Model
     protected $guarded = [];
 
     protected $casts = ['payload' => 'array', 'created_at' => 'datetime'];
+
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_id');
+    }
 }

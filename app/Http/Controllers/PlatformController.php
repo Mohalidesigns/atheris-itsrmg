@@ -24,7 +24,6 @@ use App\Models\FairRun;
 use App\Models\FairScenario;
 use App\Models\FeatureFlag;
 use App\Models\FrameworkClause;
-use App\Models\Issue;
 use App\Models\Kri;
 use App\Models\KriBreach;
 use App\Models\KriReading;
@@ -182,37 +181,6 @@ class PlatformController extends Controller
         $capabilities = BusinessCapability::get();
 
         return Inertia::render('BusinessServices/Graph', compact('services', 'dependencies', 'capabilities'));
-    }
-
-    /* -------------------------------- Issues -------------------------------- */
-    public function issuesIndex(Request $r)
-    {
-        $status = $r->query('status');
-        $issues = Issue::query()
-            ->when($status, fn ($q) => $q->where('status', $status))
-            ->orderBy('severity')->orderByDesc('created_at')
-            ->get();
-        $counts = Issue::select('status', DB::raw('count(*) as c'))->groupBy('status')->pluck('c', 'status');
-
-        return Inertia::render('Issues/Index', compact('issues', 'counts', 'status'));
-    }
-
-    public function issuesSlaPolicies()
-    {
-        $policies = DB::table('vulnerability_sla_policies')->get();
-
-        return Inertia::render('Issues/SlaPolicies', compact('policies'));
-    }
-
-    public function itsmIndex()
-    {
-        $integrations = collect([
-            ['key' => 'jira', 'name' => 'Atlassian Jira', 'status' => 'connected', 'tickets_synced' => 128],
-            ['key' => 'servicenow', 'name' => 'ServiceNow', 'status' => 'connected', 'tickets_synced' => 64],
-            ['key' => 'freshservice', 'name' => 'Freshservice', 'status' => 'available', 'tickets_synced' => 0],
-        ]);
-
-        return Inertia::render('Issues/Itsm', compact('integrations'));
     }
 
     /* ------------------------------- Risk Graph ------------------------------- */

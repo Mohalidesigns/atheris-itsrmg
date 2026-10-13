@@ -25,6 +25,7 @@ use App\Models\Vulnerability;
 use App\Modules\CBNCSAT\Models\CsatAssessment;
 use App\Modules\CBNCSAT\Models\CsatMaStatement;
 use App\Services\ComplianceScoreService;
+use App\Services\Issues\IssueMetrics;
 use App\Services\SecurityOps\SecurityOpsMetrics;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -188,7 +189,16 @@ class DashboardController extends Controller
             'csat' => $csat,
             'regulatory' => $orgId ? $this->regulatoryPulse((int) $orgId) : null,
             'secops' => $orgId ? $this->secopsPulse() : null,
+            'issues' => $orgId ? $this->issuesPulse() : null,
         ]);
+    }
+
+    /** Issues & Remediation feed: open CAPA load, SLA breaches and escalations (tenant-scoped model). */
+    private function issuesPulse(): array
+    {
+        $metrics = app(IssueMetrics::class);
+
+        return ['stats' => $metrics->summary(), 'overdue' => $metrics->mostOverdue(5), 'bySource' => $metrics->openBySource()];
     }
 
     /** Security Operations feed: exposure, live incidents and running regulatory clocks (tenant-scoped models). */
