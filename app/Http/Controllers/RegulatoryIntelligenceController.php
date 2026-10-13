@@ -41,8 +41,8 @@ class RegulatoryIntelligenceController extends Controller
             ->with('assessment.owner:id,name')
             ->withCount('impacts')
             ->when($regulator, fn ($q) => $q->where('regulator_code', $regulator))
-            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->where('title', 'like', "%{$search}%")
-                ->orWhere('circular_number', 'like', "%{$search}%")))
+            ->when($search !== '', fn ($q) => $q->where(fn ($w) => $w->whereLike('title', "%{$search}%")
+                ->orWhereLike('circular_number', "%{$search}%")))
             ->when($status, function ($q) use ($status) {
                 if ($status === CircularAssessment::UNREAD) {
                     return $q->where(fn ($w) => $w->doesntHave('assessment')

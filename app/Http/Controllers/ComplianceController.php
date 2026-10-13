@@ -134,7 +134,7 @@ class ComplianceController extends Controller
         ])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->status))
             ->when($request->filled('framework'), fn ($q) => $q->where('framework_id', $request->framework))
-            ->when($request->filled('search'), fn ($q) => $q->where('title', 'like', '%'.$request->search.'%'))
+            ->when($request->filled('search'), fn ($q) => $q->whereLike('title', '%'.$request->search.'%'))
             ->latest()->paginate(15)->withQueryString();
 
         $counts = ComplianceAssessment::select('status', DB::raw('count(*) as c'))->groupBy('status')->pluck('c', 'status');

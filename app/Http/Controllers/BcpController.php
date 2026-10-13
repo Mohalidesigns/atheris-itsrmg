@@ -24,8 +24,8 @@ class BcpController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('plan_code', 'like', "%{$search}%");
+                $q->whereLike('title', "%{$search}%")
+                  ->orWhereLike('plan_code', "%{$search}%");
             });
         }
 
@@ -146,8 +146,8 @@ class BcpController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('process_name', 'like', "%{$search}%")
-                  ->orWhere('department', 'like', "%{$search}%");
+                $q->whereLike('process_name', "%{$search}%")
+                  ->orWhereLike('department', "%{$search}%");
             });
         }
 

@@ -43,9 +43,9 @@ class ControlController extends Controller
         }
         if ($request->filled('search')) {
             $s = $request->search;
-            $query->where(fn ($q) => $q->where('title', 'like', "%{$s}%")
-                ->orWhere('control_code', 'like', "%{$s}%")
-                ->orWhere('description', 'like', "%{$s}%"));
+            $query->where(fn ($q) => $q->whereLike('title', "%{$s}%")
+                ->orWhereLike('control_code', "%{$s}%")
+                ->orWhereLike('description', "%{$s}%"));
         }
 
         $sort = in_array($request->sort, self::SORTABLE, true) ? $request->sort : null;

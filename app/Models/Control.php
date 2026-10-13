@@ -93,7 +93,7 @@ class Control extends Model
         $prefix = $domain ? strtoupper(substr($domain, 0, 3)) : 'CTL';
         $last = static::withoutGlobalScopes()
             ->where('organization_id', $organizationId)
-            ->where('control_code', 'like', "{$prefix}-%")
+            ->whereLike('control_code', "{$prefix}-%")
             ->orderByDesc('id')
             ->value('control_code');
 

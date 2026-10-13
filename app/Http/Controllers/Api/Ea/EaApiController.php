@@ -50,7 +50,7 @@ class EaApiController extends Controller
         return Capability::query()
             ->when($r->query('level'), fn ($q, $v) => $q->where('level', $v))
             ->when($r->query('source'), fn ($q, $v) => $q->where('source', $v))
-            ->when($r->query('search'), fn ($q, $v) => $q->where('name', 'like', "%$v%"))
+            ->when($r->query('search'), fn ($q, $v) => $q->whereLike('name', "%$v%"))
             ->paginate(min(100, (int) $r->query('per_page', 50)));
     }
 
@@ -70,7 +70,7 @@ class EaApiController extends Controller
         return EaApplication::query()
             ->when($r->query('criticality'), fn ($q, $v) => $q->where('criticality', $v))
             ->when($r->query('lifecycle'), fn ($q, $v) => $q->where('lifecycle', $v))
-            ->when($r->query('search'), fn ($q, $v) => $q->where('name', 'like', "%$v%"))
+            ->when($r->query('search'), fn ($q, $v) => $q->whereLike('name', "%$v%"))
             ->paginate(min(100, (int) $r->query('per_page', 50)));
     }
 

@@ -73,8 +73,8 @@ class KriCalculator
         $count = 0;
         foreach ($eolList as $t) {
             $hasRep = Initiative::where(function ($q) use ($t) {
-                $q->where('description', 'like', "%{$t->name}%")
-                  ->orWhere('name', 'like', "%{$t->name}%");
+                $q->whereLike('description', "%{$t->name}%")
+                  ->orWhereLike('name', "%{$t->name}%");
             })->whereIn('status', ['proposed', 'approved', 'in_flight'])->exists();
             if (!$hasRep) $count++;
         }

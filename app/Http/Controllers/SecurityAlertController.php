@@ -29,9 +29,9 @@ class SecurityAlertController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('alert_id_code', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                $q->whereLike('title', "%{$search}%")
+                    ->orWhereLike('alert_id_code', "%{$search}%")
+                    ->orWhereLike('description', "%{$search}%");
             });
         }
 

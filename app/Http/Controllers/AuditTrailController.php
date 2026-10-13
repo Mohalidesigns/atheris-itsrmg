@@ -23,7 +23,7 @@ class AuditTrailController extends Controller
             $query->where('subject_type', $request->subject_type);
         }
         if ($request->filled('search')) {
-            $query->where('description', 'like', '%' . $request->search . '%');
+            $query->whereLike('description', '%' . $request->search . '%');
         }
         if ($request->filled('date_from')) {
             $query->whereDate('created_at', '>=', $request->date_from);

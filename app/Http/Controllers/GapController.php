@@ -48,7 +48,7 @@ class GapController extends Controller
         }
         if ($request->filled('search')) {
             $s = $request->search;
-            $query->where(fn ($q) => $q->where('title', 'like', "%{$s}%")->orWhere('gap_code', 'like', "%{$s}%")->orWhere('description', 'like', "%{$s}%"));
+            $query->where(fn ($q) => $q->whereLike('title', "%{$s}%")->orWhereLike('gap_code', "%{$s}%")->orWhereLike('description', "%{$s}%"));
         }
 
         $gaps = $query->orderBy('priority')->orderByRaw('due_date is null')->orderBy('due_date')

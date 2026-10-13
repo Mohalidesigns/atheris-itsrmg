@@ -65,8 +65,8 @@ class TechObsolescenceService
         return Initiative::withoutGlobalScopes()
             ->whereIn('status', ['approved', 'in_flight'])
             ->where(function ($q) use ($component) {
-                $q->where('name', 'like', '%'.$component->name.'%')
-                  ->orWhere('description', 'like', '%'.$component->name.'%');
+                $q->whereLike('name', '%'.$component->name.'%')
+                  ->orWhereLike('description', '%'.$component->name.'%');
             })
             ->exists();
     }

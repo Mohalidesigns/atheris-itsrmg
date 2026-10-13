@@ -21,10 +21,10 @@ class UserManagementController extends Controller
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('job_title', 'like', "%{$search}%")
-                    ->orWhere('department', 'like', "%{$search}%");
+                $q->whereLike('name', "%{$search}%")
+                    ->orWhereLike('email', "%{$search}%")
+                    ->orWhereLike('job_title', "%{$search}%")
+                    ->orWhereLike('department', "%{$search}%");
             });
         }
 

@@ -324,8 +324,8 @@ class ResidencyService
         }
 
         return \App\Models\Ea\Initiative::whereIn('status', ['approved', 'in_flight'])
-            ->where(fn ($q) => $q->where('name', 'like', '%'.$application->name.'%')
-                ->orWhere('description', 'like', '%'.$application->name.'%'))
+            ->where(fn ($q) => $q->whereLike('name', '%'.$application->name.'%')
+                ->orWhereLike('description', '%'.$application->name.'%'))
             ->value('name');
     }
 }

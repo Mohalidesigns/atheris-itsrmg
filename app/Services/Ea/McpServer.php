@@ -271,7 +271,7 @@ class McpServer
             'list_applications' => $this->encodeRows(EaApplication::query()
                 ->when($args['criticality'] ?? null, fn ($q, $v) => $q->where('criticality', $v))
                 ->when($args['lifecycle'] ?? null, fn ($q, $v) => $q->where('lifecycle', $v))
-                ->when($args['search'] ?? null, fn ($q, $v) => $q->where('name', 'like', "%$v%"))
+                ->when($args['search'] ?? null, fn ($q, $v) => $q->whereLike('name', "%$v%"))
                 ->limit((int) ($args['limit'] ?? 50))->get(['id', 'code', 'name', 'criticality', 'lifecycle'])),
             'list_capabilities' => $this->encodeRows(Capability::query()
                 ->when($args['level'] ?? null, fn ($q, $v) => $q->where('level', $v))

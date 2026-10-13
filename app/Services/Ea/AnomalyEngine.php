@@ -134,8 +134,8 @@ class AnomalyEngine
         foreach ($eolList as $t) {
             $replacement = Initiative::query()
                 ->where(function ($q) use ($t) {
-                    $q->where('description', 'like', "%{$t->name}%")
-                      ->orWhere('name', 'like', "%{$t->name}%");
+                    $q->whereLike('description', "%{$t->name}%")
+                      ->orWhereLike('name', "%{$t->name}%");
                 })
                 ->whereIn('status', ['proposed', 'approved', 'in_flight'])
                 ->exists();

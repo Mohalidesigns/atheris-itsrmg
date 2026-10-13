@@ -24,8 +24,8 @@ class RiskAssessmentController extends Controller
             ->when($request->filled('methodology'), fn ($q) => $q->where('methodology', $request->methodology))
             ->when($request->filled('assessment_type'), fn ($q) => $q->where('assessment_type', $request->assessment_type))
             ->when($request->filled('search'), fn ($q) => $q->whereHas('risk', fn ($r) => $r
-                ->where('title', 'like', "%{$request->search}%")
-                ->orWhere('risk_id_code', 'like', "%{$request->search}%")))
+                ->whereLike('title', "%{$request->search}%")
+                ->orWhereLike('risk_id_code', "%{$request->search}%")))
             ->latest('assessment_date')
             ->latest('id')
             ->paginate(15)

@@ -35,6 +35,10 @@ return new class extends Migration
         Schema::table('incident_notifications', function (Blueprint $table) {
             $table->string('delivery_status', 24)->default('draft')->change();
         });
+        // Postgres keeps the enum's CHECK constraint across ->change(); MySQL/SQLite rebuild the column.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE incident_notifications DROP CONSTRAINT IF EXISTS incident_notifications_delivery_status_check');
+        }
         DB::table('incident_notifications')->whereIn('delivery_status', ['delivered', 'acknowledged'])->update(['delivery_status' => 'submitted']);
         DB::table('incident_notifications')->where('delivery_status', 'signed')->update(['delivery_status' => 'approved']);
 

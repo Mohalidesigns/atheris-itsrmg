@@ -113,7 +113,7 @@ class NlSearchService
     {
         $results = $queryBuilder->where(function ($w) use ($cols, $q) {
             foreach ($cols as $c) {
-                $w->orWhere($c, 'like', '%'.$q.'%');
+                $w->orWhereLike($c, '%'.$q.'%');
             }
         })->limit(15)->get();
 

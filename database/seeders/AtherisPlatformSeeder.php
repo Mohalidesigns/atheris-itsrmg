@@ -175,6 +175,10 @@ class AtherisPlatformSeeder extends Seeder
             Tenant::create(['id' => 1, 'slug' => 'acme-nigeria', 'name' => 'Acme Nigeria Ltd', 'country' => 'NG', 'regulator_primary' => 'CBN', 'licence_type' => 'DMB', 'hosting_mode' => 'saas-dedicated', 'status' => 'active', 'tier' => 'professional']);
             Tenant::create(['id' => 2, 'slug' => 'sterling-bank-demo', 'name' => 'Sterling Bank (Demo)', 'country' => 'NG', 'regulator_primary' => 'CBN', 'licence_type' => 'DMB', 'hosting_mode' => 'saas-shared', 'status' => 'active', 'tier' => 'essentials']);
             Tenant::create(['id' => 3, 'slug' => 'kuda-mfb-demo', 'name' => 'Kuda MFB (Demo)', 'country' => 'NG', 'regulator_primary' => 'CBN', 'licence_type' => 'MFB', 'hosting_mode' => 'on-prem', 'status' => 'active', 'tier' => 'enterprise']);
+            // Explicit ids don't advance a Postgres sequence; resync so the next create gets id 4.
+            if (DB::getDriverName() === 'pgsql') {
+                DB::statement("SELECT setval(pg_get_serial_sequence('tenants', 'id'), (SELECT MAX(id) FROM tenants))");
+            }
         }
     }
 

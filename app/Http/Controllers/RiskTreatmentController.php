@@ -34,8 +34,8 @@ class RiskTreatmentController extends Controller
         }
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(fn ($q) => $q->where('title', 'like', "%{$search}%")
-                ->orWhereHas('risk', fn ($r) => $r->where('risk_id_code', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%")));
+            $query->where(fn ($q) => $q->whereLike('title', "%{$search}%")
+                ->orWhereHas('risk', fn ($r) => $r->whereLike('risk_id_code', "%{$search}%")->orWhereLike('title', "%{$search}%")));
         }
 
         $treatments = $query->orderByRaw('due_date IS NULL')->orderBy('due_date')->latest('id')

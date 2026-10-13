@@ -88,7 +88,7 @@ Paste this as the first message of the new session:
 
 > Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 7, Asset Management, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
 
-Before you start: XAMPP MySQL must be running (the user starts it). Start the dev server with the Browser pane's `preview_start` using the `atheris` entry (port 8010), and check `ls -lO` for iCloud `dataless` files if reads hang (see Environment gotchas).
+Before you start: the dev database is now **PostgreSQL** (see Environment gotchas); check it is up. Start the dev server with the Browser pane's `preview_start` using the `atheris` entry (port 8010), and check `ls -lO` for iCloud `dataless` files if reads hang (see Environment gotchas).
 
 ### Scope
 
@@ -148,14 +148,20 @@ Sidebar group `Asset Management` (`resources/js/Config/navigation.js`):
 ## Environment gotchas (important)
 
 - **The project folder was restored from git (10 Oct 2026):** `vendor/`, `node_modules/`, `.env` and `.claude/launch.json` were missing. They were rebuilt with `composer install`, `npm install --legacy-peer-deps`, and a new `.env` (MySQL `it-security-risk`, `APP_URL=http://127.0.0.1:8010`). A scratch SQLite DB for `migrate:fresh --seed` lives at `database/database.sqlite` (gitignored); run it with `DB_CONNECTION=sqlite DB_DATABASE=$PWD/database/database.sqlite`.
-- **XAMPP MySQL** may not be running after a restart; the user starts it (it needs their permission).
+- **The dev database moved to PostgreSQL on 13 Oct 2026.** `.env` uses `pgsql`: Homebrew `postgresql@17` on `127.0.0.1:5432`, database `it_security_risk`, user `mac`, no password. It is fully migrated and seeded. MySQL had failed because an earlier migration run died halfway and left tables behind; starting on a clean Postgres database got around that. The old MySQL settings are in `.env.mysql.bak` (gitignored). A separate EDB PostgreSQL 18 (`/Library/PostgreSQL/18`) also runs on this Mac; the app does not use it. `psql` is not on the PATH: use `/opt/homebrew/opt/postgresql@17/bin/psql -d it_security_risk` or `php artisan tinker`.
+- **PostgreSQL compatibility (13 Oct 2026):**
+  - `LIKE` is case-sensitive on Postgres, so text searches use `whereLike()` / `orWhereLike()`, which are case-insensitive on every driver. Use them for new search code, not `where(..., 'like', ...)`.
+  - The module 5 migration drops the leftover enum CHECK constraint on `incident_notifications.delivery_status`, on `pgsql` only.
+  - `AtherisPlatformSeeder` resyncs the `tenants` id sequence after inserting explicit ids.
+  - PHPUnit still runs on in-memory SQLite, and migrations must stay driver-agnostic (CLAUDE.md).
+- **XAMPP MySQL** is no longer needed for the dev app. If you switch back, the user starts it (it needs their permission).
 
 - **iCloud eviction:** the project lives in iCloud-synced Documents, and iCloud keeps evicting files to "dataless". Reads and `git` then hang, and `phpunit.xml` and `.git/objects` have both been affected.
   - Detect with `ls -lO <file>` (look for the `dataless` flag).
   - Fix by copying from a fresh `git clone` of the remote in the scratchpad, or `git clone --bare` and copy its pack into `.git/objects/pack`, then `rm` the dataless loose objects.
   - Never `mv` dataless files to another volume; that forces a download and hangs.
   - **Recommended:** move the project out of iCloud Documents.
-- **MySQL** is XAMPP: `/Applications/XAMPP/xamppfiles/bin/mysql -uroot it-security-risk`. The dev DB has been migrated and seeded in place, and includes the browser-test data (e.g. KHB-GAP-046, completed CBN assessment #10).
+- **Old MySQL dev DB** (XAMPP: `/Applications/XAMPP/xamppfiles/bin/mysql -uroot it-security-risk`) still holds the browser-test data from modules 1-6 (e.g. KHB-GAP-046, completed CBN assessment #10, KHB-ISS-0026). The Postgres DB was freshly seeded, so that walk data is not in it.
 - **Dev servers** come from `.claude/launch.json` (uncommitted): `atheris` on port 8010. The Vite dev server's port 5180 clashes with another project, so use `npm run build` (delete `public/hot`) and serve built assets.
 - **Fresh checkout / restore:** `storage/framework/{cache/data,views,sessions,testing}` and `bootstrap/cache` must exist or a dozen feature tests fail with "Please provide a valid cache path". `mkdir -p` them before running the suite.
 - **Tests:** ParaTest isn't installed, so run `php vendor/bin/phpunit`. Never name a test helper `result()`, because it clashes with a final method on PHPUnit's TestCase.

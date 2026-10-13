@@ -18,8 +18,8 @@ class QuestionLibraryController extends Controller
             ->when($request->filled('response_type'), fn ($q) => $q->where('response_type', $request->response_type))
             ->when($request->filled('status'), fn ($q) => $q->where('is_active', $request->status === 'active'))
             ->when($request->filled('search'), fn ($q) => $q->where(fn ($w) => $w
-                ->where('title', 'like', "%{$request->search}%")
-                ->orWhere('question_text', 'like', "%{$request->search}%")))
+                ->whereLike('title', "%{$request->search}%")
+                ->orWhereLike('question_text', "%{$request->search}%")))
             ->orderBy('module')->orderBy('sort_order')->orderBy('id')
             ->paginate(20)->withQueryString();
 

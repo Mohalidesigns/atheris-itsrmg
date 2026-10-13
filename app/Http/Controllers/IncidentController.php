@@ -49,9 +49,9 @@ class IncidentController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                    ->orWhere('incident_id_code', 'like', "%{$search}%")
-                    ->orWhere('description', 'like', "%{$search}%");
+                $q->whereLike('title', "%{$search}%")
+                    ->orWhereLike('incident_id_code', "%{$search}%")
+                    ->orWhereLike('description', "%{$search}%");
             });
         }
 

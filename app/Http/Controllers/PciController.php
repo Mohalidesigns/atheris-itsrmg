@@ -60,7 +60,7 @@ class PciController extends Controller
             ->count();
         $policies = DB::table('policies')->where('organization_id', $orgId)
             ->where(function ($q) {
-                $q->where('title', 'like', '%PCI%')->orWhere('category', 'security');
+                $q->whereLike('title', '%PCI%')->orWhere('category', 'security');
             })->count();
 
         return Inertia::render('PCI/Dashboard', [

@@ -62,14 +62,14 @@ class IsmsController extends Controller
         foreach ($themes as $code => &$t) {
             $t['count'] = DB::table('framework_requirements')
                 ->where('framework_id', $fwId)
-                ->where('requirement_code', 'like', $code.'%')
+                ->whereLike('requirement_code', $code.'%')
                 ->where('level', '>', 0)
                 ->count();
             $soaImpl = DB::table('statements_of_applicability as s')
                 ->join('framework_requirements as r', 'r.id', '=', 's.requirement_id')
                 ->where('s.organization_id', $orgId)
                 ->where('r.framework_id', $fwId)
-                ->where('r.requirement_code', 'like', $code.'%')
+                ->whereLike('r.requirement_code', $code.'%')
                 ->where('s.implementation_status', 'implemented')
                 ->count();
             $t['implemented'] = $soaImpl;

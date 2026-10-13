@@ -43,7 +43,7 @@ class EvidenceController extends Controller
         }
         if ($request->filled('search')) {
             $s = $request->search;
-            $query->where(fn ($q) => $q->where('title', 'like', "%{$s}%")->orWhere('description', 'like', "%{$s}%")->orWhere('file_name', 'like', "%{$s}%"));
+            $query->where(fn ($q) => $q->whereLike('title', "%{$s}%")->orWhereLike('description', "%{$s}%")->orWhereLike('file_name', "%{$s}%"));
         }
 
         $evidence = $query->latest()->paginate(20)->withQueryString();

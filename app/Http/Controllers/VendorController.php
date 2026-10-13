@@ -22,10 +22,10 @@ class VendorController extends Controller
         if ($request->filled('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('vendor_code', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%")
-                  ->orWhere('contact_name', 'like', "%{$search}%");
+                $q->whereLike('name', "%{$search}%")
+                  ->orWhereLike('vendor_code', "%{$search}%")
+                  ->orWhereLike('description', "%{$search}%")
+                  ->orWhereLike('contact_name', "%{$search}%");
             });
         }
 
