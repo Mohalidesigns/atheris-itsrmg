@@ -135,6 +135,10 @@ class DatabaseSeeder extends Seeder
         // only for policies in force, policy→control mapping and exceptions in every state (ATH-VAL-009)
         $this->call(PolicyManagementDemoSeeder::class);
 
+        // ISMS: defensible SoA exclusions with reasons, a justification for every control, two approved
+        // SoA versions and changes since; claim/evidence contradictions kept (ATH-VAL-010)
+        $this->call(IsmsDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

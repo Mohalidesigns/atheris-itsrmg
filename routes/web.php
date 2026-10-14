@@ -379,6 +379,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/isms/controls', [IsmsController::class, 'controls'])->name('isms.controls');
         Route::get('/isms/audit', [IsmsController::class, 'audit'])->name('isms.audit');
         Route::get('/isms/soa', [IsmsController::class, 'soa'])->name('isms.soa');
+        Route::get('/isms/soa/export', [IsmsController::class, 'soaExport'])->middleware('permission:export isms')->name('isms.soa.export');
+        Route::put('/isms/soa/{requirement}', [IsmsController::class, 'soaUpdate'])->middleware('permission:edit isms')->whereNumber('requirement')->name('isms.soa.update');
+        Route::post('/isms/soa/versions', [IsmsController::class, 'soaSubmit'])->middleware('permission:edit isms')->name('isms.soa.submit');
+        Route::post('/isms/soa/versions/{version}/decide', [IsmsController::class, 'soaDecide'])->middleware('permission:approve isms')->name('isms.soa.decide');
         Route::get('/isms/gap-analysis', [IsmsController::class, 'gapAnalysis'])->name('isms.gap-analysis');
     });
 

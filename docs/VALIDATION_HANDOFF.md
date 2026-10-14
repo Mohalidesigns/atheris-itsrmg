@@ -38,10 +38,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 6 | Issues & Remediation | `44f0102` | `docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md` | `tests/Feature/Issues/IssuesModuleTest.php` (12) |
 | 7 | Asset Management | `f337190` | `docs/ATH-VAL-007_Asset_Management_Validation_Report.md` | `tests/Feature/Assets/AssetManagementModuleTest.php` (12) |
 | 8 | Vendor Management | `f57ddea` | `docs/ATH-VAL-008_Vendor_Management_Validation_Report.md` | `tests/Feature/Vendors/VendorManagementModuleTest.php` (10) |
-| 9 | Policy Management | see `git log` | `docs/ATH-VAL-009_Policy_Management_Validation_Report.md` | `tests/Feature/Policies/PolicyManagementModuleTest.php` (8) |
+| 9 | Policy Management | `a81f88a` | `docs/ATH-VAL-009_Policy_Management_Validation_Report.md` | `tests/Feature/Policies/PolicyManagementModuleTest.php` (8) |
+| 10 | ISMS | see `git log` | `docs/ATH-VAL-010_ISMS_Validation_Report.md` | `tests/Feature/Isms/IsmsModuleTest.php` (6) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **282 tests, 281 passed, 1 skipped, 2,728 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 204 GET routes.
+Last full suite: **288 tests, 287 passed, 1 skipped, 2,835 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -140,26 +141,34 @@ Last full suite: **282 tests, 281 passed, 1 skipped, 2,728 assertions (14 Oct 20
   - The daily `policies:sweep` expires lapsed exceptions.
 - **Feeds:** the dashboard "Policy Compliance" card is fed by `PolicyMetrics`. The Returns Centre's `policies_in_force` and the Reports "published" count now read `active`.
 
-## Next phase: module 10, ISMS
+### ISMS highlights (module 10)
 
-Paste as the first message of a new session:
+- **SoA against evidence** (`StatementOfApplicabilityService`): each Annex A entry shows its mapped controls with tested effectiveness and the latest completed ISO 27001 assessment result. Contradictions are flagged: implemented but a control is ineffective or the control was assessed non-compliant; applicable with no control; assessed compliant but still "planned"; no justification.
+- **SoA editing** (`edit isms`): applicability, a justification (required), implementation status and the primary control (tenant-checked). An excluded control is stored as `not_applicable`. Edits are logged.
+- **SoA versions** (`soa_versions`, cl. 6.1.3 d): a submitted snapshot that someone other than the preparer approves or returns. "Changed since approval" is shown per entry. CSV export includes the evidence. Annex A codes sort naturally.
+- **Overview:** real theme figures (SoA implemented against assessed compliant) replace the hard-coded maturity scores. The bank name comes from the session.
+- **ISMS risks:** scoped to the `config/isms.php` categories, with the controls treating each risk.
+- **Demo data:** `IsmsDemoSeeder` keeps only defensible exclusions, writes real justifications, issues two approved versions and three changes since.
 
-> Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 10, ISMS, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
+## Next phase: module 11, PCI Management
 
-**Scope:** sidebar `ISMS`.
-- Routes: `isms.*` under the `permission:view isms` group in `routes/web.php` (index, risks, controls, audit, …).
-- Controller: `IsmsController`.
-- Check the Statement of Applicability against the Compliance assessment results and the new `control_policy` mappings (open item from module 3).
+Drafts are prepared in the session scratchpad. If they are lost, rebuild from this plan:
+- **Migration `2027_01_20_000001_pci_module`:**
+  - PCI DSS v4.0.1 as a platform framework (12 requirements, 64 sub-requirements), so PCI assessments run on the compliance engine and controls map through `control_framework_mappings`;
+  - `assets.pci_scope` (`cde` / `connected` / `out_of_scope`) and `pci_scope_note`.
+- **`PciPosture` service:** per-requirement status from the latest PCI assessment, mapped controls, evidence and scoping.
+- **Rebuilt `PciController`:** CDE scoping, control mapping, assessment, matrix and evidence. It replaces the synthetic pages: `rand()` matrix, random control mapping, generated SAQ answers, and organisation 1's evidence shown to every bank.
+- **Demo data:** `PciDemoSeeder`.
 
-**Deliverables:** `tests/Feature/Isms/IsmsModuleTest.php`, `docs/ATH-VAL-010_ISMS_Validation_Report.md`, and a demo seeder if needed, wired after `PolicyManagementDemoSeeder`.
+**Remaining order after that:** Business Continuity, then Continuous Monitoring, then KRIs & Dashboards, then the rest.
 
-**Remaining order after that:** PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest.
-
-**Open from module 9:**
-- no attestation reminders or escalation;
-- plain-text policies with no attachments, version comparison or PDF;
-- exception renewal is a new request; no link from an expired exception to the risk register;
-- no UI for the control mapping's clause field.
+**Business Continuity recon (14 Oct 2026):**
+- **Cross-bank leaks:**
+  - `DrRunbook` and `DrExercise` have no tenant scope; `dr_exercises` has no `organization_id` at all.
+  - `BcpController::drPlanIndex` and `testIndex` query `dr_runbooks`, `dr_exercises` and `bcp_tests` without a bank filter.
+- **No workflow:** no plan approval or edit flow, no way to record a test, and the owner picker is not tenant-checked.
+- **BIA not linked:** BIA records are not linked to EA business services. Module 7 deferred to this module the job of writing RTO/RPO onto services.
+- **Data:** First Bank has no BCP tests or DR runbooks.
 
 ### Patterns from modules 5-9 to reuse
 

@@ -7,8 +7,15 @@ use App\Models\Control;
 use App\Models\ControlFramework;
 use App\Models\Gap;
 use App\Models\Risk;
+use App\Models\SoaVersion;
+use App\Models\StatementOfApplicability;
+use App\Services\Isms\StatementOfApplicabilityService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Information Security Management System (ISMS) — ISO/IEC 27001:2022.
@@ -29,89 +36,70 @@ class IsmsController extends Controller
         return ControlFramework::where('slug', 'iso-27001-2022')->value('id');
     }
 
-    public function index()
+    public function index(StatementOfApplicabilityService $soa)
     {
         $orgId = $this->orgId();
         $fwId = $this->isoFrameworkId();
+        $rows = $soa->rows($orgId);
+        $summary = $soa->summary($rows);
 
-        $totalAnnexA = DB::table('framework_requirements')->where('framework_id', $fwId)->count();
-        $soaCount = DB::table('statements_of_applicability')->where('organization_id', $orgId)->count();
-        $soaApplicable = DB::table('statements_of_applicability')
-            ->where('organization_id', $orgId)->where('is_applicable', true)->count();
-        $implementedCount = DB::table('statements_of_applicability')
-            ->where('organization_id', $orgId)
-            ->where('implementation_status', 'implemented')->count();
+        // Per Annex A theme: what the SoA claims, and what the latest ISO assessment found.
+        $themes = collect([
+            'A.5' => 'Organizational controls', 'A.6' => 'People controls', 'A.7' => 'Physical controls', 'A.8' => 'Technological controls',
+        ])->map(function ($name, $code) use ($rows) {
+            $theme = $rows->filter(fn ($r) => str_starts_with($r['requirement_code'], $code.'.'));
+            $applicable = $theme->where('is_applicable', true);
+            $assessed = $applicable->whereNotNull('assessment_result')->where('assessment_result', '!=', 'not_assessed')->where('assessment_result', '!=', 'not_applicable');
 
-        $ismsRisks = Risk::where('organization_id', $orgId)
-            ->whereIn('source', ['self-assessment', 'audit'])->count();
+            return [
+                'name' => $name,
+                'count' => $theme->count(),
+                'applicable' => $applicable->count(),
+                'implemented' => $applicable->where('implementation_status', 'implemented')->count(),
+                'compliant' => $assessed->where('assessment_result', 'compliant')->count(),
+                'assessed' => $assessed->count(),
+                'flagged' => $theme->filter(fn ($r) => $r['flags'])->count(),
+            ];
+        })->all();
 
-        $openGaps = $this->isoGaps($orgId, $fwId)
-            ->whereNotIn('g.status', Gap::RESOLVED_STATUSES)->count();
-
-        $latestAudit = ComplianceAssessment::where('organization_id', $orgId)
-            ->where('framework_id', $fwId)
-            ->orderByDesc('created_at')->first();
-
-        // Annex A themes breakdown
-        $themes = [
-            'A.5' => ['name' => 'Organizational Controls', 'target' => 37],
-            'A.6' => ['name' => 'People Controls', 'target' => 8],
-            'A.7' => ['name' => 'Physical Controls', 'target' => 14],
-            'A.8' => ['name' => 'Technological Controls', 'target' => 34],
-        ];
-        foreach ($themes as $code => &$t) {
-            $t['count'] = DB::table('framework_requirements')
-                ->where('framework_id', $fwId)
-                ->whereLike('requirement_code', $code.'%')
-                ->where('level', '>', 0)
-                ->count();
-            $soaImpl = DB::table('statements_of_applicability as s')
-                ->join('framework_requirements as r', 'r.id', '=', 's.requirement_id')
-                ->where('s.organization_id', $orgId)
-                ->where('r.framework_id', $fwId)
-                ->whereLike('r.requirement_code', $code.'%')
-                ->where('s.implementation_status', 'implemented')
-                ->count();
-            $t['implemented'] = $soaImpl;
-        }
-        unset($t);
-
-        $maturity = [
-            'context' => 3.5, 'leadership' => 3.8, 'planning' => 3.2,
-            'support' => 3.4, 'operation' => 3.0, 'performance_eval' => 2.9, 'improvement' => 3.1,
-        ];
+        $approved = SoaVersion::query()->where('status', 'approved')->orderByDesc('version_no')->first(['id', 'version_no', 'decided_at', 'decided_by']);
+        $openNc = $this->isoGaps($orgId, $fwId)->whereNotIn('g.status', Gap::RESOLVED_STATUSES);
 
         return Inertia::render('ISMS/Index', [
             'kpis' => [
-                'annex_a_total' => $totalAnnexA,
-                'soa_total' => $soaCount,
-                'soa_applicable' => $soaApplicable,
-                'soa_implemented' => $implementedCount,
-                'isms_risks' => $ismsRisks,
-                'open_gaps' => $openGaps,
+                'annex_a_total' => $summary['total'],
+                'soa_applicable' => $summary['applicable'],
+                'soa_implemented' => $summary['implemented'],
+                'soa_flagged' => $summary['flagged'],
+                'isms_risks' => $this->ismsRisks()->count(),
+                'isms_risks_above_appetite' => $this->ismsRisks()->where('risk_appetite', 'above')->count(),
+                'open_gaps' => (clone $openNc)->count(),
+                'overdue_gaps' => (clone $openNc)->whereNotNull('g.due_date')->whereDate('g.due_date', '<', today())->count(),
             ],
             'themes' => $themes,
-            'maturity' => $maturity,
-            'latestAudit' => $latestAudit,
+            'soaVersion' => $approved ? ['version_no' => $approved->version_no, 'approved_at' => $approved->decided_at,
+                'changes' => count($soa->changesSinceApproved($orgId, $rows))] : null,
+            'pendingVersion' => SoaVersion::query()->where('status', 'submitted')->exists(),
+            // The assessment the SoA evidence is read from: the latest completed one.
+            'latestAudit' => ComplianceAssessment::where('organization_id', $orgId)->where('framework_id', $fwId)
+                ->where('status', 'completed')->orderByDesc('end_date')->orderByDesc('id')->first(),
         ]);
     }
 
+    /** Risks inside the ISMS scope (config isms.risk_categories), with the controls treating them. */
     public function risks()
     {
-        $orgId = $this->orgId();
-        $risks = Risk::with(['owner:id,name', 'category:id,name'])
-            ->where('organization_id', $orgId)
-            ->orderByDesc('residual_score')
-            ->take(60)
-            ->get();
-        $distribution = [
-            'critical' => $risks->where('residual_rating', 'critical')->count(),
-            'high' => $risks->where('residual_rating', 'high')->count(),
-            'medium' => $risks->where('residual_rating', 'medium')->count(),
-            'low' => $risks->where('residual_rating', 'low')->count(),
-        ];
+        $risks = $this->ismsRisks()->with(['owner:id,name', 'category:id,name', 'controls:id,control_code,title,effectiveness'])
+            ->orderByDesc('residual_score')->get();
 
-        return Inertia::render('ISMS/Risks', compact('risks', 'distribution'));
+        return Inertia::render('ISMS/Risks', [
+            'risks' => $risks,
+            // Five-point rating scale shown as four bands: "very low" counts as low.
+            'distribution' => collect(['critical', 'high', 'medium'])->mapWithKeys(fn ($r) => [$r => $risks->where('residual_rating', $r)->count()])
+                ->put('low', $risks->whereIn('residual_rating', ['low', 'very_low'])->count())->all(),
+            'scope' => DB::table('risk_categories')->where('organization_id', $this->orgId())->whereIn('slug', config('isms.risk_categories'))->orderBy('name')->pluck('name'),
+            'untreated' => $risks->filter(fn ($r) => $r->controls->isEmpty())->count(),
+        ]);
     }
 
     public function controls()
@@ -168,31 +156,125 @@ class IsmsController extends Controller
         ]);
     }
 
-    public function soa()
+    public function soa(StatementOfApplicabilityService $soa)
     {
         $orgId = $this->orgId();
-        $fwId = $this->isoFrameworkId();
+        $rows = $soa->rows($orgId);
+        $user = request()->user();
 
-        $rows = DB::table('framework_requirements as r')
-            ->leftJoin('statements_of_applicability as s', function ($j) use ($orgId) {
-                $j->on('s.requirement_id', '=', 'r.id')->where('s.organization_id', $orgId);
-            })
-            ->where('r.framework_id', $fwId)
-            ->where('r.level', '>', 0) // leaf controls only
-            ->orderBy('r.requirement_code')
-            ->select('r.requirement_code', 'r.title', 'r.description',
-                's.is_applicable', 's.justification', 's.implementation_status')
-            ->get();
+        return Inertia::render('ISMS/Soa', [
+            'rows' => $rows->values(),
+            'summary' => $soa->summary($rows),
+            'changes' => $soa->changesSinceApproved($orgId, $rows),
+            'versions' => SoaVersion::query()->with(['preparer:id,name', 'decider:id,name'])->orderByDesc('version_no')
+                ->get(['id', 'version_no', 'status', 'summary', 'notes', 'prepared_by', 'prepared_at', 'decided_by', 'decided_at', 'decision_notes']),
+            'controls' => Control::query()->orderBy('control_code')->get(['id', 'control_code', 'title']),
+            'implementation' => StatementOfApplicability::IMPLEMENTATION,
+            'can' => [
+                'edit' => $user->can('edit isms'),
+                'approve' => $user->can('approve isms'),
+                'export' => $user->can('export isms'),
+            ],
+            'me' => $user->id,
+        ]);
+    }
 
-        $summary = [
-            'total' => $rows->count(),
-            'applicable' => $rows->where('is_applicable', true)->count(),
-            'excluded' => $rows->where('is_applicable', false)->count(),
-            'pending' => $rows->whereNull('is_applicable')->count(),
-            'implemented' => $rows->where('implementation_status', 'implemented')->count(),
-        ];
+    /** Record (or change) the bank's decision for one Annex A control. */
+    public function soaUpdate(Request $request, int $requirement)
+    {
+        $orgId = $this->orgId();
+        abort_unless(DB::table('framework_requirements')->where('id', $requirement)->where('framework_id', $this->isoFrameworkId())->where('level', '>', 0)->exists(), 404);
 
-        return Inertia::render('ISMS/Soa', compact('rows', 'summary'));
+        $data = $request->validate([
+            'is_applicable' => 'required|boolean',
+            'justification' => 'required|string|min:10|max:2000',
+            'implementation_status' => ['required', Rule::in(StatementOfApplicability::IMPLEMENTATION)],
+            'control_id' => ['nullable', 'integer', Rule::exists('controls', 'id')->where('organization_id', $orgId)->whereNull('deleted_at')],
+        ], ['justification.required' => 'ISO 27001 requires a reason for including or excluding every Annex A control.']);
+
+        // An excluded control is not implemented; an applicable one cannot be "not applicable".
+        if (! $data['is_applicable']) {
+            $data['implementation_status'] = 'not_applicable';
+        } elseif ($data['implementation_status'] === 'not_applicable') {
+            throw ValidationException::withMessages(['implementation_status' => 'Choose how far an applicable control is implemented.']);
+        }
+
+        $entry = StatementOfApplicability::query()->firstOrNew(['organization_id' => $orgId, 'requirement_id' => $requirement]);
+        $entry->fill($data + ['updated_by' => $request->user()->id])->save();
+
+        return back()->with('success', 'Statement of Applicability updated.');
+    }
+
+    /** Freeze the current SoA as a new version for management approval. */
+    public function soaSubmit(Request $request, StatementOfApplicabilityService $soa)
+    {
+        $orgId = $this->orgId();
+        abort_if(SoaVersion::query()->where('status', 'submitted')->exists(), 422, 'A version is already awaiting approval.');
+        $rows = $soa->rows($orgId);
+        $summary = $soa->summary($rows);
+        if ($summary['pending'] > 0) {
+            throw ValidationException::withMessages(['soa' => "{$summary['pending']} Annex A controls have no decision yet."]);
+        }
+
+        $version = SoaVersion::create([
+            'organization_id' => $orgId,
+            'version_no' => (int) SoaVersion::query()->max('version_no') + 1,
+            'status' => 'submitted',
+            'snapshot' => $soa->snapshot($rows),
+            'summary' => $summary + ['changes' => count($soa->changesSinceApproved($orgId, $rows))],
+            'notes' => $request->input('notes'),
+            'prepared_by' => $request->user()->id,
+            'prepared_at' => now(),
+        ]);
+
+        return back()->with('success', "SoA version {$version->version_no} submitted for approval.");
+    }
+
+    /** Approve or return a submitted version. Whoever prepared it cannot approve it. */
+    public function soaDecide(Request $request, SoaVersion $version)
+    {
+        $data = $request->validate([
+            'decision' => ['required', Rule::in(['approve', 'return'])],
+            'notes' => 'required_if:decision,return|nullable|string|max:2000',
+        ]);
+        abort_unless($version->status === 'submitted', 422, 'This version has already been decided.');
+        if ($request->user()->id === (int) $version->prepared_by) {
+            throw ValidationException::withMessages(['decision' => 'The person who prepared a version cannot approve it.']);
+        }
+
+        $version->update([
+            'status' => $data['decision'] === 'approve' ? 'approved' : 'returned',
+            'decided_by' => $request->user()->id,
+            'decided_at' => now(),
+            'decision_notes' => $data['notes'] ?? null,
+        ]);
+
+        return back()->with('success', "SoA version {$version->version_no} ".($version->status === 'approved' ? 'approved.' : 'returned.'));
+    }
+
+    /** The SoA as CSV, with the evidence beside each entry (`export isms`). */
+    public function soaExport(StatementOfApplicabilityService $soa): StreamedResponse
+    {
+        $rows = $soa->rows($this->orgId());
+
+        return response()->streamDownload(function () use ($rows) {
+            $out = fopen('php://output', 'w');
+            fputcsv($out, ['control', 'title', 'applicable', 'justification', 'implementation', 'implementing_controls', 'latest_assessment', 'flags']);
+            foreach ($rows as $r) {
+                fputcsv($out, [$r['requirement_code'], $r['title'], $r['is_applicable'] === null ? 'undecided' : ($r['is_applicable'] ? 'yes' : 'no'),
+                    $r['justification'], $r['implementation_status'], collect($r['controls'])->pluck('control_code')->implode('; '),
+                    $r['assessment_result'], implode(' ', $r['flags'])]);
+            }
+            fclose($out);
+        }, 'statement-of-applicability-'.now()->format('Ymd').'.csv', ['Content-Type' => 'text/csv']);
+    }
+
+    private function ismsRisks()
+    {
+        $categories = DB::table('risk_categories')->where('organization_id', $this->orgId())
+            ->whereIn('slug', config('isms.risk_categories'))->pluck('id');
+
+        return Risk::query()->active()->whereIn('category_id', $categories);
     }
 
     public function gapAnalysis()
