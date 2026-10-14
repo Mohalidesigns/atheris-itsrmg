@@ -14,7 +14,7 @@ class PolicyAttestation extends Model
     use HasTenantIdAlias;
 
     protected $fillable = [
-        'organization_id', 'policy_id', 'user_id', 'status',
+        'organization_id', 'policy_id', 'version_number', 'user_id', 'status',
         'acknowledged_at', 'due_date', 'reminder_sent_at', 'notes',
     ];
 
@@ -27,9 +27,18 @@ class PolicyAttestation extends Model
         ];
     }
 
-    public const STATUSES = [
-        'pending', 'acknowledged', 'declined', 'overdue',
-    ];
+    /** Overdue is not stored: it is a pending attestation past its due date (scopeOverdue). */
+    public const STATUSES = ['pending', 'completed', 'waived'];
+
+    public function scopeOverdue($query)
+    {
+        return $query->where('status', 'pending')->whereNotNull('due_date')->whereDate('due_date', '<', today());
+    }
+
+    public function isOverdue(): bool
+    {
+        return $this->status === 'pending' && $this->due_date && $this->due_date->lt(today());
+    }
 
     public function policy(): BelongsTo
     {

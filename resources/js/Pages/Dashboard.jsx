@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null, policyPulse = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -605,9 +605,27 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
 
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                     <div className="flex items-start justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-[#2D3748]">Policy Attestation Coverage</h3>
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Policy Compliance</h3>
                         <Link href={route('policy-attestations.index')} className="text-xs text-[#0A1F44] underline">Attestations →</Link>
                     </div>
+                    {policyPulse && (
+                        <div className="mb-3 grid grid-cols-3 gap-2 text-center">
+                            {[
+                                ['Attested', policyPulse.attestation_rate == null ? '—' : `${policyPulse.attestation_rate}%`, route('policy-attestations.index'), false],
+                                ['Overdue', policyPulse.attestations_overdue, route('policy-attestations.index', { status: 'overdue' }), policyPulse.attestations_overdue > 0],
+                                ['Reviews overdue', policyPulse.review_overdue, route('policies.index', { flag: 'review_overdue' }), policyPulse.review_overdue > 0],
+                                ['Awaiting approval', policyPulse.awaiting_approval, route('policies.index', { status: 'in_review' }), false],
+                                ['Live exceptions', policyPulse.exceptions_live, route('policy-exceptions.index', { status: 'approved' }), false],
+                                ['No control mapped', policyPulse.unmapped_active, route('control-standards.index'), policyPulse.unmapped_active > 0],
+                            ].map(([label, n, href, alert]) => (
+                                <Link key={label} href={href} className="rounded-lg border border-gray-100 px-1 py-1.5 hover:bg-gray-50">
+                                    <p className={`text-base font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                    <p className="text-[10px] text-[#718096]">{label}</p>
+                                </Link>
+                            ))}
+                        </div>
+                    )}
+                    <h4 className="mb-2 text-xs font-semibold text-[#2D3748]">Attestation coverage by department</h4>
                     <ul className="space-y-3 text-xs">
                         {attestationByDept.map((d) => (
                             <li key={d.department}>

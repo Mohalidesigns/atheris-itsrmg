@@ -170,6 +170,7 @@ const navigation = [
             { name: 'Control Standards', href: 'control-standards.index', permission: 'view controls' },
             { name: 'Policy Attestations', href: 'policy-attestations.index', permission: 'view policy-attestations' },
             { name: 'Exceptions', href: 'policy-exceptions.index', permission: 'view policies' },
+            { name: 'My Attestations', href: 'my-attestations.index' },
         ],
     },
     {

@@ -198,7 +198,8 @@ class ReturnRunPopulator
             'breach_records_affected' => (int) DataBreach::withoutGlobalScopes()->where('organization_id', $orgId)
                 ->whereBetween('discovered_at', [$from, $to])->sum('records_affected'),
             'policies_in_force' => Policy::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')
-                ->whereIn('status', ['approved', 'active'])->count(),
+                // Approved-but-unpublished policies are not yet in force (ATH-VAL-009 lifecycle).
+                ->where('status', 'active')->count(),
             'vendors_active' => Vendor::withoutGlobalScopes()->where('organization_id', $orgId)->where('status', 'active')->count(),
             'vendors_critical' => Vendor::withoutGlobalScopes()->where('organization_id', $orgId)->where('status', 'active')
                 ->whereIn('risk_level', ['critical', 'high'])->count(),

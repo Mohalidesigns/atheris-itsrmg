@@ -343,8 +343,12 @@ Route::middleware('auth')->group(function () {
         ->middlewareFor('destroy', 'permission:delete policies');
     Route::post('/policies/{policy}/publish', [PolicyController::class, 'publish'])
         ->middleware('permission:approve policies')->name('policies.publish');
-    Route::post('/policies/{policy}/attest', [PolicyController::class, 'attest'])
-        ->middleware('permission:view policies')->name('policies.attest');
+    // Workflow actions; the controller checks edit vs approve per action (ATH-VAL-009).
+    Route::post('/policies/{policy}/transition', [PolicyController::class, 'transition'])
+        ->middleware('permission:edit policies|approve policies')->name('policies.transition');
+    // Attestation is for all staff: the controller allows anyone asked to attest, or with view policies.
+    Route::post('/policies/{policy}/attest', [PolicyController::class, 'attest'])->name('policies.attest');
+    Route::get('/my-attestations', [PolicyAttestationController::class, 'mine'])->name('my-attestations.index');
 
     // Control Standards
     Route::get('/control-standards', [ControlStandardController::class, 'index'])
@@ -353,6 +357,8 @@ Route::middleware('auth')->group(function () {
     // Policy Attestations (read-only register — writes go through policies.attest)
     Route::resource('policy-attestations', PolicyAttestationController::class)->only(['index', 'show'])
         ->middleware('permission:view policy-attestations');
+    Route::post('/policy-attestations/{policy_attestation}/waive', [PolicyAttestationController::class, 'waive'])
+        ->middleware('permission:approve policy-attestations')->name('policy-attestations.waive');
 
     // Change Requests (legacy stub) — redirects to the Change Management module at /changes
     Route::get('/change-requests', [ChangeRequestController::class, 'index'])
@@ -361,6 +367,10 @@ Route::middleware('auth')->group(function () {
     // Policy Exceptions
     Route::get('/policy-exceptions', [PolicyExceptionController::class, 'index'])
         ->middleware('permission:view policies')->name('policy-exceptions.index');
+    Route::post('/policy-exceptions', [PolicyExceptionController::class, 'store'])
+        ->middleware('permission:view policies')->name('policy-exceptions.store');
+    Route::post('/policy-exceptions/{exception}/decide', [PolicyExceptionController::class, 'decide'])
+        ->middleware('permission:approve policies')->name('policy-exceptions.decide');
 
     // ISMS Module
     Route::middleware('permission:view isms')->group(function () {

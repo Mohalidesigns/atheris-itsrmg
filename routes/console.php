@@ -10,6 +10,7 @@ use App\Jobs\Ea\RunSurveyCampaigns;
 use App\Jobs\Ea\SyncAssetCatalogue;
 use App\Jobs\Ea\SyncCveFeed;
 use App\Jobs\Ea\SyncEolFeed;
+use App\Models\PolicyException;
 use App\Services\Change\ChangeWorkflow;
 use App\Services\Ea\ArchiMateExchange;
 use App\Services\Issues\IssueWorkflow;
@@ -73,3 +74,12 @@ Artisan::command('changes:sweep', function (ChangeWorkflow $workflow) {
     $this->info($workflow->sweepOverdueApprovals().' overdue approval reminder(s) sent.');
 })->purpose('Remind approvers of overdue change approvals');
 Schedule::command('changes:sweep')->hourly()->name('changes.sweep')->withoutOverlapping();
+
+/* =====================  Policy Management ===================== */
+// Approved policy exceptions past their end date become expired (ATH-VAL-009).
+Artisan::command('policies:sweep', function () {
+    $expired = PolicyException::withoutGlobalScopes()->where('status', 'approved')
+        ->whereDate('expires_on', '<', today())->update(['status' => 'expired', 'updated_at' => now()]);
+    $this->info("{$expired} policy exception(s) expired.");
+})->purpose('Expire approved policy exceptions past their end date');
+Schedule::command('policies:sweep')->dailyAt('00:15')->name('policies.sweep')->withoutOverlapping();

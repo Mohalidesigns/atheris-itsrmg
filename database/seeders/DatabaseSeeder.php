@@ -131,6 +131,10 @@ class DatabaseSeeder extends Seeder
         // watch (ATH-VAL-008; before Regulatory Intelligence so vendor return figures are final)
         $this->call(VendorManagementDemoSeeder::class);
 
+        // Policy Management: categories, owners and approvers from each policy's title, attestations
+        // only for policies in force, policy→control mapping and exceptions in every state (ATH-VAL-009)
+        $this->call(PolicyManagementDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

@@ -62,7 +62,7 @@ class ReportController extends Controller
 
         // Policy stats
         $policyStats = [
-            'published' => Policy::where('status', 'published')->count(),
+            'published' => Policy::where('status', 'active')->count(),
         ];
 
         // BCP stats

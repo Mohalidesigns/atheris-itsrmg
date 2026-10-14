@@ -28,6 +28,7 @@ use App\Services\Change\ChangeApprovalRouter;
 use App\Services\Change\ChangeMetrics;
 use App\Services\ComplianceScoreService;
 use App\Services\Issues\IssueMetrics;
+use App\Services\Policies\PolicyMetrics;
 use App\Services\SecurityOps\SecurityOpsMetrics;
 use App\Services\Vendors\VendorMetrics;
 use Illuminate\Http\Request;
@@ -108,8 +109,12 @@ class DashboardController extends Controller
         $vendorScoreboard = $orgId ? app(VendorMetrics::class)->scoreboard(10) : [];
 
         // Policy attestation coverage per department
+        // Policies in force only; waived requests are neither done nor outstanding (ATH-VAL-009).
         $attestationByDept = DB::table('policy_attestations as pa')
             ->join('users as u', 'u.id', '=', 'pa.user_id')
+            ->join('policies as p', 'p.id', '=', 'pa.policy_id')
+            ->where('p.status', 'active')->whereNull('p.deleted_at')
+            ->whereIn('pa.status', ['pending', 'completed'])
             ->when($orgId, fn ($q) => $q->where('pa.organization_id', $orgId))
             ->select('u.department',
                 DB::raw("SUM(CASE WHEN pa.status = 'completed' THEN 1 ELSE 0 END) as completed"),
@@ -156,7 +161,7 @@ class DashboardController extends Controller
             'controls' => Control::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'assets' => Asset::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->where('status', '!=', 'decommissioned')->count(),
             'vendors' => Vendor::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->where('status', '!=', 'terminated')->count(),
-            'policies' => Policy::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
+            'policies' => Policy::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->where('status', 'active')->count(),
             'incidents' => Incident::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'vulns' => Vulnerability::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
             'compliance_assessments' => ComplianceAssessment::when($orgId, fn ($q) => $q->where('organization_id', $orgId))->count(),
@@ -183,6 +188,7 @@ class DashboardController extends Controller
             'issues' => $orgId ? $this->issuesPulse() : null,
             'assets' => $orgId ? $this->assetsPulse() : null,
             'vendors' => $orgId ? app(VendorMetrics::class)->summary() : null,
+            'policyPulse' => $orgId ? app(PolicyMetrics::class)->summary() : null,
             'changes' => $orgId ? $this->changesPulse($request->user()) : null,
         ]);
     }

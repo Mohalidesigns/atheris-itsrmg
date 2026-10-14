@@ -37,10 +37,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 5 | Security Operations | `86041ee` | `docs/ATH-VAL-005_Security_Operations_Validation_Report.md` | `tests/Feature/SecurityOperations/SecurityOperationsModuleTest.php` (12) |
 | 6 | Issues & Remediation | `44f0102` | `docs/ATH-VAL-006_Issues_Remediation_Validation_Report.md` | `tests/Feature/Issues/IssuesModuleTest.php` (12) |
 | 7 | Asset Management | `f337190` | `docs/ATH-VAL-007_Asset_Management_Validation_Report.md` | `tests/Feature/Assets/AssetManagementModuleTest.php` (12) |
-| 8 | Vendor Management | see `git log` | `docs/ATH-VAL-008_Vendor_Management_Validation_Report.md` | `tests/Feature/Vendors/VendorManagementModuleTest.php` (10) |
+| 8 | Vendor Management | `f57ddea` | `docs/ATH-VAL-008_Vendor_Management_Validation_Report.md` | `tests/Feature/Vendors/VendorManagementModuleTest.php` (10) |
+| 9 | Policy Management | see `git log` | `docs/ATH-VAL-009_Policy_Management_Validation_Report.md` | `tests/Feature/Policies/PolicyManagementModuleTest.php` (8) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **274 tests, 2,573 assertions, 1 skipped (13 Oct 2026, local, PHP 8.4)**. One failure was a pre-existing flake in `RiskModuleTest` (factory could generate the same residual values as the update); it is pinned and the file re-runs green. The skip is the route smoke test, which runs separately and passed over 203 GET routes.
+Last full suite: **282 tests, 281 passed, 1 skipped, 2,728 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 204 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -124,31 +125,43 @@ Last full suite: **274 tests, 2,573 assertions, 1 skipped (13 Oct 2026, local, P
 - **Dashboard:** the Third-Party Risk card is fed by `VendorMetrics`.
 - **Demo data:** `VendorManagementDemoSeeder` runs after Asset Management. The platform seeder no longer writes ratings or breach events.
 
-## Next phase: module 9, Policy Management
+### Policy Management highlights (module 9)
+
+- **Vocabulary:** one status set, `draft → in_review → approved → active → retired`, mapped from the data's `under_review / active / expired / archived`. Categories mapped. Attestations are `pending / completed / waived`, with overdue derived from the due date.
+  - `PolicyManagementDemoSeeder::normalise()` applies the same mapping on fresh installs, because the bank seeders still write the old values.
+- **Workflow** (`PolicyWorkflow`):
+  - Submit needs the text and an owner; the owner and the submitter cannot approve.
+  - Publish sets the dates and, for a mandatory policy, launches an attestation campaign (all active staff, due in 30 days, version-stamped).
+  - Retiring waives open requests. A text change to an approved or active policy is a new minor version and re-opens approval.
+- **Attestation for all staff:** `policies.attest` and the new **My Attestations** page need only sign-in plus being asked. Before, only 6 roles could attest.
+- **Control Standards:** a `control_policy` mapping (edited on the policy form), with coverage and failing controls per policy.
+- **Exceptions:** a `policy_exceptions` request/decide/revoke flow.
+  - The requester can't decide; the term is capped by risk rating (critical 3 months, high 6, medium and low 12); high and critical need compensating controls.
+  - The daily `policies:sweep` expires lapsed exceptions.
+- **Feeds:** the dashboard "Policy Compliance" card is fed by `PolicyMetrics`. The Returns Centre's `policies_in_force` and the Reports "published" count now read `active`.
+
+## Next phase: module 10, ISMS
 
 Paste as the first message of a new session:
 
-> Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 9, Policy Management, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
+> Read `docs/VALIDATION_HANDOFF.md` and `CLAUDE.md`, then start module 10, ISMS, following the per-module workflow. Test in the in-app browser so I can watch. Commit and push only after the full suite passes, then pause for my go-ahead.
 
-**Scope** (sidebar `Policy Management`):
+**Scope:** sidebar `ISMS`.
+- Routes: `isms.*` under the `permission:view isms` group in `routes/web.php` (index, risks, controls, audit, …).
+- Controller: `IsmsController`.
+- Check the Statement of Applicability against the Compliance assessment results and the new `control_policy` mappings (open item from module 3).
 
-| Page | Route | Controller | Gate |
-|---|---|---|---|
-| Policies | `policies.*` (+ `policies.publish`) | `PolicyController` | `view policies` |
-| Control Standards | `control-standards.index` | `ControlStandardController` | `view controls` |
-| Policy Attestations | `policy-attestations.*` (index, show) | `PolicyAttestationController` | `view policy-attestations` |
-| Exceptions | `policy-exceptions.index` | `PolicyExceptionController` | `view policies` |
+**Deliverables:** `tests/Feature/Isms/IsmsModuleTest.php`, `docs/ATH-VAL-010_ISMS_Validation_Report.md`, and a demo seeder if needed, wired after `PolicyManagementDemoSeeder`.
 
-**Deliverables:** `tests/Feature/Policies/PolicyManagementModuleTest.php`, `docs/ATH-VAL-009_Policy_Management_Validation_Report.md`, and a demo seeder if needed, wired after `VendorManagementDemoSeeder`.
+**Remaining order after that:** PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest.
 
-**Remaining order after that:** ISMS → PCI Management → Business Continuity → Continuous Monitoring → KRIs & Dashboards → the rest.
+**Open from module 9:**
+- no attestation reminders or escalation;
+- plain-text policies with no attachments, version comparison or PDF;
+- exception renewal is a new request; no link from an expired exception to the risk register;
+- no UI for the control mapping's clause field.
 
-**Open from module 8:**
-- No live rating or breach-feed providers, no DDQ question sets, no directory admin.
-- Fourth parties and exit plans are not modelled; no review or contract reminders.
-- `KRI-TPR-BREACH` and `CCM-TPR-RATE-018` don't read the TPRM tables yet; that belongs to the KRIs pass.
-
-### Patterns from modules 5-8 to reuse
+### Patterns from modules 5-9 to reuse
 
 - **Stub pages:** move `PlatformController` stubs into a module controller, with services under `app/Services/<Module>/`, and a `<Module>Metrics` service shared by the module page and the executive dashboard (`DashboardController` + `Pages/Dashboard.jsx` panel).
 - **Tenancy:** strict `BelongsToOrganization` on the model, so route binding 404s across banks; pickers validated with tenant-scoped `Rule::exists` or the model's own scope.
@@ -157,6 +170,7 @@ Paste as the first message of a new session:
 - **Webhooks:** signed with `sha256=HMAC(secret, "{ts}.{body}")`, outside auth and CSRF (`routes/web.php` top plus `bootstrap/app.php` exceptions); secrets use the `encrypted` cast and are shown once.
 - **Sandbox integrations:** when no credentials exist, run the real code path against a deterministic catalogue, record `mode = sandbox`, and say so in the UI (module 6 ITSM, module 7 discovery). Demo seeders should drive the real service, as `AssetManagementDemoSeeder` does with the connectors, so demo history matches what the UI produces.
 - **EA overlap:** EA is canonical for business architecture. GRC pages read the EA models. Non-ArchiMate links (assets) go in GRC pivots, not `ea_relationships`. Write EA link fields with the query builder in seeders so stewardship seals are not broken.
+- **Fresh seeds versus migrations:** bank seeders run after the migrations. A migration that remaps existing data must be mirrored in the module's demo seeder, or a fresh install keeps the old values (module 9 hit this).
 - **Timing:** a new module test takes about 9 minutes on its own (migrations dominate). The full suite takes about 30-35 minutes. The smoke test works as `SMOKE=1 DB_CONNECTION=sqlite DB_DATABASE=$PWD/database/database.sqlite php vendor/bin/phpunit --filter RouteSmokeTest` after a fresh seed of that file.
 
 ## Open follow-ups (not blocking)
