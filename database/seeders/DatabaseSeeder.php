@@ -147,6 +147,9 @@ class DatabaseSeeder extends Seeder
         // services they recover, DR exercises measured against target, First Bank's DR runbooks and
         // test history (ATH-VAL-012)
         $this->call(BusinessContinuityDemoSeeder::class);
+        // Continuous Monitoring: CCM run history measured from the bank's records, drift reconciled with
+        // approved changes, access-review campaigns (ATH-VAL-013)
+        $this->call(ContinuousMonitoringDemoSeeder::class);
 
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)

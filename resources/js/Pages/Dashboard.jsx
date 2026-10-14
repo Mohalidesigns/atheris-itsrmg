@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null, policyPulse = null, continuity = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null, policyPulse = null, continuity = null, monitoring = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -238,7 +238,7 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                         </ul>
                     </div>
                     <div className="mt-4 pt-3 border-t border-gray-100">
-                        <h4 className="text-xs font-semibold text-[#2D3748]">CCM — this week</h4>
+                        <h4 className="text-xs font-semibold text-[#2D3748]">CCM — latest results</h4>
                         <div className="flex items-end gap-2 h-16 mt-2">
                             {['pass', 'warn', 'fail', 'error'].map((s) => (
                                 <div key={s} className="flex-1 flex flex-col items-center gap-1">
@@ -518,6 +518,30 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                             ['Critical services with no plan', continuity.critical_without_plan, route('bcp.plans'), continuity.critical_without_plan > 0],
                             ['BIA RTO not on the service', continuity.bia_not_applied, route('bcp.bia'), continuity.bia_not_applied > 0],
                             ['DR exercises within RTO', continuity.exercises_12m ? `${continuity.exercises_within_rto}/${continuity.exercises_12m}` : '—', route('dr.exercises'), continuity.exercises_12m > 0 && continuity.exercises_within_rto < continuity.exercises_12m],
+                        ].map(([label, n, href, alert]) => (
+                            <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                <p className="text-[11px] text-[#718096]">{label}</p>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {monitoring && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Continuous Monitoring</h3>
+                        <Link href={route('monitoring.dashboard')} className="text-xs text-[#0A1F44] underline">Monitoring →</Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                        {[
+                            ['CCM tests passing', monitoring.tests ? `${monitoring.pass}/${monitoring.tests}` : '—', route('ccm.index'), false],
+                            ['CCM tests failing', monitoring.fail, route('ccm.index', { status: 'fail' }), monitoring.fail > 0],
+                            ['Control ratings that disagree with CCM', monitoring.controls_disagree, route('monitoring.controls', { filter: 'disagree' }), monitoring.controls_disagree > 0],
+                            ['Open high/critical drift', monitoring.drift_critical, route('monitoring.drift', { status: 'unresolved' }), monitoring.drift_critical > 0],
+                            ['Access reviews overdue', monitoring.reviews_overdue, route('monitoring.access-reviews', { status: 'overdue' }), monitoring.reviews_overdue > 0],
+                            ['Revocations to confirm', monitoring.revocations_pending, route('monitoring.access-reviews'), monitoring.revocations_pending > 0],
                         ].map(([label, n, href, alert]) => (
                             <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
                                 <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>

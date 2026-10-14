@@ -41,10 +41,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 9 | Policy Management | `a81f88a` | `docs/ATH-VAL-009_Policy_Management_Validation_Report.md` | `tests/Feature/Policies/PolicyManagementModuleTest.php` (8) |
 | 10 | ISMS | `e4ed5da` | `docs/ATH-VAL-010_ISMS_Validation_Report.md` | `tests/Feature/Isms/IsmsModuleTest.php` (6) |
 | 11 | PCI Management | `b09d047` | `docs/ATH-VAL-011_PCI_Management_Validation_Report.md` | `tests/Feature/Pci/PciModuleTest.php` (6) |
-| 12 | Business Continuity | see `git log` | `docs/ATH-VAL-012_Business_Continuity_Validation_Report.md` | `tests/Feature/Continuity/BusinessContinuityModuleTest.php` (6) |
+| 12 | Business Continuity | `25a5ec5` | `docs/ATH-VAL-012_Business_Continuity_Validation_Report.md` | `tests/Feature/Continuity/BusinessContinuityModuleTest.php` (6) |
+| 13 | Continuous Monitoring | see `git log` | `docs/ATH-VAL-013_Continuous_Monitoring_Validation_Report.md` | `tests/Feature/Monitoring/ContinuousMonitoringModuleTest.php` (6) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **300 tests, 299 passed, 1 skipped, 3,084 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
+Last full suite: **306 tests, 305 passed, 1 skipped, 3,221 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -170,17 +171,26 @@ Last full suite: **300 tests, 299 passed, 1 skipped, 3,084 assertions (14 Oct 20
 - **Bug fixed:** the new BIA fields were missing from `$fillable` (indentation mismatch on the first edit).
 - **Demo data:** `BusinessContinuityDemoSeeder` links BIAs and plans to services, gives First Bank runbooks and test history, and leaves deliberate gaps (two unapplied BIAs, two plans untested for over a year).
 
-## Next phase: module 13, Continuous Monitoring
+### Continuous Monitoring highlights (module 13)
 
-Sidebar items: Dashboard (`monitoring.dashboard`), CCM Console (`ccm.index`, `view platform`), Controls Monitoring, Drift Detection and Access Reviews (`monitoring.*`, `view monitoring`).
+- **CCM measured, not random:** `CcmChecks` defines all 40 starter-pack tests (metric, unit, direction, pass/warn). 15 are measured from the bank's own records (policies, attestations, DR, BIA, vulnerabilities, incidents, changes, vendors, circulars, returns, drift, access reviews); 25 need an unconnected tool and run in labelled sandbox mode. `CcmRunner` records value, threshold and findings, schedules from the cron (`ccm:run-due` every 15 min), moves the control's last-tested date, and raises one issue per failing test (source `ccm_test`).
+- **Controls Monitoring:** assessed effectiveness beside the CCM signal; disagreements flagged and counted on both dashboards.
+- **Drift register** (`config_drift_events`): sandbox scans of the bank's own assets, reconciled with approved changes that list the asset; investigate, remediate, link a change, accept (not by the owner, with expiry ≤ 12 months), reopen. Unauthorised critical drift raises an issue (source `config_drift`).
+- **Access reviews:** campaigns from Atheris users and roles (real), an AD extract (sandbox) or by hand; nobody decides their own access; removals confirmed by someone other than the decider; completion needs every decision.
+- **Tenancy and gates:** CCM models strictly scoped and runs carry their bank; CCM moved from the platform group to `view monitoring`; Compliance Officer gains monitoring permissions, Risk Manager view.
+- **Demo data:** `ContinuousMonitoringDemoSeeder` drives the real services for both banks; platform-measured failures are real gaps in the demo records.
 
-Start with recon, as for the earlier modules:
-- tenant scoping on the monitoring and CCM models, and whether the pages are `PlatformController` stubs with hard-coded or random data;
-- whether CCM test results feed control effectiveness, issues and the compliance engine;
-- access reviews: segregation of duties (the reviewer cannot certify their own access) and tenant-checked pickers;
-- demo data for both banks (CCM is Kano-only per CLAUDE.md).
+## Next phase: module 14, KRIs & Dashboards
 
-**Remaining order after that:** KRIs & Dashboards, then the rest of the sidebar.
+Sidebar items: KRI Dashboard (`kri.index`), Board Packs (`board-packs.index`), both `PlatformController` stubs under `view platform`, and Executive Dashboard (`reports.executive`, `view reports`).
+
+Start with recon, as for the earlier modules. Known from module 13's walk:
+- `Kri`, `KriReading`, `KriBreach` have no tenant scope; `kriIndex` lists every bank's KRIs and readings;
+- `boardPacksGenerate` writes `organization_id = 1` and fake file paths;
+- KRIs are seeded for Kano only (30); First Bank has none;
+- EA has its own KRI recompute job (`App\Jobs\Ea\RecomputeKris`): check how it relates to the `kris` table before building.
+
+**Remaining order after that:** the rest of the sidebar.
 
 ### Patterns from modules 5-9 to reuse
 

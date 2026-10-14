@@ -82,6 +82,8 @@ class RolesAndPermissionsSeeder extends Seeder
             // Vendor Management: the bank's Vendor Risk Manager holds this role (ATH-VAL-008).
             'view vendors', 'create vendors', 'edit vendors',
             'view vendor-assessments', 'create vendor-assessments', 'edit vendor-assessments',
+            // Continuous Monitoring: reads CCM results and drift against the risk register (ATH-VAL-013).
+            'view monitoring',
         ]);
 
         // Compliance Officer - compliance + controls + evidence + frameworks
@@ -102,6 +104,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view platform', 'create platform', 'edit platform',
             // Change Management: CAB member for Compliance.
             'view changes', 'create changes', 'approve changes',
+            // Continuous Monitoring: runs access-review campaigns and owns CCM evidence (ATH-VAL-013).
+            'view monitoring', 'create monitoring', 'edit monitoring', 'approve monitoring',
         ]);
 
         // Security Analyst - security operations

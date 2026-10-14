@@ -56,6 +56,9 @@ class Issue extends Model
         'assessment' => ['label' => 'Compliance gap', 'model' => Gap::class, 'code' => 'gap_code', 'route' => null],
         'ndpa_finding' => ['label' => 'NDPA finding', 'model' => null],
         'ea_arb_condition' => ['label' => 'ARB condition', 'model' => ArbSubmission::class, 'code' => 'code', 'route' => 'ea.arb.show'],
+        'ccm_test' => ['label' => 'CCM test', 'model' => CcmTenantTest::class, 'code' => 'code', 'route' => 'ccm.show'],
+        'config_drift' => ['label' => 'Configuration drift', 'model' => ConfigDriftEvent::class, 'code' => 'drift_code', 'route' => 'drift.show'],
+        'access_review' => ['label' => 'Access review', 'model' => AccessReviewCampaign::class, 'code' => 'campaign_code', 'route' => 'access-reviews.show'],
     ];
 
     /** Issue severity → SLA policy severity (the policy table uses the vulnerability scale). */

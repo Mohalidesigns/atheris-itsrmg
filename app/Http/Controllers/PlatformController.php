@@ -6,8 +6,6 @@ use App\Models\AucsControl;
 use App\Models\AucsFrameworkMapping;
 use App\Models\BoardPackRun;
 use App\Models\BoardPackTemplate;
-use App\Models\CcmTenantTest;
-use App\Models\CcmTestRun;
 use App\Models\ContentInstall;
 use App\Models\CopilotConversation;
 use App\Models\CopilotMessage;
@@ -159,38 +157,6 @@ class PlatformController extends Controller
             'categories' => RiskCategory::orderBy('sort_order')->get(['id', 'name']),
             'filters' => ['limit' => $limit] + $request->only('category_id', 'rating'),
         ]);
-    }
-
-    /* --------------------------------- CCM --------------------------------- */
-    public function ccmIndex()
-    {
-        $tests = CcmTenantTest::with('test')->get();
-        $lastRuns = CcmTestRun::orderByDesc('ran_at')->take(50)->get();
-        $summary = [
-            'total' => $tests->count(),
-            'pass' => $tests->where('last_status', 'pass')->count(),
-            'fail' => $tests->where('last_status', 'fail')->count(),
-            'warn' => $tests->where('last_status', 'warn')->count(),
-            'error' => $tests->where('last_status', 'error')->count(),
-        ];
-
-        return Inertia::render('Ccm/Index', compact('tests', 'lastRuns', 'summary'));
-    }
-
-    public function ccmRun(CcmTenantTest $tenantTest)
-    {
-        $statuses = ['pass', 'fail', 'warn'];
-        $status = $statuses[array_rand($statuses)];
-        CcmTestRun::create([
-            'tenant_test_id' => $tenantTest->id,
-            'status' => $status,
-            'output_summary' => "Ad-hoc run completed with status: {$status}",
-            'latency_ms' => rand(250, 2500),
-            'ran_at' => now(),
-        ]);
-        $tenantTest->update(['last_status' => $status, 'last_run_at' => now(), 'next_run_at' => now()->addDay()]);
-
-        return redirect()->back()->with('success', "CCM test ran: {$status}");
     }
 
     /* ---------------------------- Evidence Vault ---------------------------- */

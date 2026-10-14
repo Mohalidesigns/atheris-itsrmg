@@ -5,13 +5,10 @@ use App\Http\Controllers\Admin\UserManagementController;
 use App\Http\Controllers\AssetController;
 use App\Http\Controllers\Assets\AssetDiscoveryController;
 use App\Http\Controllers\Assets\BusinessServiceMapController;
-use App\Http\Controllers\Vendors\SecurityRatingController;
-use App\Http\Controllers\Vendors\SharedDirectoryController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\Auth\SamlController;
 use App\Http\Controllers\Auth\ScimController;
 use App\Http\Controllers\BcpController;
-use App\Http\Controllers\DrController;
 use App\Http\Controllers\BusinessAssetController;
 use App\Http\Controllers\Change\ChangeCabController;
 use App\Http\Controllers\Change\ChangePolicyController;
@@ -23,6 +20,7 @@ use App\Http\Controllers\ControlController;
 use App\Http\Controllers\ControlStandardController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataBreachController;
+use App\Http\Controllers\DrController;
 use App\Http\Controllers\Ea\DecisionRecordController;
 use App\Http\Controllers\Ea\DepthController;
 use App\Http\Controllers\Ea\PortalController;
@@ -36,6 +34,9 @@ use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\IsmsController;
 use App\Http\Controllers\IssueController;
+use App\Http\Controllers\Monitoring\AccessReviewController;
+use App\Http\Controllers\Monitoring\CcmController;
+use App\Http\Controllers\Monitoring\DriftController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\PciController;
 use App\Http\Controllers\PlatformController;
@@ -57,6 +58,8 @@ use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\ThreatController;
 use App\Http\Controllers\VendorAssessmentController;
 use App\Http\Controllers\VendorController;
+use App\Http\Controllers\Vendors\SecurityRatingController;
+use App\Http\Controllers\Vendors\SharedDirectoryController;
 use App\Http\Controllers\VulnerabilityController;
 use App\Http\Controllers\VulnerabilityTicketController;
 use App\Modules\CBNCSAT\Http\Controllers\CsatAssessmentController;
@@ -432,11 +435,29 @@ Route::middleware('auth')->group(function () {
     });
 
     // Continuous Monitoring
+    // (ATH-VAL-013: CCM moved here from the platform group; drift and access reviews are registers.)
     Route::middleware('permission:view monitoring')->group(function () {
         Route::get('/monitoring/dashboard', [MonitoringController::class, 'dashboard'])->name('monitoring.dashboard');
         Route::get('/monitoring/controls', [MonitoringController::class, 'controls'])->name('monitoring.controls');
-        Route::get('/monitoring/drift', [MonitoringController::class, 'drift'])->name('monitoring.drift');
-        Route::get('/monitoring/access-reviews', [MonitoringController::class, 'accessReviews'])->name('monitoring.access-reviews');
+
+        Route::get('/ccm', [CcmController::class, 'index'])->name('ccm.index');
+        Route::get('/ccm/{tenantTest}', [CcmController::class, 'show'])->name('ccm.show');
+        Route::post('/ccm/{tenantTest}/run', [CcmController::class, 'run'])->middleware('permission:edit monitoring')->name('ccm.run');
+        Route::put('/ccm/{tenantTest}', [CcmController::class, 'update'])->middleware('permission:edit monitoring')->name('ccm.update');
+
+        Route::get('/monitoring/drift', [DriftController::class, 'index'])->name('monitoring.drift');
+        Route::post('/monitoring/drift/scan', [DriftController::class, 'scan'])->middleware('permission:edit monitoring')->name('drift.scan');
+        Route::post('/monitoring/drift', [DriftController::class, 'store'])->middleware('permission:create monitoring')->name('drift.store');
+        Route::get('/monitoring/drift/{drift}', [DriftController::class, 'show'])->name('drift.show');
+        Route::post('/monitoring/drift/{drift}/transition', [DriftController::class, 'transition'])->middleware('permission:edit monitoring')->name('drift.transition');
+
+        Route::get('/monitoring/access-reviews', [AccessReviewController::class, 'index'])->name('monitoring.access-reviews');
+        Route::post('/monitoring/access-reviews', [AccessReviewController::class, 'store'])->middleware('permission:create monitoring')->name('access-reviews.store');
+        Route::get('/monitoring/access-reviews/{campaign}', [AccessReviewController::class, 'show'])->name('access-reviews.show');
+        Route::post('/monitoring/access-reviews/{campaign}/items', [AccessReviewController::class, 'addItem'])->middleware('permission:edit monitoring')->name('access-reviews.items.store');
+        Route::post('/monitoring/access-reviews/{campaign}/complete', [AccessReviewController::class, 'complete'])->middleware('permission:approve monitoring')->name('access-reviews.complete');
+        Route::post('/monitoring/access-review-items/{item}/decide', [AccessReviewController::class, 'decide'])->middleware('permission:edit monitoring')->name('access-reviews.items.decide');
+        Route::post('/monitoring/access-review-items/{item}/confirm', [AccessReviewController::class, 'confirm'])->middleware('permission:edit monitoring')->name('access-reviews.items.confirm');
     });
 
     // CBN-CSAT Module
@@ -612,10 +633,6 @@ Route::middleware('auth')->group(function () {
 
         // Phase 2: AUCS Browser
         Route::get('/aucs', [PlatformController::class, 'aucsIndex'])->name('aucs.index');
-
-        // Phase 3: CCM
-        Route::get('/ccm', [PlatformController::class, 'ccmIndex'])->name('ccm.index');
-        Route::post('/ccm/{tenantTest}/run', [PlatformController::class, 'ccmRun'])->name('ccm.run');
 
         // Phase 3: Evidence Vault (WORM)
         Route::get('/evidence-vault', [PlatformController::class, 'evidenceVaultIndex'])->name('evidence-vault.index');

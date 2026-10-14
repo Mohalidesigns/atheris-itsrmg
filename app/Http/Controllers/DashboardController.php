@@ -29,6 +29,7 @@ use App\Services\Change\ChangeMetrics;
 use App\Services\ComplianceScoreService;
 use App\Services\Continuity\ContinuityMetrics;
 use App\Services\Issues\IssueMetrics;
+use App\Services\Monitoring\MonitoringMetrics;
 use App\Services\Policies\PolicyMetrics;
 use App\Services\SecurityOps\SecurityOpsMetrics;
 use App\Services\Vendors\VendorMetrics;
@@ -77,8 +78,8 @@ class DashboardController extends Controller
             'not_assessed' => (int) (($effRaw['not_assessed'] ?? 0) + ($effRaw[''] ?? 0)),
         ];
 
-        // CCM pass/fail
-        $ccmByStatus = CcmTenantTest::select('last_status', DB::raw('count(*) as c'))
+        // CCM: latest result of each enabled test in this bank
+        $ccmByStatus = CcmTenantTest::where('status', 'enabled')->whereNotNull('last_status')->select('last_status', DB::raw('count(*) as c'))
             ->groupBy('last_status')->pluck('c', 'last_status');
 
         // Incidents last 90 days
@@ -191,6 +192,7 @@ class DashboardController extends Controller
             'vendors' => $orgId ? app(VendorMetrics::class)->summary() : null,
             'policyPulse' => $orgId ? app(PolicyMetrics::class)->summary() : null,
             'continuity' => $orgId ? app(ContinuityMetrics::class)->summary() : null,
+            'monitoring' => $orgId ? app(MonitoringMetrics::class)->summary((int) $orgId) : null,
             'changes' => $orgId ? $this->changesPulse($request->user()) : null,
         ]);
     }

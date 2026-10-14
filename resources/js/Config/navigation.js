@@ -216,7 +216,7 @@ const navigation = [
         icon: ChartBarIcon,
         children: [
             { name: 'Dashboard', href: 'monitoring.dashboard', permission: 'view monitoring' },
-            { name: 'CCM Console', href: 'ccm.index', permission: 'view platform' },
+            { name: 'CCM Console', href: 'ccm.index', permission: 'view monitoring' },
             { name: 'Controls Monitoring', href: 'monitoring.controls', permission: 'view monitoring' },
             { name: 'Drift Detection', href: 'monitoring.drift', permission: 'view monitoring' },
             { name: 'Access Reviews', href: 'monitoring.access-reviews', permission: 'view monitoring' },

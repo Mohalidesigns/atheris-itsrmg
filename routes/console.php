@@ -14,6 +14,7 @@ use App\Models\PolicyException;
 use App\Services\Change\ChangeWorkflow;
 use App\Services\Ea\ArchiMateExchange;
 use App\Services\Issues\IssueWorkflow;
+use App\Services\Monitoring\CcmRunner;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -83,3 +84,10 @@ Artisan::command('policies:sweep', function () {
     $this->info("{$expired} policy exception(s) expired.");
 })->purpose('Expire approved policy exceptions past their end date');
 Schedule::command('policies:sweep')->dailyAt('00:15')->name('policies.sweep')->withoutOverlapping();
+
+/* =====================  Continuous Monitoring ===================== */
+// Run every enabled CCM test whose cron schedule is due (ATH-VAL-013).
+Artisan::command('ccm:run-due', function (CcmRunner $runner) {
+    $this->info($runner->runDue().' CCM test(s) run.');
+})->purpose('Run CCM tests that are due');
+Schedule::command('ccm:run-due')->everyFifteenMinutes()->name('ccm.run-due')->withoutOverlapping();

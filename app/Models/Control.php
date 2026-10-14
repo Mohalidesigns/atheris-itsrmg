@@ -69,6 +69,12 @@ class Control extends Model
         return $this->belongsTo(User::class, 'owner_id');
     }
 
+    /** CCM tests that monitor this control (ATH-VAL-013). */
+    public function ccmTests(): HasMany
+    {
+        return $this->hasMany(CcmTenantTest::class);
+    }
+
     public function frameworkRequirements(): BelongsToMany
     {
         return $this->belongsToMany(FrameworkRequirement::class, 'control_framework_mappings', 'control_id', 'requirement_id')
