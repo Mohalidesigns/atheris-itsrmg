@@ -42,10 +42,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 10 | ISMS | `e4ed5da` | `docs/ATH-VAL-010_ISMS_Validation_Report.md` | `tests/Feature/Isms/IsmsModuleTest.php` (6) |
 | 11 | PCI Management | `b09d047` | `docs/ATH-VAL-011_PCI_Management_Validation_Report.md` | `tests/Feature/Pci/PciModuleTest.php` (6) |
 | 12 | Business Continuity | `25a5ec5` | `docs/ATH-VAL-012_Business_Continuity_Validation_Report.md` | `tests/Feature/Continuity/BusinessContinuityModuleTest.php` (6) |
-| 13 | Continuous Monitoring | see `git log` | `docs/ATH-VAL-013_Continuous_Monitoring_Validation_Report.md` | `tests/Feature/Monitoring/ContinuousMonitoringModuleTest.php` (6) |
+| 13 | Continuous Monitoring | `0d238b2` | `docs/ATH-VAL-013_Continuous_Monitoring_Validation_Report.md` | `tests/Feature/Monitoring/ContinuousMonitoringModuleTest.php` (6) |
+| 14 | KRIs & Dashboards | see `git log` | `docs/ATH-VAL-014_KRIs_Dashboards_Validation_Report.md` | `tests/Feature/Kri/KriDashboardsModuleTest.php` (6) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **306 tests, 305 passed, 1 skipped, 3,221 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
+Last full suite: **312 tests, 311 passed, 1 skipped, 3,325 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -180,17 +181,25 @@ Last full suite: **306 tests, 305 passed, 1 skipped, 3,221 assertions (14 Oct 20
 - **Tenancy and gates:** CCM models strictly scoped and runs carry their bank; CCM moved from the platform group to `view monitoring`; Compliance Officer gains monitoring permissions, Risk Manager view.
 - **Demo data:** `ContinuousMonitoringDemoSeeder` drives the real services for both banks; platform-measured failures are real gaps in the demo records.
 
-## Next phase: module 14, KRIs & Dashboards
+### KRIs & Dashboards highlights (module 14)
 
-Sidebar items: KRI Dashboard (`kri.index`), Board Packs (`board-packs.index`), both `PlatformController` stubs under `view platform`, and Executive Dashboard (`reports.executive`, `view reports`).
+- **KRIs:** strictly scoped (KRIs, readings, breaches); status computed from thresholds in the KRI's direction; one reading per period; commentary required for amber/red. 12 of the 30-indicator pack are measured from platform data (`KriMeasures`, "Measure now", weekly `kri:measure`); the rest are recorded by their owner; EA-published KRIs stay read-only.
+- **Breaches:** opened/escalated by amber/red readings, resolved by green; red raises one issue (source `kri`) for the KRI owner; the owner records an action plan.
+- **Board packs** (`BoardPackBuilder`): a snapshot of the bank's figures per template section, rendered print-ready (save as PDF); prepared as a draft, approved by someone else. Fake PPTX/PDF runs removed (no PPTX library installed).
+- **Executive report:** open vulnerabilities exclude false positives, risk counts active only, residual heat map really residual, KRI row added.
+- **EA publisher (contract I-8):** keyed per bank, readings carry their bank.
+- **Gates:** KRIs under `risks` permissions, board packs under `reports` (Risk Manager gains `create reports`).
+- **Demo data:** `KriDashboardsDemoSeeder` gives both banks the pack with owners, risks and history through `KriService`, and three board packs (two approved, one draft).
 
-Start with recon, as for the earlier modules. Known from module 13's walk:
-- `Kri`, `KriReading`, `KriBreach` have no tenant scope; `kriIndex` lists every bank's KRIs and readings;
-- `boardPacksGenerate` writes `organization_id = 1` and fake file paths;
-- KRIs are seeded for Kano only (30); First Bank has none;
-- EA has its own KRI recompute job (`App\Jobs\Ea\RecomputeKris`): check how it relates to the `kris` table before building.
+## Next phase: module 15, Enterprise Architecture
 
-**Remaining order after that:** the rest of the sidebar.
+Brought forward by the user (14 Oct 2026): EA is a key selling point. Scope:
+- **Navigation:** move the EA group up to sit directly under "KRIs & Dashboards".
+- **CBN IT blueprint domains:** organise EA around the five domains: Business, Application, Data, Technology, and Security Architecture & Assurance. Check that each has a clear workspace (Technology Architecture may need one).
+- **Maturity:** add a CMMI-style capability maturity model, so a bank sees its maturity level per domain (levels 1-5) with evidence behind each rating.
+- **Usual recon:** tenant scoping (EA models use `BelongsToTenant`; NULL-org rows are platform-shared by design), stub or random data, demo data for both banks (First Bank holds the EA repository).
+
+**Remaining order after that:** Workflow Studio, Core Banking, Reports, then the rest of the sidebar.
 
 ### Patterns from modules 5-9 to reuse
 

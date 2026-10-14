@@ -58,6 +58,7 @@ class Issue extends Model
         'ea_arb_condition' => ['label' => 'ARB condition', 'model' => ArbSubmission::class, 'code' => 'code', 'route' => 'ea.arb.show'],
         'ccm_test' => ['label' => 'CCM test', 'model' => CcmTenantTest::class, 'code' => 'code', 'route' => 'ccm.show'],
         'config_drift' => ['label' => 'Configuration drift', 'model' => ConfigDriftEvent::class, 'code' => 'drift_code', 'route' => 'drift.show'],
+        'kri' => ['label' => 'KRI breach', 'model' => Kri::class, 'code' => 'code', 'route' => 'kri.show'],
         'access_review' => ['label' => 'Access review', 'model' => AccessReviewCampaign::class, 'code' => 'campaign_code', 'route' => 'access-reviews.show'],
     ];
 

@@ -84,6 +84,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'view vendor-assessments', 'create vendor-assessments', 'edit vendor-assessments',
             // Continuous Monitoring: reads CCM results and drift against the risk register (ATH-VAL-013).
             'view monitoring',
+            // KRIs & Dashboards: the CRO prepares the board packs (ATH-VAL-014).
+            'create reports',
         ]);
 
         // Compliance Officer - compliance + controls + evidence + frameworks

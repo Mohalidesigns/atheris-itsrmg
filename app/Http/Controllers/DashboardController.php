@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Asset;
-use App\Models\BoardPackRun;
 use App\Models\BoardPackTemplate;
 use App\Models\CcmTenantTest;
 use App\Models\CircularAssessment;
@@ -31,6 +30,7 @@ use App\Services\Continuity\ContinuityMetrics;
 use App\Services\Issues\IssueMetrics;
 use App\Services\Monitoring\MonitoringMetrics;
 use App\Services\Policies\PolicyMetrics;
+use App\Services\Reports\BoardPackBuilder;
 use App\Services\SecurityOps\SecurityOpsMetrics;
 use App\Services\Vendors\VendorMetrics;
 use Illuminate\Http\Request;
@@ -60,10 +60,11 @@ class DashboardController extends Controller
             ->take(10)
             ->get();
 
-        // KRI latest readings
-        $kris = Kri::with(['readings' => fn ($q) => $q->orderByDesc('recorded_at')->limit(12)])
-            ->take(12)
-            ->get();
+        // KRI panel: the bank's KRIs, worst latest reading first (ATH-VAL-014)
+        $rank = ['red' => 0, 'amber' => 1, 'green' => 2];
+        $kris = Kri::with(['readings' => fn ($q) => $q->orderByDesc('recorded_at')->limit(6)])->get()
+            ->sortBy(fn ($k) => [$rank[$k->readings->first()?->status] ?? 3, $k->code])
+            ->take(12)->values();
 
         // Control effectiveness donut — operational controls, in a fixed order so the colours match
         // (effective, partially effective, ineffective, not assessed).
@@ -269,19 +270,13 @@ class DashboardController extends Controller
         ];
     }
 
-    public function boardPackExport()
+    /** "Export board pack": generate this month's BAC pack from current figures (ATH-VAL-014). */
+    public function boardPackExport(Request $request, BoardPackBuilder $builder)
     {
-        // Stubbed export — create a BoardPackRun row and redirect back
-        $run = BoardPackRun::create([
-            'organization_id' => 1,
-            'template_id' => BoardPackTemplate::first()?->id ?? 1,
-            'period' => now()->format('Y-m'),
-            'status' => 'generated',
-            'pptx_path' => 'board-packs/dashboard-export-'.now()->timestamp.'.pptx',
-            'pdf_path' => 'board-packs/dashboard-export-'.now()->timestamp.'.pdf',
-            'generated_at' => now(),
-        ]);
+        abort_unless($request->user()->can('create reports'), 403);
+        $template = BoardPackTemplate::where('name', 'like', 'BAC%')->first() ?? BoardPackTemplate::firstOrFail();
+        $run = $builder->generate($template, $request->user());
 
-        return redirect()->route('board-packs.index')->with('success', 'Board pack queued for generation (navy/gold PPTX + PDF)');
+        return redirect()->route('board-packs.show', $run)->with('success', 'Board pack generated from current figures. Review it, then pass it to an approver.');
     }
 }

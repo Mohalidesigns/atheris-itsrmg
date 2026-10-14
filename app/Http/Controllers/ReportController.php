@@ -15,6 +15,7 @@ use App\Models\RiskTreatment;
 use App\Models\Vendor;
 use App\Models\Vulnerability;
 use App\Services\ComplianceScoreService;
+use App\Services\Kri\KriMetrics;
 use App\Services\RiskScoringService;
 use Inertia\Inertia;
 
@@ -29,25 +30,26 @@ class ReportController extends Controller
     {
         $orgId = auth()->user()->organization_id;
 
-        // Risk stats
+        // Risk stats: active risks only (ATH-VAL-014; closed risks were counted)
         $riskStats = [
-            'total' => Risk::count(),
-            'critical' => Risk::where('inherent_rating', 'critical')->count(),
-            'high' => Risk::where('inherent_rating', 'high')->count(),
-            'medium' => Risk::where('inherent_rating', 'medium')->count(),
-            'low' => Risk::where('inherent_rating', 'low')->count(),
-            'open' => Risk::whereNotIn('status', ['closed', 'archived'])->count(),
+            'total' => Risk::active()->count(),
+            'critical' => Risk::active()->where('inherent_rating', 'critical')->count(),
+            'high' => Risk::active()->where('inherent_rating', 'high')->count(),
+            'medium' => Risk::active()->where('inherent_rating', 'medium')->count(),
+            'low' => Risk::active()->where('inherent_rating', 'low')->count(),
+            'open' => Risk::active()->count(),
         ];
 
         // Compliance stats
         $complianceStats = $this->complianceScoreService->getComplianceStats($orgId);
 
         // Security stats
+        // Open = open or in progress; false positives were counted as open (ATH-VAL-014).
         $securityStats = [
-            'open_vulnerabilities' => Vulnerability::whereNotIn('status', ['remediated', 'closed', 'accepted'])->count(),
+            'open_vulnerabilities' => Vulnerability::whereIn('status', ['open', 'in_progress'])->count(),
             'critical_vulnerabilities' => Vulnerability::where('severity', 'critical')
-                ->whereNotIn('status', ['remediated', 'closed', 'accepted'])->count(),
-            'active_incidents' => Incident::whereNotIn('status', ['resolved', 'closed'])->count(),
+                ->whereIn('status', ['open', 'in_progress'])->count(),
+            'active_incidents' => Incident::whereNull('resolved_at')->where('status', '!=', 'closed')->count(),
             'active_breaches' => DataBreach::whereNotIn('status', ['closed', 'resolved'])->count(),
         ];
 
@@ -70,8 +72,11 @@ class ReportController extends Controller
             'total_plans' => BcpPlan::count(),
         ];
 
-        // Heat map data for executive view
-        $heatMapData = $this->riskScoringService->getHeatMapData($orgId, 'inherent');
+        // Heat maps: the page toggles inherent / residual, so both are sent (it showed inherent under both).
+        $heatMapData = [
+            'inherent' => $this->riskScoringService->getHeatMapData($orgId, 'inherent'),
+            'residual' => $this->riskScoringService->getHeatMapData($orgId, 'residual'),
+        ];
 
         // Risk distribution
         $distribution = $this->riskScoringService->getRiskDistribution($orgId);
@@ -90,6 +95,7 @@ class ReportController extends Controller
             'heatMapData' => $heatMapData,
             'distribution' => $distribution,
             'openGaps' => $openGaps,
+            'kriSummary' => app(KriMetrics::class)->summary((int) $orgId),
         ]);
     }
 
@@ -108,6 +114,7 @@ class ReportController extends Controller
             ->get()
             ->map(function ($item) {
                 $category = RiskCategory::find($item->category_id);
+
                 return [
                     'name' => $category?->name ?? 'Uncategorized',
                     'count' => $item->count,

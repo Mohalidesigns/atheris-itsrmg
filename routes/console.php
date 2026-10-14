@@ -14,6 +14,7 @@ use App\Models\PolicyException;
 use App\Services\Change\ChangeWorkflow;
 use App\Services\Ea\ArchiMateExchange;
 use App\Services\Issues\IssueWorkflow;
+use App\Services\Kri\KriService;
 use App\Services\Monitoring\CcmRunner;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -91,3 +92,10 @@ Artisan::command('ccm:run-due', function (CcmRunner $runner) {
     $this->info($runner->runDue().' CCM test(s) run.');
 })->purpose('Run CCM tests that are due');
 Schedule::command('ccm:run-due')->everyFifteenMinutes()->name('ccm.run-due')->withoutOverlapping();
+
+/* =====================  KRIs ===================== */
+// Measure every platform-sourced KRI from the bank's records each Monday (ATH-VAL-014).
+Artisan::command('kri:measure', function (KriService $kris) {
+    $this->info($kris->measureAll().' KRI(s) measured.');
+})->purpose('Measure KRIs sourced from platform data');
+Schedule::command('kri:measure')->weeklyOn(1, '06:00')->name('kri.measure')->withoutOverlapping();

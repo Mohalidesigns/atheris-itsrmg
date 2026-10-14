@@ -60,10 +60,11 @@ class KriPublisher
         // register.
         $code = 'EA-'.$eaKri->code;
 
+        // Keyed per bank (ATH-VAL-014): two banks' EA KRIs share codes.
         return Kri::withoutGlobalScopes()->updateOrCreate(
-            ['code' => $code],
+            ['organization_id' => $eaKri->organization_id, 'code' => $code],
             [
-                'organization_id' => $eaKri->organization_id,
+                'source' => 'ea',
                 'name' => $eaKri->name,
                 'description' => 'Published from Enterprise Architecture. Computed by '
                     .'KriCalculator from the architecture repository; edit the definition in EA, not here.',
@@ -90,9 +91,10 @@ class KriPublisher
             ->get();
 
         foreach ($values as $value) {
-            $reading = KriReading::updateOrCreate(
+            $reading = KriReading::withoutGlobalScopes()->updateOrCreate(
                 ['kri_id' => $kri->id, 'period' => $value->period],
                 [
+                    'organization_id' => $kri->organization_id,
                     'value' => $value->value,
                     'status' => $this->status($value->status),
                     'recorded_at' => $value->recorded_at ?? now(),

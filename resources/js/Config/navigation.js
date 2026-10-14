@@ -226,8 +226,8 @@ const navigation = [
         name: 'KRIs & Dashboards',
         icon: ChartBarIcon,
         children: [
-            { name: 'KRI Dashboard', href: 'kri.index', permission: 'view platform' },
-            { name: 'Board Packs', href: 'board-packs.index', permission: 'view platform' },
+            { name: 'KRI Dashboard', href: 'kri.index', permission: 'view risks' },
+            { name: 'Board Packs', href: 'board-packs.index', permission: 'view reports' },
             { name: 'Executive Dashboard', href: 'reports.executive', permission: 'view reports' },
         ],
     },

@@ -151,6 +151,10 @@ class DatabaseSeeder extends Seeder
         // approved changes, access-review campaigns (ATH-VAL-013)
         $this->call(ContinuousMonitoringDemoSeeder::class);
 
+        // KRIs & Dashboards: the KRI pack for both banks with owners, risks and readings measured or
+        // recorded through the service; board packs prepared and approved (ATH-VAL-014)
+        $this->call(KriDashboardsDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

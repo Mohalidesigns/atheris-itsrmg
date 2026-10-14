@@ -34,6 +34,7 @@ use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\IsmsController;
 use App\Http\Controllers\IssueController;
+use App\Http\Controllers\Kri\KriController;
 use App\Http\Controllers\Monitoring\AccessReviewController;
 use App\Http\Controllers\Monitoring\CcmController;
 use App\Http\Controllers\Monitoring\DriftController;
@@ -47,6 +48,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuestionLibraryController;
 use App\Http\Controllers\RegulatoryIntelligenceController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\Reports\BoardPackController;
 use App\Http\Controllers\ResponseProcedureController;
 use App\Http\Controllers\Returns\RegulatoryReturnController;
 use App\Http\Controllers\RiskAssessmentController;
@@ -460,6 +462,24 @@ Route::middleware('auth')->group(function () {
         Route::post('/monitoring/access-review-items/{item}/confirm', [AccessReviewController::class, 'confirm'])->middleware('permission:edit monitoring')->name('access-reviews.items.confirm');
     });
 
+    // KRIs & Dashboards (ATH-VAL-014: KRIs sit with risk management, board packs with reporting;
+    // both moved here from the platform group)
+    Route::middleware('permission:view risks')->group(function () {
+        Route::get('/kri', [KriController::class, 'index'])->name('kri.index');
+        Route::post('/kri', [KriController::class, 'store'])->middleware('permission:create risks')->name('kri.store');
+        Route::get('/kri/{kri}', [KriController::class, 'show'])->name('kri.show');
+        Route::put('/kri/{kri}', [KriController::class, 'update'])->middleware('permission:edit risks')->name('kri.update');
+        Route::post('/kri/{kri}/readings', [KriController::class, 'record'])->middleware('permission:edit risks')->name('kri.readings.store');
+        Route::post('/kri/{kri}/measure', [KriController::class, 'measure'])->middleware('permission:edit risks')->name('kri.measure');
+        Route::post('/kri-breaches/{breach}/acknowledge', [KriController::class, 'acknowledge'])->middleware('permission:edit risks')->name('kri.breaches.acknowledge');
+    });
+    Route::middleware('permission:view reports')->group(function () {
+        Route::get('/board-packs', [BoardPackController::class, 'index'])->name('board-packs.index');
+        Route::post('/board-packs/generate', [BoardPackController::class, 'generate'])->middleware('permission:create reports')->name('board-packs.generate');
+        Route::get('/board-packs/{run}', [BoardPackController::class, 'show'])->name('board-packs.show');
+        Route::post('/board-packs/{run}/approve', [BoardPackController::class, 'approve'])->middleware('permission:approve reports')->name('board-packs.approve');
+    });
+
     // CBN-CSAT Module
     Route::prefix('csat')->name('csat.')->middleware('permission:view csat')->group(function () {
         Route::get('/', [CsatAssessmentController::class, 'index'])->name('index');
@@ -636,13 +656,6 @@ Route::middleware('auth')->group(function () {
 
         // Phase 3: Evidence Vault (WORM)
         Route::get('/evidence-vault', [PlatformController::class, 'evidenceVaultIndex'])->name('evidence-vault.index');
-
-        // Phase 3: KRI
-        Route::get('/kri', [PlatformController::class, 'kriIndex'])->name('kri.index');
-
-        // Phase 3: Board Packs
-        Route::get('/board-packs', [PlatformController::class, 'boardPacksIndex'])->name('board-packs.index');
-        Route::post('/board-packs/generate', [PlatformController::class, 'boardPacksGenerate'])->name('board-packs.generate');
 
         // Phase 3: Pricing
         Route::get('/pricing', [PlatformController::class, 'pricingIndex'])->name('pricing.index');

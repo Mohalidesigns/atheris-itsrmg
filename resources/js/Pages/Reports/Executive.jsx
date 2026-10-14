@@ -117,6 +117,7 @@ export default function Executive({
     heatMapData,
     distribution,
     openGaps,
+    kriSummary = null,
 }) {
     const { auth } = usePage().props;
     const [heatMapType, setHeatMapType] = useState('inherent');
@@ -236,6 +237,30 @@ export default function Executive({
                 />
             </div>
 
+            {kriSummary && kriSummary.total > 0 && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Key risk indicators</h3>
+                        <Link href={route('kri.index')} className="text-xs text-[#1A365D] underline">KRI dashboard →</Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                        {[
+                            ['Green', kriSummary.green, 'green', '#2D7D46'],
+                            ['Amber', kriSummary.amber, 'amber', '#B7791F'],
+                            ['Red', kriSummary.red, 'red', '#C53030'],
+                            ['Open breaches', kriSummary.breaches_open, 'breach', kriSummary.breaches_open ? '#C53030' : '#1A365D'],
+                            ['Breaches without an action plan', kriSummary.breaches_unacknowledged, 'breach', kriSummary.breaches_unacknowledged ? '#C53030' : '#1A365D'],
+                            ['Readings overdue', kriSummary.stale, 'stale', kriSummary.stale ? '#B7791F' : '#1A365D'],
+                        ].map(([label, n, status, color]) => (
+                            <Link key={label} href={route('kri.index', { status })} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                <p className="text-xl font-bold" style={{ color }}>{n ?? 0}</p>
+                                <p className="text-[11px] text-[#718096]">{label}</p>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Middle Row: Heat Map + Compliance Posture */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
                 {/* Risk Heat Map (2/3) */}
@@ -259,7 +284,7 @@ export default function Executive({
                         </div>
                     </div>
                     {riskStats.total > 0 ? (
-                        <RiskHeatMap data={heatMapData} type={heatMapType} />
+                        <RiskHeatMap data={heatMapData[heatMapType] || heatMapData.inherent || heatMapData} type={heatMapType} />
                     ) : (
                         <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
                             <div className="text-center">

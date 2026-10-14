@@ -126,6 +126,7 @@ function CsatRadar({ csat }) {
 export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null, policyPulse = null, continuity = null, monitoring = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
+    const canBoardPack = (usePage().props.auth?.user?.permissions || []).includes('create reports');
     const severityOrder = ['critical', 'high', 'medium', 'low'];
     const vulnFunnel = severityOrder.map((s) => ({ level: s, n: Number(vulnsBySeverity[s] || 0) }));
     const maxVulns = Math.max(...vulnFunnel.map((v) => v.n), 1);
@@ -137,10 +138,10 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                 breadcrumbs={[{ label: 'Executive Dashboard' }]}
                 title={`Executive Dashboard · ${orgName}`}
                 subtitle="Atheris ITSRM&G — live view of cyber, IT, ops-tech, third-party, data protection, fraud, physical and regulatory risk."
-                actions={
+                actions={canBoardPack &&
                     <button onClick={exportBoardPack}
                         className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-[#C9A86A] text-[#0A1F44] text-sm font-semibold hover:bg-[#D9BE85]">
-                        <DocumentArrowDownIcon className="w-4 h-4" /> Export Board Pack (PPTX + PDF)
+                        <DocumentArrowDownIcon className="w-4 h-4" /> Generate Board Pack
                     </button>
                 }
             />

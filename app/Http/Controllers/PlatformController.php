@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\AucsControl;
 use App\Models\AucsFrameworkMapping;
-use App\Models\BoardPackRun;
-use App\Models\BoardPackTemplate;
 use App\Models\ContentInstall;
 use App\Models\CopilotConversation;
 use App\Models\CopilotMessage;
@@ -17,9 +15,6 @@ use App\Models\FairRun;
 use App\Models\FairScenario;
 use App\Models\FeatureFlag;
 use App\Models\FrameworkClause;
-use App\Models\Kri;
-use App\Models\KriBreach;
-use App\Models\KriReading;
 use App\Models\MarketplaceItem;
 use App\Models\Obligation;
 use App\Models\PricingTier;
@@ -170,41 +165,6 @@ class PlatformController extends Controller
         ];
 
         return Inertia::render('EvidenceVault/Index', compact('evidence', 'stats'));
-    }
-
-    /* -------------------------------- KRIs -------------------------------- */
-    public function kriIndex()
-    {
-        $kris = Kri::get();
-        $readingsByKri = KriReading::orderByDesc('recorded_at')->get()->groupBy('kri_id');
-        $breaches = KriBreach::with('kri')->orderByDesc('occurred_at')->take(50)->get();
-
-        return Inertia::render('Kri/Index', compact('kris', 'readingsByKri', 'breaches'));
-    }
-
-    /* ---------------------------- Board Packs ---------------------------- */
-    public function boardPacksIndex()
-    {
-        $templates = BoardPackTemplate::get();
-        $runs = BoardPackRun::with('template')->orderByDesc('created_at')->take(50)->get();
-
-        return Inertia::render('BoardPacks/Index', compact('templates', 'runs'));
-    }
-
-    public function boardPacksGenerate(Request $r)
-    {
-        $tmpl = BoardPackTemplate::findOrFail($r->input('template_id'));
-        BoardPackRun::create([
-            'organization_id' => 1,
-            'template_id' => $tmpl->id,
-            'period' => now()->format('Y-m'),
-            'status' => 'generated',
-            'pptx_path' => 'board-packs/demo-'.now()->timestamp.'.pptx',
-            'pdf_path' => 'board-packs/demo-'.now()->timestamp.'.pdf',
-            'generated_at' => now(),
-        ]);
-
-        return redirect()->route('board-packs.index')->with('success', 'Board pack generated (demo)');
     }
 
     /* ------------------------------- Pricing ------------------------------- */
