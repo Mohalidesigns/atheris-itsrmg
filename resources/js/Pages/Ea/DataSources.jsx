@@ -10,7 +10,7 @@ import {
     CheckCircleIcon,
     ExclamationTriangleIcon,
     XCircleIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 /**
  * EA Data Sources — ATH-EAR-002 WS 0.4.

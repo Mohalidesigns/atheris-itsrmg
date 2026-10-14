@@ -1,42 +1,21 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Chip from '@/Components/Material/Chip';
+import Badge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@/Components/Material/Symbols';
 import Pagination from '@/Components/Pagination';
 
 const typeLabels = { bcp: 'BCP', dr: 'DR', crisis: 'Crisis' };
-const typeColors = { bcp: '#1A365D', dr: '#2D7D46', crisis: '#C53030' };
-const statusColors = {
-    draft: '#718096',
-    active: '#2D7D46',
-    under_review: '#D4AF37',
-    tested: '#1A365D',
-    expired: '#C53030',
-};
+const TYPE_CHIP = { bcp: ['primary', 'business_center'], dr: ['success', 'settings_backup_restore'], crisis: ['error', 'crisis_alert'] };
 
 function TypeBadge({ type }) {
-    return (
-        <span
-            className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full text-white"
-            style={{ backgroundColor: typeColors[type] || '#718096' }}
-        >
-            {typeLabels[type] || type}
-        </span>
-    );
+    const [tone, icon] = TYPE_CHIP[type] || ['neutral', null];
+    return <Chip tone={tone} icon={icon}>{typeLabels[type] || type}</Chip>;
 }
 
 function StatusBadge({ status }) {
-    return (
-        <span
-            className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full"
-            style={{
-                backgroundColor: (statusColors[status] || '#718096') + '15',
-                color: statusColors[status] || '#718096',
-            }}
-        >
-            {status?.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
-        </span>
-    );
+    return <Badge status={status} />;
 }
 
 export default function PlansIndex({ plans, filters, planTypes, statuses, metrics = {}, testMonths = 12 }) {

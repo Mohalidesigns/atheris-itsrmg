@@ -22,9 +22,9 @@ export default function ObligationsIndex({ obligations = [], regulators = [], re
                 subtitle={`Regulatory submissions and reviews, ordered by next due date. ${dueSoon} due in the next 30 days.`} />
 
             <div className="flex flex-wrap gap-1.5 mb-4">
-                <button onClick={() => filter(null)} className={`text-xs px-2.5 py-1 rounded-full ${!regulator ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#4A5568]'}`}>All</button>
+                <button onClick={() => filter(null)} className={`text-xs px-2.5 py-1 rounded-lg ${!regulator ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#4A5568]'} whitespace-nowrap`}>All</button>
                 {regulators.map((r) => (
-                    <button key={r} onClick={() => filter(r)} className={`text-xs px-2.5 py-1 rounded-full ${regulator === r ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#4A5568]'}`}>{r}</button>
+                    <button key={r} onClick={() => filter(r)} className={`text-xs px-2.5 py-1 rounded-lg ${regulator === r ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#4A5568]'} whitespace-nowrap`}>{r}</button>
                 ))}
             </div>
 
@@ -56,7 +56,7 @@ export default function ObligationsIndex({ obligations = [], regulators = [], re
                                 <td className="px-3 py-2 text-xs text-[#718096] whitespace-nowrap">{formatDate(o.effective_date)}</td>
                                 <td className="px-3 py-2 text-xs whitespace-nowrap">
                                     {formatDate(o.next_due)}
-                                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${dueTone(o.days_to_due)}`}>{o.days_to_due === 0 ? 'today' : `${o.days_to_due}d`}</span>
+                                    <span className={`ml-1.5 px-1.5 py-0.5 rounded-md text-[10px] font-medium ${dueTone(o.days_to_due)} whitespace-nowrap`}>{o.days_to_due === 0 ? 'today' : `${o.days_to_due}d`}</span>
                                 </td>
                             </tr>
                         ))}

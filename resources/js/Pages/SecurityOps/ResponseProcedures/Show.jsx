@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
-import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon } from '@/Components/Material/Symbols';
 
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
@@ -76,7 +76,7 @@ export default function ShowResponseProcedure({ procedure, incidents = [] }) {
                             {(procedure.incident_types || []).length === 0 ? (
                                 <span className="text-sm text-[#718096]">--</span>
                             ) : procedure.incident_types.map(t => (
-                                <span key={t} className="px-2.5 py-1 rounded-full text-xs bg-[#0A1F44]/5 text-[#0A1F44]">{cap(t)}</span>
+                                <span key={t} className="px-2.5 py-1 rounded-lg text-xs bg-[#0A1F44]/5 text-[#0A1F44] whitespace-nowrap">{cap(t)}</span>
                             ))}
                         </div>
                     </div>

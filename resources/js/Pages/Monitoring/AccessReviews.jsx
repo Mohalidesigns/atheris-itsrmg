@@ -46,7 +46,7 @@ export default function AccessReviews({ campaigns = [], metrics = {}, users = []
             {launching && <Launch users={users} assets={assets} options={options} onDone={() => setLaunching(false)} />}
             <div className="mb-3 flex flex-wrap gap-2 text-xs">
                 {[['All', null], ['In progress', 'in_progress'], ['Overdue', 'overdue'], ['Completed', 'completed']].map(([label, s]) => (
-                    <button key={label} onClick={() => go(s)} className={`rounded-full border px-3 py-1 ${(filters.status || null) === s ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>
+                    <button key={label} onClick={() => go(s)} className={`rounded-lg border px-3 py-1 ${(filters.status || null) === s ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>
                 ))}
             </div>
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">

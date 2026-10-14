@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import { Head, Link, router } from '@inertiajs/react';
-import { PlayIcon } from '@heroicons/react/24/outline';
+import { PlayIcon } from '@/Components/Material/Symbols';
 import { fmtDateTime, ModeTag, Pill } from '@/Components/Monitoring/format';
 
 export default function CcmIndex({ tests = [], summary = {}, filters = {}, canRun = false }) {
@@ -32,7 +32,7 @@ export default function CcmIndex({ tests = [], summary = {}, filters = {}, canRu
             <div className="mb-3 flex flex-wrap gap-2 text-xs">
                 {[['All', {}], ['Failing', { status: 'fail' }], ['Warning', { status: 'warn' }], ['Passing', { status: 'pass' }], ['Not linked to a control', { unlinked: 1 }]].map(([label, f]) => {
                     const active = JSON.stringify(f) === JSON.stringify(Object.fromEntries(Object.entries(filters).filter(([, v]) => v)));
-                    return <button key={label} onClick={() => filter(f)} className={`rounded-full border px-3 py-1 ${active ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>;
+                    return <button key={label} onClick={() => filter(f)} className={`rounded-lg border px-3 py-1 ${active ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>;
                 })}
             </div>
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">

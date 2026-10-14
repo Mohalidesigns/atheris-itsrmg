@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { ShieldCheckIcon } from '@/Components/Material/Symbols';
 
 export default function GuestLayout({ children }) {
     return (
@@ -12,7 +12,7 @@ export default function GuestLayout({ children }) {
                             <ShieldCheckIcon className="w-8 h-8 text-[#1A365D]" />
                         </div>
                         <div>
-                            <h1 className="text-2xl font-bold text-white">IT Risk Mgt</h1>
+                            <h1 className="text-2xl font-bold text-white">Atheris Govern</h1>
                             <span className="text-[#D4AF37] text-sm font-medium">GRC Suite</span>
                         </div>
                     </div>
@@ -42,7 +42,7 @@ export default function GuestLayout({ children }) {
                 </div>
 
                 <p className="text-blue-300/50 text-xs">
-                    &copy; {new Date().getFullYear()} IT Risk Mgt GRC Suite. All rights reserved.
+                    &copy; {new Date().getFullYear()} Atheris Govern GRC Suite. All rights reserved.
                 </p>
             </div>
 
@@ -54,7 +54,7 @@ export default function GuestLayout({ children }) {
                         <ShieldCheckIcon className="w-7 h-7 text-[#1A365D]" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-[#1A365D]">IT Risk Mgt</h1>
+                        <h1 className="text-xl font-bold text-[#1A365D]">Atheris Govern</h1>
                         <span className="text-[#D4AF37] text-xs font-medium">GRC Suite</span>
                     </div>
                 </div>

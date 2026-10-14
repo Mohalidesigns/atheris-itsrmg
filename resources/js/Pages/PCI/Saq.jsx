@@ -39,7 +39,7 @@ export default function PciAssessment({ requirements = [], assessment = null, as
                                             </div>
                                             <span className="flex flex-shrink-0 items-center gap-2 text-xs">
                                                 {s.evidence > 0 && <span className="text-[#718096]">{s.evidence} evidence</span>}
-                                                <span className={`rounded-full px-2 py-0.5 ${statusTone[s.status]}`}>{labels[s.status]}</span>
+                                                <span className={`rounded-lg px-2 py-0.5 ${statusTone[s.status]}`}>{labels[s.status]}</span>
                                             </span>
                                         </li>
                                     ))}

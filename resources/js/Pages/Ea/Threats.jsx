@@ -10,7 +10,7 @@ import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head } from '@inertiajs/react';
-import { BugAntIcon } from '@heroicons/react/24/outline';
+import { BugAntIcon } from '@/Components/Material/Symbols';
 
 const STRIDE = [
     { value: 'S', label: 'S — Spoofing' },

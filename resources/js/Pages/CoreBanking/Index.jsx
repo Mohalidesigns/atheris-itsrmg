@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head } from '@inertiajs/react';
-import { BuildingLibraryIcon } from '@heroicons/react/24/outline';
+import { BuildingLibraryIcon } from '@/Components/Material/Symbols';
 
 export default function CoreBankingIndex({ integrations = [] }) {
     return (

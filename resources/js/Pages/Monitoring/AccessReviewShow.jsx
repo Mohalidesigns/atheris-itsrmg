@@ -65,7 +65,7 @@ export default function AccessReviewShow({ campaign, items = [], counts = {}, fi
             {open && can.decide && campaign.source === 'manual' && <AddItem campaign={campaign} />}
             <div className="mb-3 flex flex-wrap gap-2 text-xs">
                 {[['All', null], ['Undecided', 'undecided'], ['Privileged', 'privileged'], ['Removal to confirm', 'to_confirm']].map(([label, f]) => (
-                    <button key={label} onClick={() => go(f)} className={`rounded-full border px-3 py-1 ${filter === f ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>
+                    <button key={label} onClick={() => go(f)} className={`rounded-lg border px-3 py-1 ${filter === f ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>
                 ))}
             </div>
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">

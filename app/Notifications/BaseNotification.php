@@ -27,7 +27,7 @@ abstract class BaseNotification extends Notification implements ShouldQueue
             ->greeting("Hello {$notifiable->name},")
             ->line($this->getMessage())
             ->action('View Details', $this->actionUrl)
-            ->line('This is an automated notification from IT Risk Mgt.');
+            ->line('This is an automated notification from Atheris Govern.');
     }
 
     public function toArray(object $notifiable): array

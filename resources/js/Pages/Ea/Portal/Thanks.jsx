@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { CheckCircleIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon } from '@/Components/Material/Symbols';
 
 /**
  * Confirmation after a magic-link submission.

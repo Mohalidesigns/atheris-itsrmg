@@ -5,7 +5,7 @@ import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 import { Head, Link, useForm, router } from '@inertiajs/react';
 import { formatDate, threatLabel } from '@/Utils/risk';
-import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon } from '@/Components/Material/Symbols';
 
 function DetailRow({ label, value }) {
     return (

@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, Link } from '@inertiajs/react';
-import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon } from '@/Components/Material/Symbols';
 import { lockMessage } from '@/Utils/csat';
 
 const ENGAGEMENT = [['yes', 'Yes'], ['no', 'No'], ['na', 'N/A'], ['yes_with_comment', 'Yes (with comment)']];

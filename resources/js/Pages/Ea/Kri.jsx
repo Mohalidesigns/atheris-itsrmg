@@ -7,7 +7,7 @@ import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head, router } from '@inertiajs/react';
-import { ArrowPathIcon, ChartBarIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, ChartBarIcon } from '@/Components/Material/Symbols';
 
 /**
  * Appendix A #24: `ea.kri.recompute` existed with no caller — the KRI page

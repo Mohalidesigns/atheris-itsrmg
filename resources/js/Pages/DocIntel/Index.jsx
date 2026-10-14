@@ -4,7 +4,7 @@ import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import InputError from '@/Components/InputError';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { CloudArrowUpIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { CloudArrowUpIcon, DocumentTextIcon } from '@/Components/Material/Symbols';
 
 export const JOB_STATUS = {
     uploaded: ['draft', 'Uploaded'],

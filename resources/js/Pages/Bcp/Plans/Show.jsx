@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { ClockIcon, ShieldCheckIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, ShieldCheckIcon, DocumentTextIcon } from '@/Components/Material/Symbols';
 
 const typeLabels = { bcp: 'BCP', dr: 'DR', crisis: 'Crisis' };
 const typeColors = { bcp: '#1A365D', dr: '#2D7D46', crisis: '#C53030' };
@@ -75,7 +75,7 @@ export default function ShowPlan({ plan, testOverdue = false, testTypes = [], ca
                     <p className="text-xs text-[#718096] uppercase font-medium">Type</p>
                     <div className="mt-1">
                         <span
-                            className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full text-white"
+                            className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-lg text-white whitespace-nowrap"
                             style={{ backgroundColor: typeColors[plan.plan_type] || '#718096' }}
                         >
                             {typeLabels[plan.plan_type] || plan.plan_type}
@@ -86,7 +86,7 @@ export default function ShowPlan({ plan, testOverdue = false, testTypes = [], ca
                     <p className="text-xs text-[#718096] uppercase font-medium">Status</p>
                     <div className="mt-1">
                         <span
-                            className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full"
+                            className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-lg whitespace-nowrap"
                             style={{
                                 backgroundColor: (statusColors[plan.status] || '#718096') + '15',
                                 color: statusColors[plan.status] || '#718096',
@@ -236,7 +236,7 @@ export default function ShowPlan({ plan, testOverdue = false, testTypes = [], ca
                                         <td className="px-4 py-3">
                                             {test.pass_fail ? (
                                                 <span
-                                                    className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full text-white"
+                                                    className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-lg text-white whitespace-nowrap"
                                                     style={{ backgroundColor: passFailColors[test.pass_fail] || '#718096' }}
                                                 >
                                                     {test.pass_fail.charAt(0).toUpperCase() + test.pass_fail.slice(1)}

@@ -5,7 +5,7 @@ import {
     MagnifyingGlassIcon,
     Bars3Icon,
     XMarkIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 import Sidebar from '@/Components/Sidebar/Sidebar';
 import Dropdown from '@/Components/Dropdown';
 

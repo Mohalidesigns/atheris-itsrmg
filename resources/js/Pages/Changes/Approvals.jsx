@@ -4,7 +4,7 @@ import StatusBadge from '@/Components/StatusBadge';
 import KpiCard from '@/Components/KpiCard';
 import InputError from '@/Components/InputError';
 import { formatDate, humanize } from '@/Utils/risk';
-import { RISK_COLOUR, VOTE_COLOUR, relativeDue } from '@/Utils/changes';
+import { VOTE_COLOUR, relativeDue } from '@/Utils/changes';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -24,7 +24,7 @@ function ApprovalRow({ item: a }) {
                     <p className="flex flex-wrap items-center gap-2 text-xs text-[#718096]">
                         <Link href={route('changes.show', c.id)} className="font-mono text-[#0A1F44] underline">{c.change_code}</Link>
                         <StatusBadge status={c.change_type} label={humanize(c.change_type)} />
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: RISK_COLOUR[c.risk_level] || '#718096' }}>{humanize(c.risk_level)} risk</span>
+                        <StatusBadge status={c.risk_level} label={`${humanize(c.risk_level)} risk`} size="xs" />
                         {c.status !== 'in_approval' && <StatusBadge status={c.status} label={humanize(c.status)} />}
                     </p>
                     <Link href={route('changes.show', c.id)} className="mt-1 block text-sm font-medium text-[#2D3748] hover:underline">{c.title}</Link>

@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Chip from '@/Components/Material/Chip';
+import Badge from '@/Components/StatusBadge';
 import Pagination from '@/Components/Pagination';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -10,29 +12,14 @@ import {
     ClockIcon,
     UserIcon,
     DocumentTextIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 function EventBadge({ description }) {
     const event = (description || '').toLowerCase();
-    let color = 'bg-gray-100 text-gray-700';
-    let label = description || 'Action';
-
-    if (event.includes('created') || event.includes('create')) {
-        color = 'bg-[#2D7D46]/10 text-[#2D7D46]';
-        label = 'Created';
-    } else if (event.includes('updated') || event.includes('update')) {
-        color = 'bg-blue-50 text-blue-700';
-        label = 'Updated';
-    } else if (event.includes('deleted') || event.includes('delete')) {
-        color = 'bg-[#C53030]/10 text-[#C53030]';
-        label = 'Deleted';
-    }
-
-    return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>
-            {label}
-        </span>
-    );
+    if (event.includes('create')) return <Badge status="created" label="Created" />;
+    if (event.includes('update')) return <Badge status="updated" label="Updated" />;
+    if (event.includes('delete')) return <Badge status="deleted" label="Deleted" />;
+    return <Chip tone="neutral" icon="history">{description || 'Action'}</Chip>;
 }
 
 function ChangesPanel({ properties }) {

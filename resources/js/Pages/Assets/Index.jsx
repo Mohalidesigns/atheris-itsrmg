@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ArrowDownTrayIcon, ChevronUpDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, ArrowDownTrayIcon, ChevronUpDownIcon, ArrowUpIcon } from '@/Components/Material/Symbols';
 import Pagination from '@/Components/Pagination';
 import { CriticalityBadge, AssetStatusBadge, typeLabels, sourceLabels } from '@/Components/Assets/AssetBadges';
 

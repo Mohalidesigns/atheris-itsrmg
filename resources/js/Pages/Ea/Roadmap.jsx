@@ -4,7 +4,7 @@ import EaWorkspaceTabs from '@/Components/Ea/EaWorkspaceTabs';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head } from '@inertiajs/react';
-import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
+import { DocumentArrowDownIcon } from '@/Components/Material/Symbols';
 
 const statusTone = { proposed: 'draft', approved: 'moderate', in_flight: 'warn', delivered: 'pass', on_hold: 'amber', cancelled: 'fail' };
 

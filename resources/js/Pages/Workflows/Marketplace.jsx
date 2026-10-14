@@ -16,7 +16,7 @@ export default function WorkflowsMarketplace({ templates = [] }) {
                     <div key={t.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
                         <div className="flex items-start justify-between">
                             <h3 className="text-sm font-semibold text-[#2D3748]">{t.name}</h3>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A86A]/15 text-[#0A1F44]">Template</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#C9A86A]/15 text-[#0A1F44] whitespace-nowrap">Template</span>
                         </div>
                         <p className="text-xs text-[#718096] mt-1">{t.category}</p>
                         <button className="mt-4 w-full px-3 py-2 rounded-lg bg-[#0A1F44] text-white text-sm">Clone into tenant</button>

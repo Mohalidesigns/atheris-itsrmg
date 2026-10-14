@@ -2,13 +2,16 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import StatusBadge from '@/Components/StatusBadge';
 import KpiCard from '@/Components/KpiCard';
+import Icon from '@/Components/Material/Icon';
+import Chip from '@/Components/Material/Chip';
 import { formatDate, humanize } from '@/Utils/risk';
-import { CATEGORIES, CHANGE_TYPES, RISK_COLOUR, RISK_LEVELS, windowLabel } from '@/Utils/changes';
+import { CATEGORIES, CATEGORY_ICON, CHANGE_TYPES, RISK_LEVELS, windowLabel } from '@/Utils/changes';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 const COLUMNS = ['draft', 'in_approval', 'approved', 'scheduled', 'implementing', 'review'];
 const COLUMN_LABEL = { draft: 'Draft', in_approval: 'Awaiting approval', approved: 'Approved', scheduled: 'Scheduled', implementing: 'Implementing', review: 'In review (PIR)' };
+const COLUMN_ICON = { draft: 'edit_note', in_approval: 'hourglass_top', approved: 'verified', scheduled: 'event', implementing: 'construction', review: 'rate_review' };
 
 export default function ChangesIndex({ changes = [], counts = {}, stats = {}, filters = {} }) {
     const { auth } = usePage().props;
@@ -91,9 +94,11 @@ export default function ChangesIndex({ changes = [], counts = {}, stats = {}, fi
                 <>
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
                         {COLUMNS.map((c) => (
-                            <div key={c} className="min-h-[200px] rounded-xl bg-[#F7FAFC] p-3">
-                                <h3 className="mb-2 flex justify-between text-xs font-semibold uppercase text-[#718096]">
-                                    <span>{COLUMN_LABEL[c]}</span><span>{grouped[c].length}</span>
+                            <div key={c} className="min-h-[200px] rounded-2xl bg-[#F0F1F4] p-2">
+                                <h3 className="mb-2 flex items-center gap-1.5 px-1.5 pt-1 text-sm font-medium text-[#1B1B1F]">
+                                    <Icon name={COLUMN_ICON[c]} size={18} className="text-[#43474E]" />
+                                    <span className="truncate">{COLUMN_LABEL[c]}</span>
+                                    <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[#DDE3F0] px-1.5 text-[11px] font-semibold text-[#0A1F44]">{grouped[c].length}</span>
                                 </h3>
                                 <div className="space-y-2">
                                     {grouped[c].map((i) => <ChangeCard key={i.id} change={i} />)}
@@ -149,20 +154,26 @@ export default function ChangesIndex({ changes = [], counts = {}, stats = {}, fi
 }
 
 function ChangeCard({ change: i }) {
+    const when = i.scheduled_start_at ? windowLabel(i.scheduled_start_at, i.scheduled_end_at) : null;
     return (
-        <Link href={route('changes.show', i.id)} className="block rounded-lg border-l-4 bg-white p-3 shadow-sm hover:shadow" style={{ borderLeftColor: RISK_COLOUR[i.risk_level] || '#A0AEC0' }}>
-            <p className="flex items-center justify-between font-mono text-[10px] text-[#718096]">
-                <span>{i.change_code}</span>
-                {i.change_type !== 'normal' && <span className={`rounded px-1 font-sans text-[9px] font-semibold uppercase ${i.change_type === 'emergency' ? 'bg-[#B3261E]/10 text-[#B3261E]' : 'bg-[#2D7D46]/10 text-[#2D7D46]'}`}>{i.change_type}</span>}
-            </p>
-            <p className="line-clamp-2 text-xs font-medium text-[#2D3748]">{i.title}</p>
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-1">
-                <StatusBadge status={i.risk_level} label={humanize(i.risk_level)} />
-                <span className="text-[10px] text-[#718096]">{humanize(i.category)}</span>
+        <Link href={route('changes.show', i.id)}
+            className="block rounded-xl bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.08),0_1px_3px_1px_rgba(0,0,0,0.04)] transition hover:shadow-[0_1px_2px_rgba(0,0,0,0.1),0_2px_6px_2px_rgba(0,0,0,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0A1F44]">
+            <span className="block truncate font-mono text-[11px] text-[#74777F]">{i.change_code}</span>
+            <p className="mt-1 line-clamp-2 text-sm font-medium leading-snug text-[#1B1B1F]">{i.title}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-1">
+                {i.change_type !== 'normal' && <StatusBadge status={i.change_type} label={humanize(i.change_type)} size="xs" />}
+                <StatusBadge status={i.risk_level} label={humanize(i.risk_level)} size="xs" />
+                <Chip tone="neutral" variant="outlined" icon={CATEGORY_ICON[i.category] || 'category'} iconFill={false} size="xs">{humanize(i.category)}</Chip>
             </div>
-            <p className="mt-1 truncate text-[10px] text-[#718096]">
-                {i.current_stage ? <span className="font-semibold text-[#8A6400]">{i.current_stage}</span> : i.scheduled_start_at ? windowLabel(i.scheduled_start_at, i.scheduled_end_at) : i.owner || 'No owner'}
-            </p>
+            <div className="mt-2 flex items-center gap-1 border-t border-[#E3E4E8] pt-2 text-[11px] text-[#43474E]">
+                {i.current_stage ? (
+                    <><Icon name="how_to_reg" size={16} className="text-[#8A6400]" /><span className="truncate font-medium text-[#6B5420]">{i.current_stage}</span></>
+                ) : when ? (
+                    <><Icon name="schedule" size={16} /><span className="truncate tabular-nums">{when}</span></>
+                ) : (
+                    <><Icon name="person" size={16} /><span className={`truncate ${i.owner ? '' : 'text-[#B3261E]'}`}>{i.owner || 'No owner'}</span></>
+                )}
+            </div>
         </Link>
     );
 }

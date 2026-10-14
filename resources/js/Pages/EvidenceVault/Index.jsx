@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head } from '@inertiajs/react';
-import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon } from '@/Components/Material/Symbols';
 import { formatDate } from '@/Utils/risk';
 
 const mb = (b) => (Number(b) / 1024 / 1024).toFixed(2) + ' MB';

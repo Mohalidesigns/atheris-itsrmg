@@ -14,7 +14,7 @@ import QualitySealBadge from '@/Components/Ea/QualitySealBadge';
 import StewardshipDrawer from '@/Components/Ea/StewardshipDrawer';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head } from '@inertiajs/react';
-import { ArrowsRightLeftIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { ArrowsRightLeftIcon, ShieldCheckIcon } from '@/Components/Material/Symbols';
 
 /**
  * The CBN connection catalogue.

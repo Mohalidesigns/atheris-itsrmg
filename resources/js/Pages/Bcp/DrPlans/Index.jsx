@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, Link } from '@inertiajs/react';
-import { ServerStackIcon } from '@heroicons/react/24/outline';
+import { ServerStackIcon } from '@/Components/Material/Symbols';
 
 export default function DrPlansIndex({ drPlans = [], runbooks = [], exercises = [], kpis = {} }) {
     return (

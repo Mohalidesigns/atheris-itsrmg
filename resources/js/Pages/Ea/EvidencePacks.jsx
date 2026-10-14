@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, router } from '@inertiajs/react';
-import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
+import { DocumentArrowDownIcon } from '@/Components/Material/Symbols';
 
 export default function EvidencePacks({ packs = [] }) {
     const generate = () => router.post(route('ea.evidence-packs.generate'));

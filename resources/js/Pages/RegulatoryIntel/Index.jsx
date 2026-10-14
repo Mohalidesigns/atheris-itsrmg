@@ -4,7 +4,7 @@ import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
-import { NewspaperIcon, MagnifyingGlassIcon, LockClosedIcon } from '@heroicons/react/24/outline';
+import { NewspaperIcon, MagnifyingGlassIcon, LockClosedIcon } from '@/Components/Material/Symbols';
 
 /**
  * Regulatory Intelligence Console (spec §4.4.3): left rail by regulator, the circular feed with each

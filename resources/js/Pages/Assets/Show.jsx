@@ -4,7 +4,7 @@ import Modal from '@/Components/Modal';
 import { CriticalityBadge, AssetStatusBadge, typeLabels, sourceLabels } from '@/Components/Assets/AssetBadges';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { PencilIcon, ArchiveBoxIcon, LinkIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, ArchiveBoxIcon, LinkIcon } from '@/Components/Material/Symbols';
 
 const fmtDate = (v) => (v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : null);
 const fmtDateTime = (v) => (v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null);
@@ -231,8 +231,8 @@ export default function ShowAsset({ asset, changes = [], trail = [], services = 
                                         <p className="text-sm text-[#2D3748]">{risk.title}</p>
                                     </div>
                                     <div className="flex items-center gap-2 text-xs">
-                                        {risk.inherent_rating && <span className="px-2 py-0.5 rounded-full bg-gray-100 text-[#2D3748] capitalize">{String(risk.inherent_rating).replace('_', ' ')}</span>}
-                                        <span className="px-2 py-0.5 rounded-full bg-[#1A365D]/5 text-[#1A365D] capitalize">{risk.status}</span>
+                                        {risk.inherent_rating && <span className="px-2 py-0.5 rounded-lg bg-gray-100 text-[#2D3748] capitalize">{String(risk.inherent_rating).replace('_', ' ')}</span>}
+                                        <span className="px-2 py-0.5 rounded-lg bg-[#1A365D]/5 text-[#1A365D] capitalize">{risk.status}</span>
                                     </div>
                                 </li>
                             ))}
@@ -251,8 +251,8 @@ export default function ShowAsset({ asset, changes = [], trail = [], services = 
                                         <p className="text-sm text-[#2D3748]">{vuln.title}</p>
                                     </div>
                                     <div className="flex items-center gap-2 text-xs">
-                                        <span className="px-2 py-0.5 rounded-full bg-gray-100 text-[#2D3748] capitalize">{vuln.severity}</span>
-                                        <span className="px-2 py-0.5 rounded-full bg-[#1A365D]/5 text-[#1A365D] capitalize">{String(vuln.status || '').replace('_', ' ')}</span>
+                                        <span className="px-2 py-0.5 rounded-lg bg-gray-100 text-[#2D3748] capitalize">{vuln.severity}</span>
+                                        <span className="px-2 py-0.5 rounded-lg bg-[#1A365D]/5 text-[#1A365D] capitalize">{String(vuln.status || '').replace('_', ' ')}</span>
                                     </div>
                                 </li>
                             ))}
@@ -272,8 +272,8 @@ export default function ShowAsset({ asset, changes = [], trail = [], services = 
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-[#718096]">
                                     {c.scheduled_start_at && <span>{fmtDate(c.scheduled_start_at)}</span>}
-                                    <span className="px-2 py-0.5 rounded-full bg-gray-100 capitalize">{c.risk_level} risk</span>
-                                    <span className="px-2 py-0.5 rounded-full bg-[#1A365D]/5 text-[#1A365D] capitalize">{String(c.status).replace(/_/g, ' ')}</span>
+                                    <span className="px-2 py-0.5 rounded-lg bg-gray-100 capitalize">{c.risk_level} risk</span>
+                                    <span className="px-2 py-0.5 rounded-lg bg-[#1A365D]/5 text-[#1A365D] capitalize">{String(c.status).replace(/_/g, ' ')}</span>
                                 </div>
                             </li>
                         ))}

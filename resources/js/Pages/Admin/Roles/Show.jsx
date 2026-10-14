@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import PermissionMatrix from '@/Components/Admin/PermissionMatrix';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { PencilSquareIcon, UserIcon } from '@heroicons/react/24/outline';
+import { PencilSquareIcon, UserIcon } from '@/Components/Material/Symbols';
 
 export default function ShowRole({ role, permissionGroups, actions }) {
     const { auth } = usePage().props;

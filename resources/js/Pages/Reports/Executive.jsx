@@ -13,7 +13,7 @@ import {
     BoltIcon,
     Cog6ToothIcon,
     DocumentMagnifyingGlassIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 const RATING_COLORS = {
     critical: '#C53030',

@@ -6,7 +6,7 @@ import InputError from '@/Components/InputError';
 import Pagination from '@/Components/Pagination';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { PencilIcon, PlusIcon, QuestionMarkCircleIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, PlusIcon, QuestionMarkCircleIcon, TrashIcon } from '@/Components/Material/Symbols';
 import { humanize } from '@/Utils/risk';
 
 const inputClass = 'mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm';
@@ -188,7 +188,7 @@ export default function QuestionLibraryIndex({ questions, filters = {}, modules 
                                     <td className="px-4 py-3 text-[#718096] whitespace-nowrap">{TYPE_LABELS[q.response_type] || humanize(q.response_type)}</td>
                                     <td className="px-4 py-3 text-center font-mono-data">{q.weight}</td>
                                     <td className="px-4 py-3">
-                                        <span className={`text-xs px-2 py-0.5 rounded-full ${q.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>{q.is_active ? 'Active' : 'Retired'}</span>
+                                        <span className={`text-xs px-2 py-0.5 rounded-lg ${q.is_active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'} whitespace-nowrap`}>{q.is_active ? 'Active' : 'Retired'}</span>
                                     </td>
                                     <td className="px-4 py-3 whitespace-nowrap text-right">
                                         {can('edit risks') && (

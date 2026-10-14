@@ -7,7 +7,7 @@ import {
     EnvelopeIcon,
     MapPinIcon,
     CurrencyDollarIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 export default function Organization({ organization }) {
     const { data, setData, put, processing, errors } = useForm({

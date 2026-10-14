@@ -137,8 +137,8 @@ export default function KriShow({ kri, readings = [], breaches = [], users = [],
                     {can.record && kri.source !== 'ea' && (
                         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
                             <div className="mb-3 flex gap-2 text-xs">
-                                {kri.source === 'manual' && <button onClick={() => setTab('reading')} className={`rounded-full px-3 py-1 ${tab === 'reading' ? 'bg-[#0A1F44] text-white' : 'border border-gray-200'}`}>Record reading</button>}
-                                {can.edit && <button onClick={() => setTab('definition')} className={`rounded-full px-3 py-1 ${tab === 'definition' || kri.source !== 'manual' ? 'bg-[#0A1F44] text-white' : 'border border-gray-200'}`}>Definition</button>}
+                                {kri.source === 'manual' && <button onClick={() => setTab('reading')} className={`rounded-lg px-3 py-1 ${tab === 'reading' ? 'bg-[#0A1F44] text-white' : 'border border-gray-200'}`}>Record reading</button>}
+                                {can.edit && <button onClick={() => setTab('definition')} className={`rounded-lg px-3 py-1 ${tab === 'definition' || kri.source !== 'manual' ? 'bg-[#0A1F44] text-white' : 'border border-gray-200'}`}>Definition</button>}
                             </div>
                             {kri.source === 'manual' && tab === 'reading' ? <RecordReading kri={kri} /> : can.edit && <Definition kri={kri} users={users} risks={risks} options={options} />}
                         </div>

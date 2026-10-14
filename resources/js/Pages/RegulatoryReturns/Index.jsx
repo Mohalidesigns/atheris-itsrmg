@@ -9,7 +9,7 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { Head, Link, useForm } from '@inertiajs/react';
-import { DocumentCheckIcon } from '@heroicons/react/24/outline';
+import { DocumentCheckIcon } from '@/Components/Material/Symbols';
 
 /**
  * Regulatory Returns — ATH-EAR-002 A1, the flagship.

@@ -1,28 +1,20 @@
-const tierStyles = {
-    1: 'bg-[#B3261E] text-white',
-    2: 'bg-[#E5A100] text-white',
-    3: 'bg-gray-200 text-[#2D3748]',
-};
+import Chip from '@/Components/Material/Chip';
 
-const gradeStyles = {
-    A: 'bg-[#D1FAE5] text-[#2D7D46]',
-    B: 'bg-[#E6F4EA] text-[#2D7D46]',
-    C: 'bg-[#FEF3C7] text-[#8A6400]',
-    D: 'bg-[#FED7AA] text-[#C05621]',
-    F: 'bg-[#FEE2E2] text-[#C53030]',
-};
+const tierChip = { 1: ['error', 'counter_1'], 2: ['warning', 'counter_2'], 3: ['neutral', 'counter_3'] };
+const gradeTone = { A: 'success', B: 'success', C: 'warning', D: 'warning', F: 'error' };
 
 export function TierBadge({ tier }) {
     if (!tier) return <span className="text-xs text-[#718096]">Untiered</span>;
-    return <span className={`inline-flex rounded px-1.5 py-0.5 text-[10px] font-bold ${tierStyles[tier]}`}>TIER {tier}</span>;
+    const [tone, icon] = tierChip[tier] || tierChip[3];
+    return <Chip tone={tone} icon={icon} size="xs">Tier {tier}</Chip>;
 }
 
 export function GradeBadge({ grade, value }) {
     if (!grade) return <span className="text-xs text-[#718096]">Not rated</span>;
     return (
-        <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-bold ${gradeStyles[grade] || gradeStyles.C}`}>
-            {grade}{value != null && <span className="font-normal opacity-80">{value}</span>}
-        </span>
+        <Chip tone={gradeTone[grade] || 'warning'} icon="grade">
+            <span className="font-bold">{grade}</span>{value != null && <span className="ml-1 font-normal opacity-80">{value}</span>}
+        </Chip>
     );
 }
 

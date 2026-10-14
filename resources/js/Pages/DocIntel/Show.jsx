@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import StatusBadge from '@/Components/StatusBadge';
 import InputError from '@/Components/InputError';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon } from '@/Components/Material/Symbols';
 import { ConfidenceBadge, JOB_STATUS } from './Index';
 
 const input = 'mt-1 w-full rounded-lg border-gray-200 text-sm focus:border-[#0A1F44] focus:ring-[#0A1F44]/30';

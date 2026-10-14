@@ -1,4 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Chip from '@/Components/Material/Chip';
+import Badge from '@/Components/StatusBadge';
 import PageHeader from '@/Components/PageHeader';
 import Pagination from '@/Components/Pagination';
 import Modal from '@/Components/Modal';
@@ -13,26 +15,14 @@ import {
     TrashIcon,
     UserIcon,
     PowerIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 function StatusBadge({ isActive }) {
-    return isActive ? (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#2D7D46]/10 text-[#2D7D46]">
-            Active
-        </span>
-    ) : (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
-            Inactive
-        </span>
-    );
+    return isActive ? <Badge status="active" label="Active" /> : <Badge status="inactive" label="Inactive" />;
 }
 
 function RoleBadge({ role }) {
-    return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1A365D]/10 text-[#1A365D]">
-            {role}
-        </span>
-    );
+    return <Chip tone="primary" icon="badge" iconFill={false}>{role}</Chip>;
 }
 
 function formatLastLogin(dateString) {

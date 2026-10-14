@@ -12,7 +12,7 @@ import {
     TrashIcon,
     EyeIcon,
     LockClosedIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 export default function RolesIndex({ roles, totalPermissions }) {
     const { auth } = usePage().props;
@@ -75,7 +75,7 @@ export default function RolesIndex({ roles, totalPermissions }) {
                                                 </Link>
                                                 {isSuperAdminRole && (
                                                     <span
-                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-[#D4AF37]/15 text-[#8B6F1F]"
+                                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-medium bg-[#D4AF37]/15 text-[#8B6F1F] whitespace-nowrap"
                                                         title="System role — cannot be modified or deleted"
                                                     >
                                                         <LockClosedIcon className="w-3 h-3" /> System
@@ -84,12 +84,12 @@ export default function RolesIndex({ roles, totalPermissions }) {
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 text-center">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1A365D]/10 text-[#1A365D]">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium bg-[#1A365D]/10 text-[#1A365D] whitespace-nowrap">
                                                 {role.permissions_count} of {totalPermissions}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-center">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-[#2D3748]">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium bg-gray-100 text-[#2D3748] whitespace-nowrap">
                                                 {role.users_count} user{role.users_count !== 1 ? 's' : ''}
                                             </span>
                                         </td>

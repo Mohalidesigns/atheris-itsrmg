@@ -28,7 +28,7 @@ export default function MonitoringControls({ controls = [], buckets = {}, filter
             </div>
             <div className="mb-3 flex flex-wrap gap-2 text-xs">
                 {[['All controls', null], ['Monitored by CCM', 'monitored'], ['CCM failing', 'failing'], ['Rating disagrees with CCM', 'disagree']].map(([label, f]) => (
-                    <button key={label} onClick={() => go(f)} className={`rounded-full border px-3 py-1 ${filter === f ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>
+                    <button key={label} onClick={() => go(f)} className={`rounded-lg border px-3 py-1 ${filter === f ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>
                 ))}
             </div>
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">

@@ -1,49 +1,25 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Chip from '@/Components/Material/Chip';
+import Badge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@/Components/Material/Symbols';
 import Pagination from '@/Components/Pagination';
 
 function NdpaStatusBadge({ breach }) {
-    if (breach.ndpa_notified_at) {
-        return (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[#2D7D46]/10 text-[#2D7D46]">
-                Notified
-            </span>
-        );
-    }
+    if (breach.ndpa_notified_at) return <Badge status="notified" label="Notified" />;
     if (breach.ndpa_notification_required) {
         const deadline = breach.ndpa_notification_deadline ? new Date(breach.ndpa_notification_deadline) : null;
         const overdue = deadline && deadline < new Date();
         const hoursLeft = deadline ? Math.max(0, Math.round((deadline - new Date()) / 36e5)) : null;
-        return (
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${overdue ? 'bg-[#C53030] text-white' : 'bg-[#C53030]/10 text-[#C53030]'}`}>
-                {overdue ? 'Overdue' : hoursLeft !== null ? `Due in ${hoursLeft}h` : 'Required'}
-            </span>
-        );
+        if (overdue) return <Badge status="overdue" label="Overdue" />;
+        return <Chip tone="error" icon="timer">{hoursLeft !== null ? `Due in ${hoursLeft}h` : 'Required'}</Chip>;
     }
-    return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
-            Not Required
-        </span>
-    );
+    return <Badge status="not_required" label="Not required" />;
 }
 
 function StatusBadge({ status }) {
-    const map = {
-        open: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
-        investigating: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
-        contained: { bg: 'bg-[#1A365D]/10', text: 'text-[#1A365D]' },
-        notifying: { bg: 'bg-[#D4AF37]/10', text: 'text-[#D4AF37]' },
-        remediated: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
-        closed: { bg: 'bg-gray-100', text: 'text-gray-500' },
-    };
-    const style = map[status] || map.open;
-    return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${style.bg} ${style.text}`}>
-            {(status || '').replace(/_/g, ' ')}
-        </span>
-    );
+    return <Badge status={status || 'open'} />;
 }
 
 export default function BreachesIndex({ breaches, filters }) {
@@ -168,7 +144,7 @@ export default function BreachesIndex({ breaches, filters }) {
                                             </Link>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1A365D]/5 text-[#1A365D] capitalize">
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-medium bg-[#1A365D]/5 text-[#1A365D] capitalize whitespace-nowrap">
                                                 {(breach.breach_type || '').replace(/_/g, ' ')}
                                             </span>
                                         </td>

@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon } from '@/Components/Material/Symbols';
 import { fmtDate, fmtDateTime, ModeTag, Pill, severityTone } from '@/Components/Monitoring/format';
 
 function Panel({ title, href, linkLabel, children }) {

@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon } from '@/Components/Material/Symbols';
 import Pagination from '@/Components/Pagination';
 import Chip from '@/Components/Compliance/Chip';
 import { ASSESSMENT_STATUS, scoreColor, formatDate, isOverdue } from '@/Utils/compliance';
@@ -17,9 +17,9 @@ export default function AssessmentsIndex({ assessments, filters, frameworks, sta
             <Head title="Compliance Assessments" />
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <div className="flex flex-wrap gap-1.5">
-                    <button onClick={() => apply({ status: undefined })} className={`text-xs px-2.5 py-1 rounded-full ${!filters.status ? 'bg-[#1A365D] text-white' : 'bg-gray-100 text-[#4A5568]'}`}>All · {total}</button>
+                    <button onClick={() => apply({ status: undefined })} className={`text-xs px-2.5 py-1 rounded-lg ${!filters.status ? 'bg-[#1A365D] text-white' : 'bg-gray-100 text-[#4A5568]'} whitespace-nowrap`}>All · {total}</button>
                     {Object.entries(ASSESSMENT_STATUS).map(([k, v]) => (
-                        <button key={k} onClick={() => apply({ status: k })} className={`text-xs px-2.5 py-1 rounded-full ${filters.status === k ? 'bg-[#1A365D] text-white' : v.chip}`}>{v.label} · {statusCounts[k] || 0}</button>
+                        <button key={k} onClick={() => apply({ status: k })} className={`text-xs px-2.5 py-1 rounded-lg ${filters.status === k ? 'bg-[#1A365D] text-white' : v.chip} whitespace-nowrap`}>{v.label} · {statusCounts[k] || 0}</button>
                     ))}
                 </div>
                 {canCreate && <Link href={route('compliance-assessments.create')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-[#1A365D] rounded-lg hover:bg-[#2D4A7A] shrink-0"><PlusIcon className="w-4 h-4" /> New Assessment</Link>}

@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon } from '@/Components/Material/Symbols';
 import { humanize, lockMessage } from '@/Utils/csat';
 
 // CBN threat scoring: High = 3, Moderate = 2, Low = 1; risk = likelihood × impact (1–9), ≥6 is high.

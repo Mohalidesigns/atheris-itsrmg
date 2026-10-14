@@ -58,7 +58,7 @@ export default function KriIndex({ kris = [], summary = {}, categories = [], fil
             {creating && <NewKri onDone={() => setCreating(false)} />}
             <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
                 {[['All', null], ['Red', 'red'], ['Amber', 'amber'], ['Green', 'green'], ['Open breach', 'breach'], ['Reading overdue', 'stale']].map(([label, s]) => (
-                    <button key={label} onClick={() => go({ status: s || undefined })} className={`rounded-full border px-3 py-1 ${(filters.status || null) === s ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>
+                    <button key={label} onClick={() => go({ status: s || undefined })} className={`rounded-lg border px-3 py-1 ${(filters.status || null) === s ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>{label}</button>
                 ))}
                 <select value={filters.category || ''} onChange={(e) => go({ category: e.target.value || undefined })} className="ml-auto rounded-lg border-gray-300 text-xs">
                     <option value="">All categories</option>{categories.map((c) => <option key={c} value={c}>{c}</option>)}

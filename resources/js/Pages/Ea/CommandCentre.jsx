@@ -5,7 +5,7 @@ import { tabsFor } from '@/Config/eaWorkspaces';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, Link } from '@inertiajs/react';
-import { BuildingLibraryIcon, CubeIcon, ChartBarIcon, ShieldCheckIcon, CircleStackIcon } from '@heroicons/react/24/outline';
+import { BuildingLibraryIcon, CubeIcon, ChartBarIcon, ShieldCheckIcon, CircleStackIcon } from '@/Components/Material/Symbols';
 
 export default function CommandCentre({ kpis = {}, lifecycle = {}, time = {}, radar = {}, eolNext12 = [], assessment = null }) {
     const lcBar = ['plan','build','live','sunset','retired'];

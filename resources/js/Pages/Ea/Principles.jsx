@@ -11,7 +11,7 @@ import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head } from '@inertiajs/react';
-import { ScaleIcon } from '@heroicons/react/24/outline';
+import { ScaleIcon } from '@/Components/Material/Symbols';
 
 /**
  * ATH-EAR-002 §2.1: "Standards.jsx and Principles.jsx are catalogues of

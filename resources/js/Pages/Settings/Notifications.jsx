@@ -5,7 +5,7 @@ import {
     EnvelopeIcon,
     DevicePhoneMobileIcon,
     InformationCircleIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 function TogglePlaceholder({ label, description, defaultOn = false }) {
     return (

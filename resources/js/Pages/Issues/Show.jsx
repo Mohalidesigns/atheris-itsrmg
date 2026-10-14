@@ -56,13 +56,13 @@ export default function IssueShow({ issue: i, source, slaState, slaHours, chain 
             <div className="mb-4 flex flex-wrap items-center gap-2">
                 {STEPS.map((s, idx) => (
                     <div key={s} className="flex items-center gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs ${idx < stepIndex ? 'bg-[#2D7D46]/10 text-[#2D7D46]' : idx === stepIndex ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#718096]'}`}>
+                        <span className={`rounded-lg px-3 py-1 text-xs ${idx < stepIndex ? 'bg-[#2D7D46]/10 text-[#2D7D46]' : idx === stepIndex ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#718096]'} whitespace-nowrap`}>
                             {humanize(s)}{s === 'in_progress' && i.status === 'blocked' ? ' (blocked)' : ''}
                         </span>
                         {idx < STEPS.length - 1 && <span className="text-gray-300">→</span>}
                     </div>
                 ))}
-                {i.escalation_level > 0 && <span className="rounded-full bg-[#B3261E]/10 px-3 py-1 text-xs font-semibold text-[#B3261E]">Escalated · level {i.escalation_level} ({chain[i.escalation_level]})</span>}
+                {i.escalation_level > 0 && <span className="rounded-lg bg-[#B3261E]/10 px-3 py-1 text-xs font-semibold text-[#B3261E] whitespace-nowrap">Escalated · level {i.escalation_level} ({chain[i.escalation_level]})</span>}
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

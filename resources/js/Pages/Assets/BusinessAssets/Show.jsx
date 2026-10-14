@@ -4,7 +4,7 @@ import StatusBadge from '@/Components/StatusBadge';
 import { CriticalityBadge, AssetStatusBadge } from '@/Components/Assets/AssetBadges';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { PencilIcon, TrashIcon, LinkIcon, XMarkIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, LinkIcon, XMarkIcon, ExclamationTriangleIcon } from '@/Components/Material/Symbols';
 
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 

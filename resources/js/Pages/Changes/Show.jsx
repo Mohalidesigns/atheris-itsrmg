@@ -5,7 +5,7 @@ import InputError from '@/Components/InputError';
 import RiskMatrix from '@/Components/Changes/RiskMatrix';
 import { formatDate, humanize } from '@/Utils/risk';
 import {
-    APPROVAL_COLOUR, EVENT_DOT, IMPACT_LABELS, LIKELIHOOD_LABELS, PIR_OUTCOMES, PRIORITIES, RISK_COLOUR, SIDE_STATUSES, STATUS_STEPS,
+    APPROVAL_COLOUR, EVENT_DOT, IMPACT_LABELS, LIKELIHOOD_LABELS, PIR_OUTCOMES, PRIORITIES, SIDE_STATUSES, STATUS_STEPS,
     TASK_TYPES, VOTE_COLOUR, relativeDue, toDateTimeInput, windowLabel,
 } from '@/Utils/changes';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
@@ -92,14 +92,14 @@ export default function ChangeShow({
             <div className="mb-4 flex flex-wrap items-center gap-2">
                 {STATUS_STEPS.map((s, idx) => (
                     <div key={s} className="flex items-center gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs ${sideStatus ? 'bg-gray-100 text-[#A0AEC0]' : idx < stepIndex ? 'bg-[#2D7D46]/10 text-[#2D7D46]' : idx === stepIndex ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#718096]'}`}>
+                        <span className={`rounded-lg px-3 py-1 text-xs ${sideStatus ? 'bg-gray-100 text-[#A0AEC0]' : idx < stepIndex ? 'bg-[#2D7D46]/10 text-[#2D7D46]' : idx === stepIndex ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#718096]'} whitespace-nowrap`}>
                             {s === 'in_approval' ? 'In approval' : humanize(s)}
                         </span>
                         {idx < STATUS_STEPS.length - 1 && <span className="text-gray-300">→</span>}
                     </div>
                 ))}
-                {sideStatus && <span className="rounded-full bg-[#B3261E]/10 px-3 py-1 text-xs font-semibold text-[#B3261E]">{humanize(sideStatus)}{['backed_out', 'failed'].includes(sideStatus) ? ' · awaiting PIR' : ''}</span>}
-                {c.started_before_approval && <span className="rounded-full bg-[#E5A100]/10 px-3 py-1 text-xs font-semibold text-[#8A6400]">Started before approval (retrospective authorisation)</span>}
+                {sideStatus && <span className="rounded-lg bg-[#B3261E]/10 px-3 py-1 text-xs font-semibold text-[#B3261E] whitespace-nowrap">{humanize(sideStatus)}{['backed_out', 'failed'].includes(sideStatus) ? ' · awaiting PIR' : ''}</span>}
+                {c.started_before_approval && <span className="rounded-lg bg-[#E5A100]/10 px-3 py-1 text-xs font-semibold text-[#8A6400] whitespace-nowrap">Started before approval (retrospective authorisation)</span>}
             </div>
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -377,7 +377,7 @@ export default function ChangeShow({
                     <div className="rounded-xl border border-gray-100 bg-white p-5 text-sm shadow-sm">
                         <div className="mb-3 flex items-center justify-between">
                             <h3 className="text-sm font-semibold text-[#2D3748]">Risk</h3>
-                            <span className="rounded-full px-3 py-1 text-xs font-semibold text-white" style={{ backgroundColor: RISK_COLOUR[c.risk_level] || '#718096' }}>{humanize(c.risk_level)} · {c.risk_score}</span>
+                            <StatusBadge status={c.risk_level} label={`${humanize(c.risk_level)} · ${c.risk_score}`} />
                         </div>
                         <RiskMatrix impact={c.impact} likelihood={c.likelihood} size="h-5" />
                         <dl className="mt-3 space-y-2">
@@ -448,7 +448,7 @@ export default function ChangeShow({
                             ))}
                         </ul>
                         {(c.affected_services || []).length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1">{c.affected_services.map((s) => <span key={s} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-[#2D3748]">{s}</span>)}</div>
+                            <div className="mt-2 flex flex-wrap gap-1">{c.affected_services.map((s) => <span key={s} className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] text-[#2D3748] whitespace-nowrap">{s}</span>)}</div>
                         )}
                     </div>
                 </div>
@@ -482,7 +482,7 @@ function BoardPanel({ members = [], tally, canVote, myVote, vote, changeId }) {
                 {members.map((m) => (
                     <li key={m.id} className="flex items-center justify-between gap-2 rounded bg-white px-2 py-1 text-xs">
                         <span className="truncate text-[#2D3748]">{m.user?.name}<span className="ml-1 text-[10px] text-[#718096]">{m.role === 'chair' ? 'Chair' : m.represents || ''}{!m.is_voting ? ' · advisory' : ''}</span></span>
-                        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: m.vote ? VOTE_COLOUR[m.vote] : '#CBD5E0' }} title={m.comment || ''}>{m.vote ? humanize(m.vote) : 'No vote'}</span>
+                        <span title={m.comment || ''}><StatusBadge status={m.vote || 'no_vote'} label={m.vote ? humanize(m.vote) : 'No vote'} size="xs" /></span>
                     </li>
                 ))}
             </ul>

@@ -11,7 +11,7 @@ import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head } from '@inertiajs/react';
-import { ShieldExclamationIcon } from '@heroicons/react/24/outline';
+import { ShieldExclamationIcon } from '@/Components/Material/Symbols';
 
 /**
  * Appendix A #19–20: raise and renew were both orphaned endpoints.

@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import StatusBadge from '@/Components/StatusBadge';
 import InputError from '@/Components/InputError';
 import { formatDate, humanize } from '@/Utils/risk';
-import { RISK_COLOUR, toDateTimeInput, windowLabel } from '@/Utils/changes';
+import { toDateTimeInput, windowLabel } from '@/Utils/changes';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -31,7 +31,7 @@ function AgendaItem({ item, index, total, canManage, decisions, meetingStatus })
                             <p className="flex flex-wrap items-center gap-2 text-xs text-[#718096]">
                                 <Link href={route('changes.show', c.id)} className="font-mono text-[#0A1F44] underline">{c.change_code}</Link>
                                 <StatusBadge status={c.change_type} label={humanize(c.change_type)} />
-                                <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: RISK_COLOUR[c.risk_level] }}>{humanize(c.risk_level)}</span>
+                                <StatusBadge status={c.risk_level} label={humanize(c.risk_level)} size="xs" />
                                 <StatusBadge status={c.status} label={humanize(c.status)} />
                             </p>
                             <Link href={route('changes.show', c.id)} className="mt-1 block text-sm font-medium text-[#2D3748] hover:underline">{c.title}</Link>
@@ -48,7 +48,7 @@ function AgendaItem({ item, index, total, canManage, decisions, meetingStatus })
                         </>
                     ) : <p className="text-sm italic text-[#A0AEC0]">Change no longer available.</p>}
                 </div>
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${DECISION_STYLE[item.decision] || DECISION_STYLE.pending}`}>{humanize(item.decision)}</span>
+                <span className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold ${DECISION_STYLE[item.decision] || DECISION_STYLE.pending} whitespace-nowrap`}>{humanize(item.decision)}</span>
             </div>
 
             {canManage && meetingStatus !== 'cancelled' && (

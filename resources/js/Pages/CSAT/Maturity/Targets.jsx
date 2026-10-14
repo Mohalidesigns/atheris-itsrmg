@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
-import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon } from '@/Components/Material/Symbols';
 import { MATURITY_COLORS as maturityColors, lockMessage } from '@/Utils/csat';
 
 export default function MaturityTargets({ assessment, domainScores, componentScores, gapStatements, domainNames, maturityLevels, editable = true }) {

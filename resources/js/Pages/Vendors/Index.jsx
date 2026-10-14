@@ -4,7 +4,7 @@ import StatusBadge from '@/Components/StatusBadge';
 import { TierBadge, GradeBadge, fmtDate, isPast } from '@/Components/Vendors/VendorBadges';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, ChevronUpDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, ChevronUpDownIcon, ArrowUpIcon } from '@/Components/Material/Symbols';
 
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 

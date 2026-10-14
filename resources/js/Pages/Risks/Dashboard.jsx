@@ -5,7 +5,7 @@ import {
     ExclamationTriangleIcon,
     PlusIcon,
     ArrowRightIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import RiskHeatMap from '@/Components/Risk/RiskHeatMap';
 import { RatingBadge, StatusBadge, ScoreDisplay } from '@/Components/Risk/RiskBadge';

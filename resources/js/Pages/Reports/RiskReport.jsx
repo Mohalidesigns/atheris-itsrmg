@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Badge from '@/Components/StatusBadge';
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
 import {
@@ -41,18 +42,7 @@ function StatCard({ title, value, color, subtitle }) {
 
 function RatingBadge({ rating }) {
     if (!rating) return null;
-    const colors = {
-        critical: 'bg-[#C53030]/10 text-[#C53030]',
-        high: 'bg-[#DD6B20]/10 text-[#DD6B20]',
-        medium: 'bg-[#D4AF37]/10 text-[#D4AF37]',
-        low: 'bg-[#2D7D46]/10 text-[#2D7D46]',
-        very_low: 'bg-[#319795]/10 text-[#319795]',
-    };
-    return (
-        <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full uppercase ${colors[rating] || 'bg-gray-100 text-gray-500'}`}>
-            {rating.replace('_', ' ')}
-        </span>
-    );
+    return <Badge status={rating} size="xs" />;
 }
 
 const CUSTOM_TOOLTIP_STYLE = {

@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
-import { PrinterIcon } from '@heroicons/react/24/outline';
+import { PrinterIcon } from '@/Components/Material/Symbols';
 import { IR_LEVEL_COLORS, LICENCE_LABELS, MATURITY_COLORS, STATUS_LABELS, formatDate, humanize } from '@/Utils/csat';
 
 function Section({ letter, title, children }) {

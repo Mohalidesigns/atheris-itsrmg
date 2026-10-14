@@ -4,7 +4,7 @@ import PageHeader from '@/Components/PageHeader';
 import StatusBadge from '@/Components/StatusBadge';
 import InputError from '@/Components/InputError';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { ArrowDownTrayIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ArrowPathIcon } from '@/Components/Material/Symbols';
 import { RUN_STATUS } from './Index';
 
 const STEPS = ['draft', 'in_review', 'approved', 'submitted'];

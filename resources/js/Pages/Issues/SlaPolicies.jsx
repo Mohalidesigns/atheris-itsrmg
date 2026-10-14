@@ -40,7 +40,7 @@ function PolicyRow({ policy: p, canEdit }) {
                     <div className="flex flex-wrap gap-1">
                         {ROLES.map((r) => (
                             <button key={r} type="button" disabled={r === 'owner'} onClick={() => toggle(r)}
-                                className={`rounded-full border px-2 py-0.5 text-[11px] ${form.data.chain.includes(r) ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 text-[#4A5568]'}`}>
+                                className={`rounded-lg border px-2 py-0.5 text-[11px] ${form.data.chain.includes(r) ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 text-[#4A5568]'} whitespace-nowrap`}>
                                 {ROLE_LABEL[r]}
                             </button>
                         ))}

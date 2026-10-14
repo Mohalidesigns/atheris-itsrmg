@@ -3,7 +3,7 @@ import Pagination from '@/Components/Pagination';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, ExclamationTriangleIcon } from '@/Components/Material/Symbols';
 
 import { formatDate, threatLabel } from '@/Utils/risk';
 

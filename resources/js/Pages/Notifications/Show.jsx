@@ -38,7 +38,7 @@ export default function NotificationShow({ notification: n, canApprove = false }
             <div className="mb-4 flex flex-wrap items-center gap-2">
                 {STEPS.map((s, i) => (
                     <div key={s} className="flex items-center gap-2">
-                        <span className={`rounded-full px-3 py-1 text-xs ${i < stepIndex ? 'bg-[#2D7D46]/10 text-[#2D7D46]' : i === stepIndex ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#718096]'}`}>
+                        <span className={`rounded-lg px-3 py-1 text-xs ${i < stepIndex ? 'bg-[#2D7D46]/10 text-[#2D7D46]' : i === stepIndex ? 'bg-[#0A1F44] text-white' : 'bg-gray-100 text-[#718096]'} whitespace-nowrap`}>
                             {humanize(s)}
                         </span>
                         {i < STEPS.length - 1 && <span className="text-gray-300">→</span>}

@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon } from '@/Components/Material/Symbols';
 import { formatDate, humanize, lockMessage } from '@/Utils/csat';
 
 function Err({ m }) { return m ? <p className="text-xs text-[#C53030] mt-1">{m}</p> : null; }

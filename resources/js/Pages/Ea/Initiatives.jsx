@@ -10,7 +10,7 @@ import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head, router } from '@inertiajs/react';
-import { ChevronDownIcon, ChevronRightIcon, MapIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon, MapIcon } from '@/Components/Material/Symbols';
 
 const fmt = (n) => '₦' + Number(n || 0).toLocaleString();
 const statusTone = {

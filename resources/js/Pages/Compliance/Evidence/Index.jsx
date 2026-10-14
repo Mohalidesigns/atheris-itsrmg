@@ -5,7 +5,7 @@ import Pagination from '@/Components/Pagination';
 import Chip from '@/Components/Compliance/Chip';
 import EvidenceUploadModal from '@/Components/Compliance/EvidenceUploadModal';
 import EvidenceReviewModal from '@/Components/Compliance/EvidenceReviewModal';
-import { DocumentIcon, LinkIcon, CameraIcon, ClipboardIcon, CommandLineIcon, ArrowUpTrayIcon, MagnifyingGlassIcon, ArrowDownTrayIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { DocumentIcon, LinkIcon, CameraIcon, ClipboardIcon, CommandLineIcon, ArrowUpTrayIcon, MagnifyingGlassIcon, ArrowDownTrayIcon, TrashIcon } from '@/Components/Material/Symbols';
 import { EVIDENCE_TYPES, evidenceState, formatDate } from '@/Utils/compliance';
 
 const typeIcons = { document: DocumentIcon, url: LinkIcon, screenshot: CameraIcon, attestation: ClipboardIcon, log: CommandLineIcon };

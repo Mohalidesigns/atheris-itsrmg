@@ -53,7 +53,7 @@ export default function LegalEntities({ entities = [], summary = {} }) {
                         {summary.regulators.map((r) => (
                             <span
                                 key={r}
-                                className="rounded-full border border-gray-200 bg-[#F7FAFC] px-2.5 py-0.5 text-[11px] text-[#2D3748]"
+                                className="rounded-lg bg-[#F7FAFC] px-2.5 py-0.5 text-[11px] text-[#2D3748] whitespace-nowrap"
                             >
                                 {r}
                             </span>

@@ -17,7 +17,7 @@ const statusStyles = {
 const labels = { in_review: 'In review', active: 'In force' };
 
 export function PolicyStatus({ status }) {
-    return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${statusStyles[status] || statusStyles.draft}`}>{labels[status] || (status || '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())}</span>;
+    return <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-semibold ${statusStyles[status] || statusStyles.draft} whitespace-nowrap`}>{labels[status] || (status || '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())}</span>;
 }
 
 export const fmtDate = (v) => (v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : null);

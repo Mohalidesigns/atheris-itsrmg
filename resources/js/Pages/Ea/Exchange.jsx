@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, router } from '@inertiajs/react';
-import { ArrowDownTrayIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ArrowUpTrayIcon } from '@/Components/Material/Symbols';
 
 export default function Exchange({ jobs = [] }) {
     const queue = (type) => router.post(route('ea.exchange.queue'), { type });

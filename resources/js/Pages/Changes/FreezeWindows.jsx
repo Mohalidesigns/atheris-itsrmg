@@ -25,11 +25,11 @@ function FreezeForm({ form, categories, onSubmit, submitLabel, onCancel }) {
             <div>
                 <label className={label}>Scope</label>
                 <div className="mt-1 flex gap-2">
-                    {[['all', 'All changes'], ['categories', 'Selected categories']].map(([v, l]) => <button key={v} type="button" onClick={() => form.setData('scope', v)} className={`rounded-full border px-3 py-1 text-xs ${form.data.scope === v ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 text-[#4A5568]'}`}>{l}</button>)}
+                    {[['all', 'All changes'], ['categories', 'Selected categories']].map(([v, l]) => <button key={v} type="button" onClick={() => form.setData('scope', v)} className={`rounded-lg border px-3 py-1 text-xs ${form.data.scope === v ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 text-[#4A5568]'} whitespace-nowrap`}>{l}</button>)}
                 </div>
                 {form.data.scope === 'categories' && (
                     <div className="mt-2 flex flex-wrap gap-1">
-                        {categories.map((c) => <button key={c} type="button" onClick={() => toggle(c)} className={`rounded-full border px-2 py-0.5 text-[11px] ${form.data.categories.includes(c) ? 'border-[#0A1F44] bg-[#0A1F44]/10 text-[#0A1F44]' : 'border-gray-200 text-[#4A5568]'}`}>{humanize(c)}</button>)}
+                        {categories.map((c) => <button key={c} type="button" onClick={() => toggle(c)} className={`rounded-lg border px-2 py-0.5 text-[11px] ${form.data.categories.includes(c) ? 'border-[#0A1F44] bg-[#0A1F44]/10 text-[#0A1F44]' : 'border-gray-200 text-[#4A5568]'} whitespace-nowrap`}>{humanize(c)}</button>)}
                     </div>
                 )}
                 <InputError message={form.errors.categories || form.errors.scope} />

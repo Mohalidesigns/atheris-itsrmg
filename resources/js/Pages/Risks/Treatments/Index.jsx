@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon } from '@/Components/Material/Symbols';
 import { TreatmentStatusBadge } from '@/Components/Risk/RiskBadge';
 import { formatDate, humanize } from '@/Utils/risk';
 import Pagination from '@/Components/Pagination';

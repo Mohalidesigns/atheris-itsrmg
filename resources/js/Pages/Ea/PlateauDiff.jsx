@@ -137,7 +137,7 @@ export default function PlateauDiff({ plateaux = [], diff, from, to, disposition
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2 text-xs">
                                 {diff.capability_coverage.critical_lost.map((capability) => (
-                                    <span key={capability.id} className="rounded-full border border-[#B3261E]/30 bg-white px-2 py-1 font-medium">
+                                    <span key={capability.id} className="rounded-lg border border-[#B3261E]/30 bg-white px-2 py-1 font-medium">
                                         {capability.code} — {capability.name}
                                     </span>
                                 ))}

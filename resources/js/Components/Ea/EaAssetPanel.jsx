@@ -101,11 +101,11 @@ export default function EaAssetPanel({ ea }) {
                         {ea.tech_components.map((t) => (
                             <span
                                 key={t.id}
-                                className={`rounded-full border px-2 py-0.5 text-[11px] ${
+                                className={`rounded-lg px-2 py-0.5 text-[11px] ${
                                     t.obsolescence_flag
                                         ? 'border-[#B3261E]/30 bg-[#B3261E]/10 text-[#B3261E]'
                                         : 'border-gray-200 bg-white text-[#718096]'
-                                }`}
+                                } whitespace-nowrap`}
                                 title={t.eol_date ? `End of life ${t.eol_date}` : undefined}
                             >
                                 {t.name}

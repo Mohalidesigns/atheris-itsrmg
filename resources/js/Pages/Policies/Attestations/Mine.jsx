@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PolicyStatus, fmtDate, isPast } from '@/Components/Policies/PolicyBadges';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { CheckBadgeIcon } from '@heroicons/react/24/outline';
+import { CheckBadgeIcon } from '@/Components/Material/Symbols';
 
 function PendingPolicy({ attestation }) {
     const [open, setOpen] = useState(false);

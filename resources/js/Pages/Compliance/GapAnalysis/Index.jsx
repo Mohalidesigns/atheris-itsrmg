@@ -10,7 +10,7 @@ import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import Chip from '@/Components/Compliance/Chip';
-import { PlusIcon, MagnifyingGlassIcon, PaperClipIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, PaperClipIcon } from '@/Components/Material/Symbols';
 import { GAP_SEVERITY, GAP_STATUS, GAP_RESOLVED, formatDate, toDateInput } from '@/Utils/compliance';
 
 const field = 'mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm';
@@ -222,7 +222,7 @@ export default function GapAnalysisIndex({ gaps, stats, bySeverity, filters, sta
                         <option value="">Any owner</option><option value="none">Unassigned</option>
                         {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
-                    {filters.overdue ? <button onClick={() => apply({ overdue: undefined })} className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-700">Overdue only ✕</button> : null}
+                    {filters.overdue ? <button onClick={() => apply({ overdue: undefined })} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-700 whitespace-nowrap">Overdue only ✕</button> : null}
                 </div>
 
                 <div className="overflow-x-auto">

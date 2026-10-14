@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import StatusBadge from '@/Components/StatusBadge';
 import { TierBadge, GradeBadge, Sparkline, fmtDate, isPast } from '@/Components/Vendors/VendorBadges';
 import { Head, Link, router } from '@inertiajs/react';
-import { PencilIcon, TrashIcon, PlusIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, PlusIcon, ExclamationTriangleIcon } from '@/Components/Material/Symbols';
 
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 

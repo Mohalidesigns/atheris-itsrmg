@@ -28,7 +28,7 @@ import {
     ScaleIcon,
     BuildingLibraryIcon,
     UserGroupIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 /**
  * Navigation config.

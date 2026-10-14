@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlayIcon } from '@heroicons/react/24/outline';
+import { PlayIcon } from '@/Components/Material/Symbols';
 import { formatDate } from '@/Utils/risk';
 
 const fmt = (n) => '₦' + Math.round(Number(n || 0)).toLocaleString();

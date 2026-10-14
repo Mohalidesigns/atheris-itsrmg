@@ -1,45 +1,17 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Badge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@/Components/Material/Symbols';
 import Pagination from '@/Components/Pagination';
 import { formatDate } from '@/Utils/risk';
 
-const severityColors = {
-    critical: '#C53030',
-    high: '#DD6B20',
-    medium: '#D4AF37',
-    low: '#2D7D46',
-    info: '#319795',
-};
-
 function SeverityBadge({ severity }) {
-    const color = severityColors[severity] || '#718096';
-    return (
-        <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize"
-            style={{ backgroundColor: `${color}15`, color }}
-        >
-            {severity}
-        </span>
-    );
+    return <Badge status={severity} />;
 }
 
 function StatusBadge({ status }) {
-    const map = {
-        open: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
-        in_progress: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
-        mitigated: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
-        resolved: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
-        closed: { bg: 'bg-gray-100', text: 'text-gray-500' },
-        accepted: { bg: 'bg-[#D4AF37]/10', text: 'text-[#D4AF37]' },
-    };
-    const style = map[status] || map.open;
-    return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${style.bg} ${style.text}`}>
-            {(status || '').replace(/_/g, ' ')}
-        </span>
-    );
+    return <Badge status={status || 'open'} />;
 }
 
 export default function VulnerabilitiesIndex({ vulnerabilities, filters, severities, statuses }) {

@@ -1,60 +1,109 @@
-export default function StatusBadge({ status, label }) {
-    const map = {
-        pass: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        fail: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        warn: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
-        error: 'bg-gray-100 text-gray-700 border-gray-300',
-        enabled: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        disabled: 'bg-gray-100 text-gray-600 border-gray-300',
-        active: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        paused: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
-        draft: 'bg-gray-100 text-gray-700 border-gray-300',
-        in_review: 'bg-[#C9A86A]/15 text-[#8A6400] border-[#C9A86A]/40',
-        approved: 'bg-[#0A1F44]/10 text-[#0A1F44] border-[#0A1F44]/30',
-        signed: 'bg-[#0A1F44]/10 text-[#0A1F44] border-[#0A1F44]/30',
-        delivered: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        acknowledged: 'bg-[#2D7D46]/20 text-[#2D7D46] border-[#2D7D46]/40',
-        critical: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        high: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
-        moderate: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
-        medium: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
-        low: 'bg-gray-100 text-gray-700 border-gray-300',
-        open: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        in_progress: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
-        blocked: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
-        remediated: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        verified: 'bg-[#2D7D46]/20 text-[#2D7D46] border-[#2D7D46]/40',
-        closed: 'bg-gray-100 text-gray-600 border-gray-300',
-        escalated: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        green: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        amber: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
-        red: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        // Change Management (ATH-CHG-001 §8)
-        submitted: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
-        in_approval: 'bg-[#C9A86A]/15 text-[#8A6400] border-[#C9A86A]/40',
-        scheduled: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
-        implementing: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
-        implemented: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        review: 'bg-[#C9A86A]/15 text-[#8A6400] border-[#C9A86A]/40',
-        backed_out: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        failed: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        cancelled: 'bg-gray-100 text-gray-600 border-gray-300',
-        rejected: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        pending: 'bg-[#C9A86A]/15 text-[#8A6400] border-[#C9A86A]/40',
-        skipped: 'bg-gray-100 text-gray-600 border-gray-300',
-        expired: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        standard: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        normal: 'bg-[#0A1F44]/10 text-[#0A1F44] border-[#0A1F44]/30',
-        emergency: 'bg-[#B3261E]/10 text-[#B3261E] border-[#B3261E]/30',
-        held: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-        deferred: 'bg-[#E5A100]/10 text-[#8A6400] border-[#E5A100]/30',
-        more_info: 'bg-[#1D4ED8]/10 text-[#1D4ED8] border-[#1D4ED8]/30',
-        done: 'bg-[#2D7D46]/10 text-[#2D7D46] border-[#2D7D46]/30',
-    };
-    const klass = map[status] || 'bg-gray-100 text-gray-700 border-gray-300';
+import Chip from '@/Components/Material/Chip';
+
+// status → [tone, Material Symbol]. Tones live in Components/Material/Chip.
+const OK = ['success', 'check_circle'];
+const BAD = ['error', 'cancel'];
+const map = {
+    pass: OK,
+    fail: BAD,
+    warn: ['warning', 'warning'],
+    error: ['neutral', 'error'],
+    enabled: OK,
+    disabled: ['muted', 'do_not_disturb_on'],
+    active: OK,
+    degraded: ['warning', 'warning'],
+    paused: ['warning', 'pause_circle'],
+    draft: ['neutral', 'edit_note'],
+    in_review: ['tertiary', 'rate_review'],
+    approved: ['primary', 'verified'],
+    signed: ['primary', 'signature'],
+    delivered: OK,
+    acknowledged: ['success', 'done_all'],
+    // Severity / risk: Material arrow glyphs read faster than colour alone.
+    critical: ['error', 'keyboard_double_arrow_up'],
+    high: ['warning', 'keyboard_arrow_up'],
+    moderate: ['info', 'drag_handle'],
+    medium: ['info', 'drag_handle'],
+    low: ['neutral', 'keyboard_arrow_down'],
+    info: ['neutral', 'info'],
+    open: ['error', 'radio_button_unchecked'],
+    in_progress: ['info', 'timelapse'],
+    blocked: ['warning', 'block'],
+    remediated: OK,
+    resolved: OK,
+    verified: ['success', 'verified'],
+    closed: ['muted', 'task_alt'],
+    escalated: ['error', 'priority_high'],
+    green: ['success', 'circle'],
+    amber: ['warning', 'circle'],
+    red: ['error', 'circle'],
+    // Change Management (ATH-CHG-001 §8)
+    submitted: ['info', 'send'],
+    in_approval: ['tertiary', 'hourglass_top'],
+    scheduled: ['info', 'event'],
+    implementing: ['warning', 'construction'],
+    implemented: OK,
+    review: ['tertiary', 'rate_review'],
+    backed_out: ['error', 'undo'],
+    failed: BAD,
+    cancelled: ['muted', 'block'],
+    rejected: BAD,
+    pending: ['tertiary', 'hourglass_top'],
+    skipped: ['muted', 'skip_next'],
+    expired: ['error', 'timer_off'],
+    standard: ['success', 'inventory'],
+    normal: ['primary', 'sync_alt'],
+    emergency: ['error', 'bolt'],
+    held: OK,
+    deferred: ['warning', 'schedule'],
+    more_info: ['info', 'help'],
+    done: OK,
+    approve: OK,
+    reject: BAD,
+    abstain: ['muted', 'remove_circle'],
+    defer: ['warning', 'schedule'],
+    // Incidents, breaches, vulnerabilities, BCP, assets, audit trail
+    detected: ['error', 'notification_important'],
+    reported: ['neutral', 'flag'],
+    triaged: ['info', 'fact_check'],
+    investigating: ['warning', 'search'],
+    containing: ['warning', 'shield'],
+    contained: ['primary', 'shield'],
+    eradicating: ['warning', 'cleaning_services'],
+    recovering: ['info', 'restart_alt'],
+    notifying: ['tertiary', 'campaign'],
+    notified: OK,
+    post_incident: ['primary', 'rate_review'],
+    post_incident_review: ['primary', 'rate_review'],
+    mitigated: ['success', 'shield'],
+    accepted: ['tertiary', 'thumb_up'],
+    tested: ['primary', 'fact_check'],
+    inactive: ['muted', 'do_not_disturb_on'],
+    under_review: ['tertiary', 'rate_review'],
+    decommissioned: ['error', 'delete_forever'],
+    very_low: ['neutral', 'keyboard_double_arrow_down'],
+    created: ['success', 'add_circle'],
+    updated: ['info', 'edit'],
+    deleted: ['error', 'delete'],
+    completed: OK,
+    overdue: ['error', 'schedule'],
+    required: ['error', 'notification_important'],
+    not_required: ['muted', 'remove_circle'],
+};
+
+/**
+ * The status glyph shows only when the label names that status ("Medium", "Medium and above",
+ * "Critical · 18"). Pages that borrow a status purely for its colour (status="critical" label="PII")
+ * get the tone without a misleading icon. Pass `icon` to force one, or `icon={false}` to drop it.
+ */
+export default function StatusBadge({ status, label, icon, size }) {
+    const [tone, glyph] = map[status] || ['neutral', null];
+    const plain = String(status ?? '').replace(/_/g, ' ');
+    const names = !label || String(label).toLowerCase().startsWith(plain.toLowerCase());
+    const shown = icon === false ? null : (icon || (names ? glyph : null));
     return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${klass}`}>
-            {label || status}
-        </span>
+        <Chip tone={tone} icon={shown} size={size}>
+            {label || plain}
+        </Chip>
     );
 }

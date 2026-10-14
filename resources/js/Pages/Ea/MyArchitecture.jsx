@@ -5,7 +5,7 @@ import StatusBadge from '@/Components/StatusBadge';
 import QualitySealBadge from '@/Components/Ea/QualitySealBadge';
 import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import { Head, Link } from '@inertiajs/react';
-import { UserCircleIcon } from '@heroicons/react/24/outline';
+import { UserCircleIcon } from '@/Components/Material/Symbols';
 
 /**
  * My Architecture — WS 1.1's "'My architecture' view".

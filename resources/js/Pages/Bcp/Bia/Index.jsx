@@ -1,30 +1,16 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Badge from '@/Components/StatusBadge';
 import { Head, useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, ChevronUpIcon, ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, ChevronUpIcon, ChevronDownIcon, MagnifyingGlassIcon } from '@/Components/Material/Symbols';
 import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 import Pagination from '@/Components/Pagination';
 
-const criticalityColors = {
-    critical: '#C53030',
-    high: '#DD6B20',
-    medium: '#D4AF37',
-    low: '#2D7D46',
-};
-
 function CriticalityBadge({ criticality }) {
-    const color = criticalityColors[criticality] || '#718096';
-    return (
-        <span
-            className="inline-flex px-2 py-0.5 text-xs font-semibold rounded-full"
-            style={{ backgroundColor: color + '15', color }}
-        >
-            {criticality?.charAt(0).toUpperCase() + criticality?.slice(1)}
-        </span>
-    );
+    return <Badge status={criticality} />;
 }
 
 function ApplyButton({ record }) {

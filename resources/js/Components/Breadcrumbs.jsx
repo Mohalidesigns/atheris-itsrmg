@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { HomeIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { HomeIcon, ChevronRightIcon } from '@/Components/Material/Symbols';
 
 /**
  * Breadcrumbs — consistent, clickable, collapsing navigation.

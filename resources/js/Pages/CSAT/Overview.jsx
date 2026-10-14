@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { CheckCircleIcon, LockClosedIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, LockClosedIcon, XCircleIcon } from '@/Components/Material/Symbols';
 import { IR_LEVEL_COLORS, MATURITY_COLORS, MATURITY_LABELS, STATUS_COLORS, STATUS_LABELS, formatDate, humanize, lockMessage } from '@/Utils/csat';
 
 const IR_SHORT = { 1: 'Tech & Connections', 2: 'Delivery Channels', 3: 'Products & Services', 4: 'Org Characteristics', 5: 'External Threats' };
@@ -54,14 +54,14 @@ export default function CsatOverview({ assessment, editable = true, checklist = 
             <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm mb-6">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[assessment.status]}`}>{STATUS_LABELS[assessment.status] || humanize(assessment.status)}</span>
+                        <span className={`px-3 py-1 rounded-lg text-xs font-bold ${STATUS_COLORS[assessment.status]} whitespace-nowrap`}>{STATUS_LABELS[assessment.status] || humanize(assessment.status)}</span>
                         {assessment.composite_risk_level && (
-                            <span className="px-3 py-1 rounded-full text-xs font-bold text-white" style={{ backgroundColor: IR_LEVEL_COLORS[assessment.composite_risk_level] }}>
+                            <span className="px-3 py-1 rounded-lg text-xs font-bold text-white whitespace-nowrap" style={{ backgroundColor: IR_LEVEL_COLORS[assessment.composite_risk_level] }}>
                                 Inherent Risk: {humanize(assessment.composite_risk_level)} ({Number(assessment.composite_risk_score).toFixed(2)})
                             </span>
                         )}
                         {assessment.overall_maturity_level && (
-                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#1A365D]/10 text-[#1A365D]">
+                            <span className="px-3 py-1 rounded-lg text-xs font-bold bg-[#1A365D]/10 text-[#1A365D] whitespace-nowrap">
                                 Overall Maturity: {humanize(assessment.overall_maturity_level)}
                             </span>
                         )}

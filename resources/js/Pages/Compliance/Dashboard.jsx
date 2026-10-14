@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
-import { ArrowRightIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { ArrowRightIcon, PlusIcon } from '@/Components/Material/Symbols';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import Chip from '@/Components/Compliance/Chip';
 import { RESULT_STYLES, ASSESSMENT_STATUS, GAP_SEVERITY, GAP_STATUS, EFFECTIVENESS, scoreColor, formatDate } from '@/Utils/compliance';
@@ -17,7 +17,7 @@ function FrameworkCard({ fw }) {
                 <div className="min-w-0">
                     <p className="text-sm font-semibold text-[#2D3748]">{fw.short_name}</p>
                     <p className="text-xs text-[#718096] mt-0.5 line-clamp-2">{fw.name}</p>
-                    <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-full ${fw.jurisdiction === 'NG' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
+                    <span className={`inline-block mt-1 text-xs px-2 py-0.5 rounded-lg ${fw.jurisdiction === 'NG' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'} whitespace-nowrap`}>
                         {fw.jurisdiction === 'NG' ? 'Nigerian' : 'Global'}
                     </span>
                 </div>

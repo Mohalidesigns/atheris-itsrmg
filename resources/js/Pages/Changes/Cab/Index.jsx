@@ -5,7 +5,7 @@ import KpiCard from '@/Components/KpiCard';
 import Modal from '@/Components/Modal';
 import InputError from '@/Components/InputError';
 import { formatDate, humanize } from '@/Utils/risk';
-import { RISK_COLOUR, relativeDue } from '@/Utils/changes';
+import { relativeDue } from '@/Utils/changes';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -30,7 +30,7 @@ function BoardCard({ board: b, users, represents, canManage, candidates }) {
                     {b.description && <p className="mt-1 text-xs text-[#4A5568]">{b.description}</p>}
                 </div>
                 <div className="flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${b.pending_count ? 'bg-[#C9A86A]/20 text-[#8A6400]' : 'bg-gray-100 text-[#718096]'}`}>{b.pending_count} awaiting vote</span>
+                    <span className={`rounded-lg px-2 py-0.5 text-[11px] font-semibold ${b.pending_count ? 'bg-[#C9A86A]/20 text-[#8A6400]' : 'bg-gray-100 text-[#718096]'} whitespace-nowrap`}>{b.pending_count} awaiting vote</span>
                     {canManage && <button type="button" onClick={() => setEditing(!editing)} className="text-xs text-[#0A1F44] underline">{editing ? 'Close' : 'Edit board'}</button>}
                 </div>
             </div>
@@ -84,7 +84,7 @@ function BoardCard({ board: b, users, represents, canManage, candidates }) {
                             <li key={c.approval_id} className="flex flex-wrap items-center justify-between gap-2">
                                 <span><Link href={route('changes.show', c.id)} className="font-mono text-[#0A1F44] underline">{c.change_code}</Link> <span className="text-[#2D3748]">{c.title}</span></span>
                                 <span className="flex items-center gap-2 text-[10px] text-[#718096]">
-                                    <span className="rounded-full px-1.5 py-0.5 font-semibold text-white" style={{ backgroundColor: RISK_COLOUR[c.risk_level] }}>{humanize(c.risk_level)}</span>
+                                    <StatusBadge status={c.risk_level} label={humanize(c.risk_level)} size="xs" />
                                     {c.votes_tally && <span>{c.votes_tally.approve}/{c.votes_tally.quorum} approve</span>}
                                     {c.due_at && <span className={new Date(c.due_at) < Date.now() ? 'font-semibold text-[#B3261E]' : ''}>{relativeDue(c.due_at)}</span>}
                                 </span>

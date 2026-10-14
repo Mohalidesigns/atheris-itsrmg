@@ -8,7 +8,7 @@ import {
     ShieldCheckIcon,
     ClockIcon,
     CheckCircleIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 const severityColors = {
     critical: '#C53030',
@@ -70,7 +70,7 @@ export default function ShowBreach({ breach, ndpcNotification = null }) {
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <p className="text-xs text-[#718096] uppercase font-medium">Status</p>
                     <div className="mt-1">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${statusStyle.bg} ${statusStyle.text}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold capitalize ${statusStyle.bg} ${statusStyle.text} whitespace-nowrap`}>
                             {(breach.status || '').replace(/_/g, ' ')}
                         </span>
                     </div>
@@ -225,7 +225,7 @@ export default function ShowBreach({ breach, ndpcNotification = null }) {
                                                 <p className="text-xs text-[#718096] mt-1">{breach.incident.description?.substring(0, 200)}</p>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize" style={{
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold capitalize whitespace-nowrap" style={{
                                                     backgroundColor: `${severityColors[breach.incident.severity] || '#718096'}15`,
                                                     color: severityColors[breach.incident.severity] || '#718096',
                                                 }}>
@@ -249,7 +249,7 @@ export default function ShowBreach({ breach, ndpcNotification = null }) {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 <div className="bg-gray-50 rounded-lg p-4 text-center">
                                     <p className="text-xs text-[#718096] uppercase font-medium mb-2">NDPA Required</p>
-                                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold ${
+                                    <span className={`inline-flex items-center px-3 py-1 rounded-lg text-sm font-semibold ${
                                         ndpaRequired
                                             ? 'bg-[#C53030]/10 text-[#C53030]'
                                             : 'bg-gray-100 text-gray-500'

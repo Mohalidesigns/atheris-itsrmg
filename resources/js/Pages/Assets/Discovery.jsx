@@ -4,7 +4,7 @@ import KpiCard from '@/Components/KpiCard';
 import { CriticalityBadge, sourceLabels, typeLabels } from '@/Components/Assets/AssetBadges';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
-import { ArrowPathIcon, CloudIcon, ServerIcon, ShieldCheckIcon, CodeBracketIcon, DocumentArrowUpIcon, IdentificationIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon, CloudIcon, ServerIcon, ShieldCheckIcon, CodeBracketIcon, DocumentArrowUpIcon, IdentificationIcon, ArrowDownTrayIcon } from '@/Components/Material/Symbols';
 
 const icons = { ad: ShieldCheckIcon, entra: IdentificationIcon, aws: CloudIcon, tenable: CodeBracketIcon, qualys: CodeBracketIcon, csv: DocumentArrowUpIcon };
 const fmt = (v) => (v ? new Date(v).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');

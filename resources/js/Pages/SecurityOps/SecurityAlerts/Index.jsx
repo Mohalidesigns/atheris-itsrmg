@@ -3,7 +3,7 @@ import Pagination from '@/Components/Pagination';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, BellAlertIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, BellAlertIcon } from '@/Components/Material/Symbols';
 
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 

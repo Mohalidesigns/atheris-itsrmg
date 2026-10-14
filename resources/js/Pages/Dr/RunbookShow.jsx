@@ -54,7 +54,7 @@ export default function RunbookShow({ runbook, exercises = [], canRecord = false
                             <li key={e.id} className="py-2 text-xs">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[#2D3748]">{fmt(e.started_at || e.scheduled_at)}</span>
-                                    {e.result ? <span className={`rounded-full px-2 py-0.5 ${resultTone[e.result]}`}>{e.result === 'pass' ? 'within RTO' : e.result === 'partial' ? 'over RTO' : 'failed RTO'}</span> : <span className="text-[#718096]">{e.status}</span>}
+                                    {e.result ? <span className={`rounded-lg px-2 py-0.5 ${resultTone[e.result]}`}>{e.result === 'pass' ? 'within RTO' : e.result === 'partial' ? 'over RTO' : 'failed RTO'}</span> : <span className="text-[#718096]">{e.status}</span>}
                                 </div>
                                 {e.rto_achieved_min != null && <p className="text-[#718096]">{e.rto_achieved_min} min against {e.rto_target_min} min target</p>}
                                 {e.outcome_notes && <p className="text-[#4A5568]">{e.outcome_notes}</p>}

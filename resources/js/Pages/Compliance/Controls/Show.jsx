@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { PencilIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, XMarkIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, ArrowUpTrayIcon, ArrowDownTrayIcon, XMarkIcon, TrashIcon } from '@/Components/Material/Symbols';
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import Chip from '@/Components/Compliance/Chip';

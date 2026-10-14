@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { PolicyStatus, fmtDate, isPast } from '@/Components/Policies/PolicyBadges';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { PencilIcon, TrashIcon, CheckBadgeIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, CheckBadgeIcon } from '@/Components/Material/Symbols';
 
 const STEPS = ['draft', 'in_review', 'approved', 'active'];
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
@@ -42,12 +42,12 @@ function Workflow({ policy, can }) {
                     const reached = STEPS.indexOf(policy.status) >= i || policy.status === 'retired';
                     return (
                         <li key={s} className="flex items-center gap-2">
-                            <span className={`rounded-full px-2 py-0.5 ${policy.status === s ? 'bg-[#0A1F44] text-white' : reached ? 'bg-[#0A1F44]/10 text-[#0A1F44]' : 'bg-gray-100 text-[#718096]'}`}>{s === 'active' ? 'In force' : cap(s)}</span>
+                            <span className={`rounded-lg px-2 py-0.5 ${policy.status === s ? 'bg-[#0A1F44] text-white' : reached ? 'bg-[#0A1F44]/10 text-[#0A1F44]' : 'bg-gray-100 text-[#718096]'}`}>{s === 'active' ? 'In force' : cap(s)}</span>
                             {i < STEPS.length - 1 && <span className="text-gray-300">→</span>}
                         </li>
                     );
                 })}
-                {policy.status === 'retired' && <li className="rounded-full bg-gray-200 px-2 py-0.5 text-[#718096]">Retired {fmtDate(policy.retired_at)}</li>}
+                {policy.status === 'retired' && <li className="rounded-lg bg-gray-200 px-2 py-0.5 text-[#718096]">Retired {fmtDate(policy.retired_at)}</li>}
             </ol>
             {policy.status_note && <p className="mt-2 text-xs text-[#8A6400]">Note: {policy.status_note}</p>}
             {actions.length > 0 && (

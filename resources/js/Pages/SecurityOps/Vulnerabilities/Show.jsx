@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { useState } from 'react';
-import { PencilIcon } from '@heroicons/react/24/outline';
+import { PencilIcon } from '@/Components/Material/Symbols';
 import { formatDate } from '@/Utils/risk';
 
 const severityColors = {
@@ -105,7 +105,7 @@ export default function ShowVulnerability({ vulnerability, priority = null }) {
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <p className="text-xs text-[#718096] uppercase font-medium">Status</p>
                     <div className="mt-1">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${statusStyle.bg} ${statusStyle.text}`}>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold capitalize ${statusStyle.bg} ${statusStyle.text} whitespace-nowrap`}>
                             {(vulnerability.status || '').replace(/_/g, ' ')}
                         </span>
                     </div>
@@ -136,7 +136,7 @@ export default function ShowVulnerability({ vulnerability, priority = null }) {
                         <TabButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)}>
                             {tab.charAt(0).toUpperCase() + tab.slice(1)}
                             {tab === 'tickets' && vulnerability.tickets?.length > 0 && (
-                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-full">{vulnerability.tickets.length}</span>
+                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-lg whitespace-nowrap">{vulnerability.tickets.length}</span>
                             )}
                         </TabButton>
                     ))}
@@ -189,7 +189,7 @@ export default function ShowVulnerability({ vulnerability, priority = null }) {
                                                         {ticket.assignee?.name || 'Unassigned'} {ticket.sla_due_at ? `· SLA due ${formatDate(ticket.sla_due_at)}` : ''}
                                                     </p>
                                                 </div>
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${ticketStatusMap[ticket.status] || ticketStatusMap.open}`}>
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold capitalize ${ticketStatusMap[ticket.status] || ticketStatusMap.open} whitespace-nowrap`}>
                                                     {(ticket.status || '').replace(/_/g, ' ')}
                                                 </span>
                                             </div>

@@ -1,16 +1,15 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Chip from '@/Components/Material/Chip';
 import { Head, Link } from '@inertiajs/react';
 import { IR_LEVELS, MATURITY_COLORS, MATURITY_KEYS, MATURITY_LABELS, humanize } from '@/Utils/csat';
 
 // FFIEC CAT expectation: maturity should rise with inherent risk (Least → Baseline … Most → Innovative).
 const expectedMaturity = (riskIdx) => riskIdx + 1;
 
+const MATURITY_TONE = { 0: 'error', 1: 'warning', 2: 'tertiary', 3: 'info', 4: 'success', 5: 'primary' };
+
 function MaturityBadge({ level }) {
-    return (
-        <span className="inline-block px-2 py-0.5 rounded text-xs font-bold text-white" style={{ backgroundColor: MATURITY_COLORS[level] }}>
-            {MATURITY_LABELS[level]}
-        </span>
-    );
+    return <Chip tone={MATURITY_TONE[level] || 'neutral'} icon={`counter_${level}`}>{MATURITY_LABELS[level]}</Chip>;
 }
 
 export default function MaturityDashboard({ assessment, domainScores = [], factorScores = [], irComposite }) {
@@ -73,10 +72,10 @@ export default function MaturityDashboard({ assessment, domainScores = [], facto
                                         return (
                                             <td key={r} className={`p-1.5 text-center border-l border-gray-100 h-9 ${aligned ? 'bg-green-50' : 'bg-red-50'} ${ri === riskIdx ? 'ring-1 ring-inset ring-[#0A1F44]/20' : ''}`}>
                                                 {here.map(d => (
-                                                    <span key={'a' + d.scope_code} title={`${d.scope_name}: ${MATURITY_LABELS[ml]}`} className="inline-block px-1.5 py-0.5 bg-[#1A365D] text-white rounded-full text-[10px] font-bold m-0.5">{d.scope_code}</span>
+                                                    <span key={'a' + d.scope_code} title={`${d.scope_name}: ${MATURITY_LABELS[ml]}`} className="inline-block px-1.5 py-0.5 bg-[#1A365D] text-white rounded-md text-[10px] font-bold m-0.5 whitespace-nowrap">{d.scope_code}</span>
                                                 ))}
                                                 {targets.map(d => (
-                                                    <span key={'t' + d.scope_code} title={`${d.scope_name} target: ${MATURITY_LABELS[ml]}`} className="inline-block px-1.5 py-0.5 border border-dashed border-[#1A365D] text-[#1A365D] rounded-full text-[10px] font-bold m-0.5">{d.scope_code}</span>
+                                                    <span key={'t' + d.scope_code} title={`${d.scope_name} target: ${MATURITY_LABELS[ml]}`} className="inline-block px-1.5 py-0.5 border border-dashed border-[#1A365D] text-[#1A365D] rounded-md text-[10px] font-bold m-0.5 whitespace-nowrap">{d.scope_code}</span>
                                                 ))}
                                             </td>
                                         );

@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { ShieldCheckIcon, CheckBadgeIcon, DocumentMagnifyingGlassIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ShieldCheckIcon, CheckBadgeIcon, DocumentMagnifyingGlassIcon, ExclamationTriangleIcon } from '@/Components/Material/Symbols';
 
 const fmt = (v) => (v ? new Date(v).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 

@@ -14,7 +14,7 @@ import QualitySealBadge from '@/Components/Ea/QualitySealBadge';
 import StewardshipDrawer from '@/Components/Ea/StewardshipDrawer';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head, Link } from '@inertiajs/react';
-import { CpuChipIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
+import { CpuChipIcon, ShieldCheckIcon } from '@/Components/Material/Symbols';
 
 const QUADRANTS = [
     { key: 'adopt', label: 'Adopt', color: '#2D7D46', desc: 'Proven and recommended for broad use.' },

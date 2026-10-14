@@ -250,7 +250,7 @@ export default function Impact({
                             </h3>
                             <div className="flex flex-wrap gap-2 text-xs">
                                 {result.tight_rto_processes.map((process) => (
-                                    <span key={process.id} className="rounded-full border border-[#E5A100]/40 bg-white px-2 py-1">
+                                    <span key={process.id} className="rounded-lg border border-[#E5A100]/40 bg-white px-2 py-1">
                                         {process.name} · RTO {process.rto_hours}h
                                     </span>
                                 ))}

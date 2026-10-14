@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon } from '@/Components/Material/Symbols';
 import { useState } from 'react';
 
 export default function SidebarNavItem({ item, currentRoute, collapsed }) {

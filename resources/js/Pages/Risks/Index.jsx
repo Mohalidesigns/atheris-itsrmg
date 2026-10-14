@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, TableCellsIcon, Squares2X2Icon, XMarkIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon, TableCellsIcon, Squares2X2Icon, XMarkIcon } from '@/Components/Material/Symbols';
 import { RatingBadge, StatusBadge, ScoreDisplay } from '@/Components/Risk/RiskBadge';
 import { APPETITE_LABELS, IMPACT_LABELS, LIKELIHOOD_LABELS, humanize, ratingColor } from '@/Utils/risk';
 import Pagination from '@/Components/Pagination';
@@ -264,7 +264,7 @@ export default function RisksIndex({ risks, heatMapRisks = [], categories, users
                     )}
 
                     {filters.likelihood && filters.impact && (
-                        <div className="mt-3 inline-flex items-center gap-2 text-xs bg-[#0A1F44]/5 text-[#0A1F44] px-3 py-1.5 rounded-full">
+                        <div className="mt-3 inline-flex items-center gap-2 text-xs bg-[#0A1F44]/5 text-[#0A1F44] px-3 py-1.5 rounded-lg">
                             Heat-map cell: {humanize(basis)} likelihood {filters.likelihood} ({LIKELIHOOD_LABELS[filters.likelihood]}) × impact {filters.impact} ({IMPACT_LABELS[filters.impact]})
                             <button onClick={() => visit({ ...filters, likelihood: undefined, impact: undefined, basis: undefined })} aria-label="Remove heat-map cell filter">
                                 <XMarkIcon className="w-3.5 h-3.5" />

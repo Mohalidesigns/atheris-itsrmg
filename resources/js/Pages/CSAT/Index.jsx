@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { STATUS_LABELS, formatDate } from '@/Utils/csat';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon } from '@/Components/Material/Symbols';
 
 const statusColors = {
     draft: 'bg-gray-100 text-gray-700',
@@ -67,7 +67,7 @@ export default function CsatIndex({ assessments }) {
                                         <h3 className="text-lg font-bold text-[#2D3748]">
                                             {a.assessment_year} Assessment
                                         </h3>
-                                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[a.status] || 'bg-gray-100'}`}>
+                                        <span className={`px-2 py-0.5 rounded-lg text-xs font-semibold ${statusColors[a.status] || 'bg-gray-100'} whitespace-nowrap`}>
                                             {STATUS_LABELS[a.status] || a.status}
                                         </span>
                                     </div>

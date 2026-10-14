@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState, useMemo } from 'react';
-import { LockClosedIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon } from '@/Components/Material/Symbols';
 import { MATURITY_COLORS, MATURITY_LABELS, lockMessage } from '@/Utils/csat';
 
 function CommentBox({ disabled, initial, onSave }) {

@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
+import Icon from '@/Components/Material/Icon';
 import { formatDate } from '@/Utils/risk';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Fragment, useState } from 'react';
@@ -32,31 +33,7 @@ export default function SiemIndex({ integrations = [], signals = [], stats = {},
                 {integrations.length === 0 && (
                     <p className="rounded-xl border border-gray-100 bg-white p-4 text-sm text-[#718096] shadow-sm md:col-span-2 xl:col-span-4">No SIEM connectors are configured for this bank.</p>
                 )}
-                {integrations.map((i) => (
-                    <div key={i.id} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                        <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-sm font-semibold text-[#2D3748]">{i.label}</h3>
-                            <StatusBadge status={i.status === 'active' ? 'active' : 'warn'} label={i.status} />
-                        </div>
-                        <p className="mt-1 text-xs text-[#718096]">Last signal {formatDate(i.last_signal_at, true)} · {i.signals_24h} in 24h</p>
-                        <p className="mt-2 break-all font-mono text-[10px] text-[#4A5568]">POST {i.ingest_url}</p>
-                        <p className="mt-1 text-[10px] text-[#718096]">{i.has_secret ? 'Webhook secret set' : 'No webhook secret: deliveries are rejected'}</p>
-                        {newSecret?.integration_id === i.id && (
-                            <div className="mt-2 rounded bg-[#C9A86A]/15 p-2">
-                                <p className="text-[10px] font-semibold text-[#8A6400]">New secret (shown once):</p>
-                                <p className="break-all font-mono text-[11px] text-[#2D3748]">{newSecret.secret}</p>
-                            </div>
-                        )}
-                        {can('edit platform') && (
-                            <button type="button"
-                                onClick={() => confirm(i.has_secret ? 'Rotate the secret? The connector must be updated or its deliveries will be rejected.' : 'Issue a webhook secret?')
-                                    && router.post(route('siem.integrations.secret', i.id), {}, { preserveScroll: true })}
-                                className="mt-2 text-xs text-[#0A1F44] underline">
-                                {i.has_secret ? 'Rotate secret' : 'Issue secret'}
-                            </button>
-                        )}
-                    </div>
-                ))}
+                {integrations.map((i) => <ConnectorCard key={i.id} integration={i} newSecret={newSecret?.integration_id === i.id ? newSecret.secret : null} canEdit={can('edit platform')} />)}
             </div>
 
             <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
@@ -126,5 +103,61 @@ export default function SiemIndex({ integrations = [], signals = [], stats = {},
                 </div>
             </div>
         </AuthenticatedLayout>
+    );
+}
+
+function ConnectorCard({ integration: i, newSecret, canEdit }) {
+    const [copied, setCopied] = useState(false);
+    const copy = () => navigator.clipboard?.writeText(i.ingest_url).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); });
+    const status = i.status === 'active' ? 'active' : i.status === 'disabled' ? 'disabled' : 'degraded';
+    return (
+        <div className="flex flex-col rounded-2xl bg-white p-4 shadow-sm ring-1 ring-black/5">
+            <div className="flex items-start justify-between gap-2">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#DDE3F0] text-[#0A1F44]">
+                    <Icon name="sensors" size={22} />
+                </span>
+                <StatusBadge status={status} label={i.status} />
+            </div>
+            <h3 className="mt-3 truncate text-base font-medium text-[#1B1B1F]" title={i.label}>{i.label}</h3>
+            <p className="flex items-center gap-1 text-xs text-[#43474E]"><Icon name="schedule" size={14} />Last signal {formatDate(i.last_signal_at, true)}</p>
+
+            <p className="mt-3 flex items-baseline gap-1.5">
+                <span className="text-2xl font-semibold tabular-nums text-[#1B1B1F]">{i.signals_24h}</span>
+                <span className="text-xs text-[#43474E]">signals in 24h</span>
+            </p>
+
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-[#F0F1F4] py-1 pl-2 pr-1">
+                <span className="rounded bg-white px-1.5 py-0.5 text-[10px] font-semibold text-[#0A1F44]">POST</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-[#43474E]" title={i.ingest_url}>{i.ingest_url}</span>
+                <button type="button" onClick={copy} aria-label="Copy ingest URL" title={copied ? 'Copied' : 'Copy ingest URL'}
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-[#43474E] hover:bg-[#0A1F44]/[0.08]">
+                    <Icon name={copied ? 'check' : 'content_copy'} size={16} />
+                </button>
+            </div>
+
+            <p className={`mt-2 flex items-center gap-1 text-xs ${i.has_secret ? 'text-[#43474E]' : 'text-[#B3261E]'}`}>
+                <Icon name={i.has_secret ? 'lock' : 'lock_open'} size={16} fill={i.has_secret} />
+                {i.has_secret ? 'Webhook secret set' : 'No webhook secret: deliveries are rejected'}
+            </p>
+
+            {newSecret && (
+                <div className="mt-2 rounded-lg bg-[#F3E9D2] p-2">
+                    <p className="text-[11px] font-medium text-[#5E4818]">New secret (shown once):</p>
+                    <p className="break-all font-mono text-[11px] text-[#1B1B1F]">{newSecret}</p>
+                </div>
+            )}
+
+            {canEdit && (
+                <div className="mt-auto pt-3">
+                    <button type="button"
+                        onClick={() => confirm(i.has_secret ? 'Rotate the secret? The connector must be updated or its deliveries will be rejected.' : 'Issue a webhook secret?')
+                            && router.post(route('siem.integrations.secret', i.id), {}, { preserveScroll: true })}
+                        className="-ml-3 flex h-9 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-[#0A1F44] hover:bg-[#0A1F44]/[0.08]">
+                        <Icon name="key" size={18} />
+                        {i.has_secret ? 'Rotate secret' : 'Issue secret'}
+                    </button>
+                </div>
+            )}
+        </div>
     );
 }

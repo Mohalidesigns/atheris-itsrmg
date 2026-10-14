@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import { Head, useForm, router } from '@inertiajs/react';
-import { SparklesIcon, PaperAirplaneIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
+import { SparklesIcon, PaperAirplaneIcon, ChatBubbleLeftIcon } from '@/Components/Material/Symbols';
 import { useState } from 'react';
 
 export default function CopilotIndex({ conversations = [], active, messages = [] }) {
@@ -33,7 +33,7 @@ export default function CopilotIndex({ conversations = [], active, messages = []
                 breadcrumbs={[{ label: 'Atheris Copilot' }]}
                 title="Atheris Copilot"
                 subtitle="Natural-language assistant grounded in your risks, controls, policies, incidents, obligations and KRIs."
-                actions={<span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#C9A86A]/15 text-[#0A1F44] text-xs font-medium"><SparklesIcon className="w-4 h-4" /> Claude Sonnet 4.6 / Ollama qwen2.5:14b</span>}
+                actions={<span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#C9A86A]/15 text-[#0A1F44] text-xs font-medium whitespace-nowrap"><SparklesIcon className="w-4 h-4" /> Claude Sonnet 4.6 / Ollama qwen2.5:14b</span>}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -67,7 +67,7 @@ export default function CopilotIndex({ conversations = [], active, messages = []
                                     {suggestions.map((s) => (
                                         <button key={s}
                                             onClick={() => setData('content', s)}
-                                            className="px-3 py-1.5 rounded-full bg-[#0A1F44]/5 text-[#0A1F44] text-xs hover:bg-[#0A1F44]/10">
+                                            className="px-3 py-1.5 rounded-lg bg-[#0A1F44]/5 text-[#0A1F44] text-xs hover:bg-[#0A1F44]/10">
                                             {s}
                                         </button>
                                     ))}

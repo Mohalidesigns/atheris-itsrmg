@@ -11,7 +11,7 @@ import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head } from '@inertiajs/react';
-import { BookOpenIcon } from '@heroicons/react/24/outline';
+import { BookOpenIcon } from '@/Components/Material/Symbols';
 
 const FIELDS = [
     { name: 'code', label: 'Code', type: 'text', required: true },

@@ -16,6 +16,15 @@ export const CHANGE_TYPES = [
 
 export const CATEGORIES = ['application', 'infrastructure', 'network', 'security', 'database', 'core_banking', 'data', 'vendor', 'process', 'other'];
 
+/** Material Symbol per category (Components/Material/Icon). */
+export const CATEGORY_ICON = {
+    application: 'apps', infrastructure: 'dns', network: 'lan', security: 'shield', database: 'database',
+    core_banking: 'account_balance', data: 'dataset', vendor: 'storefront', process: 'account_tree', other: 'category',
+};
+
+/** Material tone per risk level (Components/Material/Chip TONES). */
+export const RISK_TONE = { critical: 'error', high: 'warning', medium: 'info', low: 'neutral' };
+
 export const PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
 export const RISK_LEVELS = ['low', 'medium', 'high', 'critical'];

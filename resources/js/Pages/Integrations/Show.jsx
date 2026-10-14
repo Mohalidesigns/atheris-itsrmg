@@ -12,7 +12,7 @@ import {
     CogIcon,
     BookOpenIcon,
     BeakerIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 const statusTone = (s) => ({ connected: 'pass', available: 'draft', not_connected: 'draft', error: 'critical' })[s] || 'draft';
 const statusLabel = (s) => ({ connected: 'Connected', available: 'Available', not_connected: 'Not Connected', error: 'Error' })[s] || s;

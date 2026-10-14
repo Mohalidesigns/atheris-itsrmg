@@ -3,7 +3,7 @@ import Pagination from '@/Components/Pagination';
 import { PolicyStatus, fmtDate, isPast } from '@/Components/Policies/PolicyBadges';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, ChevronUpDownIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, ChevronUpDownIcon, ArrowUpIcon } from '@/Components/Material/Symbols';
 
 function Tile({ label, value, active, onClick, alert }) {
     return (

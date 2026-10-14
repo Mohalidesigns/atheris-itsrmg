@@ -5,7 +5,7 @@ import Modal from '@/Components/Modal';
 import { PolicyStatus, fmtDate, isPast } from '@/Components/Policies/PolicyBadges';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon } from '@/Components/Material/Symbols';
 
 const input = 'mt-1 w-full rounded-lg border-gray-300 text-sm';
 

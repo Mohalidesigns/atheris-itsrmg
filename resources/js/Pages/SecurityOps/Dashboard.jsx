@@ -4,7 +4,7 @@ import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { formatDate, humanize } from '@/Utils/risk';
 import { Head, Link } from '@inertiajs/react';
-import { BellAlertIcon, BugAntIcon, ClockIcon, FireIcon, ShieldExclamationIcon } from '@heroicons/react/24/outline';
+import { BellAlertIcon, BugAntIcon, ClockIcon, FireIcon, ShieldExclamationIcon } from '@/Components/Material/Symbols';
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'];
 const SEVERITY_COLOR = { critical: '#B3261E', high: '#E5A100', medium: '#1D4ED8', low: '#718096', info: '#A0AEC0' };

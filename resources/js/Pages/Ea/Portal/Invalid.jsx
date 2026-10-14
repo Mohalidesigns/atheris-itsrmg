@@ -1,5 +1,5 @@
 import { Head } from '@inertiajs/react';
-import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { ExclamationTriangleIcon } from '@/Components/Material/Symbols';
 
 /**
  * Shown when a magic link is unrecognised or its campaign has closed.

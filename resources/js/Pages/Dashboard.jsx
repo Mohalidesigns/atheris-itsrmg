@@ -15,7 +15,7 @@ import {
     ArrowTrendingUpIcon,
     ArrowTrendingDownIcon,
     ClipboardDocumentCheckIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 10) : '—';
 

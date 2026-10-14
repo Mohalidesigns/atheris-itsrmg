@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { CheckCircleIcon, XCircleIcon, DocumentArrowDownIcon } from '@heroicons/react/24/outline';
+import { CheckCircleIcon, XCircleIcon, DocumentArrowDownIcon } from '@/Components/Material/Symbols';
 import { STATUS_COLORS, STATUS_LABELS, formatDate } from '@/Utils/csat';
 
 const ACTION_LABELS = { approved: 'Signed', returned_for_revision: 'Returned for revision', rejected: 'Rejected' };

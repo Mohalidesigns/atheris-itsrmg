@@ -19,7 +19,7 @@ import {
     RectangleGroupIcon,
     ShieldCheckIcon,
     TrashIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 
 /**
  * ATH-EAR-002 §2.1 names this page as "the clearest illustration" of the

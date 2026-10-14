@@ -9,7 +9,7 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import Chip from '@/Components/Compliance/Chip';
 import EvidenceUploadModal from '@/Components/Compliance/EvidenceUploadModal';
-import { LockClosedIcon, MagnifyingGlassIcon, PaperClipIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import { LockClosedIcon, MagnifyingGlassIcon, PaperClipIcon, PencilSquareIcon } from '@/Components/Material/Symbols';
 import { RESULT_STYLES, ASSESSMENT_STATUS, GAP_STATUS, GAP_RESOLVED, effectivenessOf, scoreColor, formatDate, toDateInput, isOverdue } from '@/Utils/compliance';
 
 const field = 'mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm';
@@ -75,7 +75,7 @@ function ResultRow({ result, gap, controls, editable, canAssess, canEvidence, on
                     <div className="flex flex-wrap gap-1.5">
                         {Object.entries(RESULT_STYLES).map(([k, v]) => (
                             <button type="button" key={k} onClick={() => setData('status', k)}
-                                className={`text-xs px-2.5 py-1 rounded-full border ${data.status === k ? 'ring-2 ring-offset-1 ring-[#1A365D]/40 ' + v.chip + ' border-transparent' : 'border-gray-200 text-[#718096] bg-white'}`}>
+                                className={`text-xs px-2.5 py-1 rounded-lg border ${data.status === k ? 'ring-2 ring-offset-1 ring-[#1A365D]/40 ' + v.chip + ' border-transparent' : 'border-gray-200 text-[#718096] bg-white'} whitespace-nowrap`}>
                                 {v.label}
                             </button>
                         ))}
@@ -264,9 +264,9 @@ export default function AssessmentShow({ assessment, resultStatuses, gapsByRequi
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
                 <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
                     <div className="flex flex-wrap gap-1.5">
-                        <button onClick={() => setFilter('all')} className={`text-xs px-2.5 py-1 rounded-full ${filter === 'all' ? 'bg-[#1A365D] text-white' : 'bg-gray-100 text-[#4A5568]'}`}>All · {total}</button>
+                        <button onClick={() => setFilter('all')} className={`text-xs px-2.5 py-1 rounded-lg ${filter === 'all' ? 'bg-[#1A365D] text-white' : 'bg-gray-100 text-[#4A5568]'} whitespace-nowrap`}>All · {total}</button>
                         {resultStatuses.map((s) => (
-                            <button key={s} onClick={() => setFilter(s)} className={`text-xs px-2.5 py-1 rounded-full ${filter === s ? 'bg-[#1A365D] text-white' : RESULT_STYLES[s].chip}`}>
+                            <button key={s} onClick={() => setFilter(s)} className={`text-xs px-2.5 py-1 rounded-lg ${filter === s ? 'bg-[#1A365D] text-white' : RESULT_STYLES[s].chip} whitespace-nowrap`}>
                                 {RESULT_STYLES[s].label} · {counts[s] || 0}
                             </button>
                         ))}

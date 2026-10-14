@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import StatusBadge from '@/Components/StatusBadge';
 import InputError from '@/Components/InputError';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { ArrowTopRightOnSquareIcon, LockClosedIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { ArrowTopRightOnSquareIcon, LockClosedIcon, TrashIcon } from '@/Components/Material/Symbols';
 import { TRIAGE } from './Index';
 
 const IMPACT_TYPES = { obligation: 'Obligation', control: 'Control', policy: 'Policy', risk: 'Risk' };

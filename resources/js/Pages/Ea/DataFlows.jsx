@@ -5,7 +5,7 @@ import { tabsFor } from '@/Config/eaWorkspaces';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head } from '@inertiajs/react';
-import { GlobeAltIcon } from '@heroicons/react/24/outline';
+import { GlobeAltIcon } from '@/Components/Material/Symbols';
 
 export default function DataFlows({ flows = [], crossBorder = 0 }) {
     return (

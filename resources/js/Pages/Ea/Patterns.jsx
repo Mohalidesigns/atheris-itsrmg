@@ -4,7 +4,7 @@ import EaWorkspaceTabs from '@/Components/Ea/EaWorkspaceTabs';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head } from '@inertiajs/react';
-import { CubeTransparentIcon } from '@heroicons/react/24/outline';
+import { CubeTransparentIcon } from '@/Components/Material/Symbols';
 
 export default function Patterns({ patterns = [] }) {
     const byCategory = patterns.reduce((a, p) => { (a[p.category] ||= []).push(p); return a; }, {});

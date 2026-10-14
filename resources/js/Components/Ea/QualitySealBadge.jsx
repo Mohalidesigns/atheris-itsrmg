@@ -1,4 +1,5 @@
 import StatusBadge from '@/Components/StatusBadge';
+import Chip from '@/Components/Material/Chip';
 
 /**
  * QualitySealBadge — the freshness indicator on every entity row.
@@ -8,15 +9,15 @@ import StatusBadge from '@/Components/StatusBadge';
  * given record is something they may rely on — and the CISO signing a CSAT
  * return can see which answers are backed by approved data before signing.
  */
+const SEAL_ICON = { approved: 'verified_user', check_needed: 'pending_actions', rejected: 'gpp_bad', draft: 'edit_note' };
+
 export default function QualitySealBadge({ seal, showCompleteness = false, compact = false }) {
     if (!seal) {
         return (
-            <span
-                className="inline-flex items-center rounded-full border border-dashed border-gray-300 px-2 py-0.5 text-[11px] text-[#718096]"
-                title="This record has never been through the quality seal — nothing has confirmed it is accurate."
-            >
+            <Chip tone="neutral" variant="outlined" icon="remove_moderator" iconFill={false}
+                title="This record has never been through the quality seal — nothing has confirmed it is accurate.">
                 Unsealed
-            </span>
+            </Chip>
         );
     }
 
@@ -36,7 +37,7 @@ export default function QualitySealBadge({ seal, showCompleteness = false, compa
 
     return (
         <span className="inline-flex items-center gap-1.5" title={title || undefined}>
-            <StatusBadge status={seal.tone} label={seal.label} />
+            <StatusBadge status={seal.tone} label={seal.label} icon={SEAL_ICON[seal.state]} />
             {showCompleteness && (
                 <span className="inline-flex items-center gap-1">
                     <span className="h-1.5 w-10 overflow-hidden rounded-full bg-gray-100">

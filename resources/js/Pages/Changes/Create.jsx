@@ -4,7 +4,7 @@ import StatusBadge from '@/Components/StatusBadge';
 import InputError from '@/Components/InputError';
 import RiskMatrix from '@/Components/Changes/RiskMatrix';
 import { formatDate, humanize } from '@/Utils/risk';
-import { CATEGORIES, CHANGE_TYPES, IMPACT_LABELS, LIKELIHOOD_LABELS, PRIORITIES, RISK_COLOUR, riskLevelFor } from '@/Utils/changes';
+import { CATEGORIES, CHANGE_TYPES, IMPACT_LABELS, LIKELIHOOD_LABELS, PRIORITIES, riskLevelFor } from '@/Utils/changes';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useEffect, useMemo, useState } from 'react';
 
@@ -238,7 +238,7 @@ export default function ChangeCreate({ templates = [], assets = [], owners = [],
                             </div>
                             {selectedAssets.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-1">
-                                    {selectedAssets.map((a) => <button key={a.id} type="button" onClick={() => toggleAsset(a.id)} className="rounded-full bg-[#0A1F44]/10 px-2 py-0.5 text-[11px] text-[#0A1F44]">{a.name} ×</button>)}
+                                    {selectedAssets.map((a) => <button key={a.id} type="button" onClick={() => toggleAsset(a.id)} className="rounded-lg bg-[#0A1F44]/10 px-2 py-0.5 text-[11px] text-[#0A1F44] whitespace-nowrap">{a.name} ×</button>)}
                                 </div>
                             )}
                             <InputError message={form.errors.affected_asset_ids} className="mt-1" />
@@ -251,7 +251,7 @@ export default function ChangeCreate({ templates = [], assets = [], owners = [],
                             </div>
                             {d.affected_services.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-1">
-                                    {d.affected_services.map((s) => <button key={s} type="button" onClick={() => set('affected_services', d.affected_services.filter((x) => x !== s))} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-[#2D3748]">{s} ×</button>)}
+                                    {d.affected_services.map((s) => <button key={s} type="button" onClick={() => set('affected_services', d.affected_services.filter((x) => x !== s))} className="rounded-lg bg-gray-100 px-2 py-0.5 text-[11px] text-[#2D3748] whitespace-nowrap">{s} ×</button>)}
                                 </div>
                             )}
                         </div>
@@ -326,7 +326,7 @@ export default function ChangeCreate({ templates = [], assets = [], owners = [],
                         <RiskMatrix impact={risk.impact} likelihood={risk.likelihood} />
                         <div className="mt-3 flex items-center justify-between">
                             <span className="text-xs text-[#718096]">Score {risk.score} / 25</span>
-                            <span className="rounded-full px-3 py-1 text-xs font-semibold text-white" style={{ backgroundColor: RISK_COLOUR[risk.level] }}>{humanize(risk.level)}</span>
+                            <StatusBadge status={risk.level} label={humanize(risk.level)} />
                         </div>
                         {risk.factors.length > 0 && (
                             <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[11px] text-[#8A6400]">

@@ -10,7 +10,7 @@ import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import ConfirmDialog from '@/Components/Ea/ConfirmDialog';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { EnvelopeOpenIcon } from '@heroicons/react/24/outline';
+import { EnvelopeOpenIcon } from '@/Components/Material/Symbols';
 
 /**
  * Surveys & campaigns — WS 1.2.

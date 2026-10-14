@@ -54,7 +54,7 @@ export default function PciCde({ assets = [], scoping = {}, scopes = {}, filters
                             <tr key={a.id} className="align-top">
                                 <td className="px-3 py-2"><Link href={route('assets.show', a.id)} className="font-mono text-xs text-[#1A365D] hover:underline">{a.asset_id_code}</Link><p className="text-[#2D3748]">{a.name}</p></td>
                                 <td className="px-3 py-2 text-xs text-[#718096]">{a.category} · {a.asset_type?.replace('_', ' ')}</td>
-                                <td className="px-3 py-2">{a.pci_scope ? <span className={`rounded-full px-2 py-0.5 text-xs ${tone[a.pci_scope]}`}>{scopes[a.pci_scope]}</span> : <span className="text-xs text-[#8A6400]">Not scoped</span>}</td>
+                                <td className="px-3 py-2">{a.pci_scope ? <span className={`rounded-lg px-2 py-0.5 text-xs ${tone[a.pci_scope]} whitespace-nowrap`}>{scopes[a.pci_scope]}</span> : <span className="text-xs text-[#8A6400]">Not scoped</span>}</td>
                                 <td className="px-3 py-2 text-xs text-[#4A5568] max-w-md">{a.pci_scope_note || '—'}</td>
                                 <td className="px-3 py-2">{canEdit && <button type="button" onClick={() => setEditing(a)} className="text-xs text-[#0A1F44] underline">Scope…</button>}</td>
                             </tr>

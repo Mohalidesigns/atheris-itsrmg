@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import EaWorkspaceTabs from '@/Components/Ea/EaWorkspaceTabs';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head } from '@inertiajs/react';
-import { ArrowRightIcon } from '@heroicons/react/24/outline';
+import { ArrowRightIcon } from '@/Components/Material/Symbols';
 
 export default function ValueStreams({ streams = [] }) {
     return (

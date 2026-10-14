@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link } from '@inertiajs/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
-import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
+import { DocumentArrowDownIcon } from '@/Components/Material/Symbols';
 import { IR_LEVEL_COLORS as riskColors, MATURITY_COLORS as maturityColors, MATURITY_KEYS, RAG_COLORS, humanize } from '@/Utils/csat';
 
 export default function Reports({ assessment, irScores, domainScores, componentScores, gapCount, recommendations, domainNames, maturityLevels, readiness }) {

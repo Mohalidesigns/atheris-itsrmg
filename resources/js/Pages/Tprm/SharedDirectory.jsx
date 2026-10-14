@@ -34,7 +34,7 @@ export default function SharedDirectory({ entries = [], unlinked = [], can = {} 
                                 <h3 className="text-sm font-semibold text-[#0A1F44]">{e.legal_name}</h3>
                                 <p className="text-xs text-[#718096]">{e.category} · {e.country}</p>
                             </div>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#C9A86A]/15 text-[#0A1F44]">DDQ {e.baseline_ddq_version}</span>
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-[#C9A86A]/15 text-[#0A1F44] whitespace-nowrap">DDQ {e.baseline_ddq_version}</span>
                         </div>
                         {e.description && <p className="text-xs text-[#2D3748] mt-2">{e.description}</p>}
                         <div className="mt-auto pt-3">

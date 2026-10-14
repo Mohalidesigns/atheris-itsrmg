@@ -1,4 +1,4 @@
-import { PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilSquareIcon, TrashIcon } from '@/Components/Material/Symbols';
 
 /**
  * RowActions — the edit/delete pair every EA index row now carries.

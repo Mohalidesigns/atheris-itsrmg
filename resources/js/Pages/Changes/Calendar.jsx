@@ -1,8 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import StatusBadge from '@/Components/StatusBadge';
+import Icon from '@/Components/Material/Icon';
+import Chip, { TONES } from '@/Components/Material/Chip';
 import { formatDate, humanize } from '@/Utils/risk';
-import { RISK_COLOUR, STATUS_COLOUR, windowLabel } from '@/Utils/changes';
+import { RISK_TONE, windowLabel } from '@/Utils/changes';
 import { Head, Link, router } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 
@@ -60,53 +62,56 @@ export default function ChangeCalendar({ from, to, changes = [], freezeWindows =
                 actions={<Link href={route('changes.freeze.index')} className="rounded-lg border border-[#0A1F44]/20 px-3 py-2 text-sm text-[#0A1F44]">Freeze windows</Link>}
             />
 
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                <button type="button" onClick={() => shift(-1)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs">‹ Previous</button>
-                <span className="text-sm font-semibold text-[#0A1F44]">{formatDate(from)} – {formatDate(to)}</span>
-                <button type="button" onClick={() => shift(1)} className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs">Next ›</button>
-                <div className="ml-2 flex overflow-hidden rounded-lg border border-gray-200 text-xs">
-                    <button type="button" onClick={thisWeek} className={`px-3 py-1.5 ${mode === 'week' ? 'bg-[#0A1F44] text-white' : 'text-[#2D3748]'}`}>Week</button>
-                    <button type="button" onClick={thisMonth} className={`px-3 py-1.5 ${mode === 'month' ? 'bg-[#0A1F44] text-white' : 'text-[#2D3748]'}`}>Month</button>
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl bg-white p-2 shadow-sm ring-1 ring-black/5">
+                <button type="button" onClick={mode === 'week' ? thisWeek : thisMonth} className="h-9 rounded-full px-4 text-sm font-medium text-[#0A1F44] ring-1 ring-[#74777F]/50 hover:bg-[#0A1F44]/[0.06]">Today</button>
+                <div className="flex">
+                    <IconButton icon="chevron_left" label={`Previous ${mode}`} onClick={() => shift(-1)} />
+                    <IconButton icon="chevron_right" label={`Next ${mode}`} onClick={() => shift(1)} />
                 </div>
-                <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="rounded-lg border border-gray-200 py-1.5 text-xs">
+                <span className="text-base font-medium text-[#1B1B1F]">{formatDate(from)} – {formatDate(to)}</span>
+                <div role="radiogroup" aria-label="Calendar view" className="ml-2 flex h-9 overflow-hidden rounded-full ring-1 ring-[#74777F]/50">
+                    {[['week', 'Week', thisWeek], ['month', 'Month', thisMonth]].map(([k, l, fn], idx) => (
+                        <button key={k} type="button" role="radio" aria-checked={mode === k} onClick={fn}
+                            className={`flex items-center gap-1 px-4 text-sm font-medium ${idx ? 'border-l border-[#74777F]/50' : ''} ${mode === k ? 'bg-[#DDE3F0] text-[#0A1F44]' : 'text-[#43474E] hover:bg-[#0A1F44]/[0.06]'}`}>
+                            {mode === k && <Icon name="check" size={18} />}{l}
+                        </button>
+                    ))}
+                </div>
+                <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="h-9 rounded-lg border-[#74777F]/50 py-0 text-sm">
                     <option value="">All types</option>
                     {['standard', 'normal', 'emergency'].map((t) => <option key={t} value={t}>{humanize(t)}</option>)}
                 </select>
-                <div className="ml-auto flex flex-wrap items-center gap-3 text-[11px] text-[#4A5568]">
-                    {Object.entries(RISK_COLOUR).map(([k, v]) => <span key={k} className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: v }} />{humanize(k)}</span>)}
-                    <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-[#B3261E]/15 ring-1 ring-[#B3261E]/40" />Freeze</span>
-                    <span className="flex items-center gap-1"><span className="text-[#E5A100]">▲</span>Conflict</span>
-                    <span className="flex items-center gap-1"><span className="text-[#B3261E]">⚡</span>Outage</span>
+                <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 px-2 text-xs text-[#43474E]">
+                    {Object.entries(RISK_TONE).map(([k, t]) => <span key={k} className="flex items-center gap-1"><span className="h-3 w-3 rounded" style={{ backgroundColor: TONES[t].container, boxShadow: `inset 2px 0 0 ${TONES[t].rail}` }} />{humanize(k)}</span>)}
+                    <span className="flex items-center gap-1"><span className="h-3 w-3 rounded bg-[repeating-linear-gradient(135deg,#F9DEDC_0_3px,#fff_3px_6px)] ring-1 ring-[#B3261E]/30" />Freeze</span>
+                    <span className="flex items-center gap-0.5"><Icon name="bolt" size={16} fill className="text-[#B3261E]" />Emergency</span>
+                    <span className="flex items-center gap-0.5"><Icon name="power_off" size={16} className="text-[#43474E]" />Outage</span>
+                    <span className="flex items-center gap-0.5"><Icon name="warning" size={16} fill className="text-[#E5A100]" />Conflict</span>
                 </div>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                <div className="grid min-w-[700px] grid-cols-7 gap-1">
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <div key={d} className="px-1 text-[11px] font-semibold uppercase text-[#718096]">{d}</div>)}
-                    {cells.map((d) => {
+            <div className="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-black/5">
+                <div className="grid min-w-[760px] grid-cols-7">
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <div key={d} className="border-b border-[#E3E4E8] px-2 py-2 text-center text-[11px] font-medium uppercase tracking-wider text-[#74777F]">{d}</div>)}
+                    {cells.map((d, idx) => {
                         const key = ymd(d);
                         const inRange = d >= start && d <= end;
                         const items = inRange ? dayItems(d) : [];
                         const frozen = inRange ? dayFreeze(d) : [];
+                        const limit = mode === 'week' ? 12 : 3;
+                        const isToday = key === today;
                         return (
-                            <div key={key} className={`relative rounded-lg border p-1 ${mode === 'week' ? 'min-h-[220px]' : 'min-h-[96px]'} ${inRange ? (frozen.length ? 'border-[#B3261E]/30 bg-[#B3261E]/5' : 'border-gray-100 bg-white') : 'border-transparent bg-gray-50/60'} ${key === today ? 'ring-2 ring-[#C9A86A]' : ''}`}
+                            <div key={key} className={`relative border-[#E3E4E8] p-1.5 ${idx % 7 ? 'border-l' : ''} ${idx >= 7 ? 'border-t' : ''} ${mode === 'week' ? 'min-h-[240px]' : 'min-h-[112px]'} ${!inRange ? 'bg-[#F7F8FA]' : frozen.length ? 'bg-[repeating-linear-gradient(135deg,#FDF1F0_0_6px,#fff_6px_12px)]' : ''}`}
                                 title={frozen.map((w) => `Freeze: ${w.name}`).join('\n')}>
-                                <div className="flex items-center justify-between">
-                                    <span className={`text-[11px] ${inRange ? 'text-[#2D3748]' : 'text-[#CBD5E0]'} ${key === today ? 'font-bold text-[#0A1F44]' : ''}`}>{d.getDate()}{d.getDate() === 1 || key === from ? ` ${d.toLocaleString('en-GB', { month: 'short' })}` : ''}</span>
-                                    {frozen.length > 0 && <span className="truncate text-[9px] font-semibold uppercase text-[#B3261E]" title={frozen.map((w) => w.name).join(', ')}>{frozen[0].scope === 'all' ? 'Freeze' : 'Partial freeze'}</span>}
+                                <div className="mb-1 flex items-center justify-between gap-1">
+                                    <span className={`flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-xs font-medium ${isToday ? 'bg-[#0A1F44] text-white' : inRange ? 'text-[#1B1B1F]' : 'text-[#B0B3BA]'}`}>
+                                        {d.getDate()}{d.getDate() === 1 || key === from ? ` ${d.toLocaleString('en-GB', { month: 'short' })}` : ''}
+                                    </span>
+                                    {frozen.length > 0 && <Chip tone="error" icon="ac_unit" size="xs" title={frozen.map((w) => w.name).join(', ')}>{frozen[0].scope === 'all' ? 'Freeze' : 'Partial'}</Chip>}
                                 </div>
-                                <div className="mt-1 space-y-0.5">
-                                    {items.slice(0, mode === 'week' ? 12 : 4).map((c) => (
-                                        <Link key={c.id} href={route('changes.show', c.id)}
-                                            className="block truncate rounded px-1 py-0.5 text-[10px] text-white hover:opacity-90"
-                                            style={{ backgroundColor: RISK_COLOUR[c.risk_level] || '#718096', borderLeft: `3px solid ${STATUS_COLOUR[c.status] || '#fff'}` }}
-                                            title={`${c.change_code} ${c.title}\n${windowLabel(c.scheduled_start_at, c.scheduled_end_at)}\n${humanize(c.status)} · ${humanize(c.change_type)}`}>
-                                            {conflictSet.has(c.id) && <span className="mr-0.5 text-[#FFE08A]">▲</span>}{c.outage_required && <span className="mr-0.5">⚡</span>}
-                                            {c.change_type === 'emergency' && <span className="mr-0.5 font-bold">E</span>}
-                                            {new Date(c.scheduled_start_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })} {c.change_code.split('-').pop()} {c.title}
-                                        </Link>
-                                    ))}
-                                    {items.length > (mode === 'week' ? 12 : 4) && <p className="text-[10px] text-[#718096]">+{items.length - (mode === 'week' ? 12 : 4)} more</p>}
+                                <div className="space-y-1">
+                                    {items.slice(0, limit).map((c) => <CalendarEvent key={c.id} change={c} conflict={conflictSet.has(c.id)} />)}
+                                    {items.length > limit && <p className="px-1 text-[11px] font-medium text-[#43474E]">+{items.length - limit} more</p>}
                                 </div>
                             </div>
                         );
@@ -117,9 +122,9 @@ export default function ChangeCalendar({ from, to, changes = [], freezeWindows =
             {freezeWindows.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
                     {freezeWindows.map((w) => (
-                        <span key={w.id} className="rounded-full border border-[#B3261E]/30 bg-[#B3261E]/5 px-2 py-0.5 text-[#B3261E]">
+                        <Chip key={w.id} tone="error" icon="ac_unit" variant="outlined">
                             {w.name}: {formatDate(w.starts_at)} – {formatDate(w.ends_at)} · {w.scope === 'all' ? 'all changes' : (w.categories || []).map(humanize).join(', ')}{w.allow_emergency ? ' · emergencies allowed' : ''}
-                        </span>
+                        </Chip>
                     ))}
                 </div>
             )}
@@ -141,8 +146,10 @@ export default function ChangeCalendar({ from, to, changes = [], freezeWindows =
                                     <td className="px-4 py-2"><StatusBadge status={c.risk_level} label={humanize(c.risk_level)} /></td>
                                     <td className="px-4 py-2"><StatusBadge status={c.status} label={humanize(c.status)} /></td>
                                     <td className="px-4 py-2 text-xs">
-                                        {conflictSet.has(c.id) && <span className="mr-2 font-semibold text-[#8A6400]">▲ Conflict</span>}
-                                        {c.outage_required && <span className="text-[#B3261E]">⚡ Outage</span>}
+                                        <span className="flex flex-wrap gap-1">
+                                            {conflictSet.has(c.id) && <Chip tone="warning" icon="warning">Conflict</Chip>}
+                                            {c.outage_required && <Chip tone="neutral" icon="power_off" iconFill={false}>Outage</Chip>}
+                                        </span>
                                     </td>
                                 </tr>
                             ))}
@@ -151,5 +158,36 @@ export default function ChangeCalendar({ from, to, changes = [], freezeWindows =
                 )}
             </div>
         </AuthenticatedLayout>
+    );
+}
+
+function IconButton({ icon, label, onClick }) {
+    return (
+        <button type="button" onClick={onClick} aria-label={label} title={label}
+            className="flex h-9 w-9 items-center justify-center rounded-full text-[#43474E] hover:bg-[#0A1F44]/[0.08] focus-visible:bg-[#0A1F44]/[0.12] focus-visible:outline-none">
+            <Icon name={icon} size={22} />
+        </button>
+    );
+}
+
+function CalendarEvent({ change: c, conflict }) {
+    const tone = TONES[RISK_TONE[c.risk_level]] || TONES.neutral;
+    const time = new Date(c.scheduled_start_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return (
+        <Link href={route('changes.show', c.id)}
+            className="block rounded-md py-1 pl-2 pr-1 text-[11px] leading-tight transition hover:shadow-md hover:brightness-[0.97]"
+            style={{ backgroundColor: tone.container, color: tone.on, boxShadow: `inset 3px 0 0 ${tone.rail}` }}
+            title={`${c.change_code} ${c.title}\n${windowLabel(c.scheduled_start_at, c.scheduled_end_at)}\n${humanize(c.status)} · ${humanize(c.change_type)} · ${humanize(c.risk_level)} risk`}>
+            <span className="flex items-center gap-1">
+                <span className="font-semibold tabular-nums">{time}</span>
+                <span className="font-mono text-[10px] opacity-70">{c.change_code.split('-').pop()}</span>
+                <span className="ml-auto flex items-center">
+                    {c.change_type === 'emergency' && <Icon name="bolt" size={14} fill label="Emergency change" />}
+                    {c.outage_required && <Icon name="power_off" size={14} label="Outage required" />}
+                    {conflict && <Icon name="warning" size={14} fill label="Schedule conflict" className="text-[#B07800]" />}
+                </span>
+            </span>
+            <span className="mt-0.5 block truncate">{c.title}</span>
+        </Link>
     );
 }

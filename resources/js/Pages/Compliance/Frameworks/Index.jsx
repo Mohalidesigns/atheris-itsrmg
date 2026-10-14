@@ -19,7 +19,7 @@ export default function FrameworksIndex({ frameworks }) {
                                     <h3 className="text-base font-semibold text-[#2D3748] group-hover:text-[#1A365D]">{fw.short_name}</h3>
                                     <p className="text-xs text-[#718096] mt-1">{fw.name}</p>
                                 </div>
-                                <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${fw.jurisdiction === 'NG' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>
+                                <span className={`text-xs px-2 py-0.5 rounded-lg shrink-0 ${fw.jurisdiction === 'NG' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'} whitespace-nowrap`}>
                                     {fw.jurisdiction === 'NG' ? 'Nigerian' : 'Global'}
                                 </span>
                             </div>

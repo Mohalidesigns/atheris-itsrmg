@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import { Head, router } from '@inertiajs/react';
-import { StarIcon, CubeIcon } from '@heroicons/react/24/outline';
+import { StarIcon, CubeIcon } from '@/Components/Material/Symbols';
 
 const fmtNgn = (n) => Number(n) > 0 ? '₦' + Number(n).toLocaleString() : 'Free';
 

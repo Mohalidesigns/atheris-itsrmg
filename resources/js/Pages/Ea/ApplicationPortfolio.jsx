@@ -14,7 +14,7 @@ import QualitySealBadge from '@/Components/Ea/QualitySealBadge';
 import StewardshipDrawer from '@/Components/Ea/StewardshipDrawer';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head, Link, router } from '@inertiajs/react';
-import { ShieldCheckIcon, Squares2X2Icon } from '@heroicons/react/24/outline';
+import { ShieldCheckIcon, Squares2X2Icon } from '@/Components/Material/Symbols';
 
 const timeTone = { Tolerate: 'draft', Invest: 'pass', Migrate: 'warn', Eliminate: 'fail' };
 

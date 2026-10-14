@@ -1,57 +1,22 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Chip from '@/Components/Material/Chip';
+import Badge from '@/Components/StatusBadge';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, FunnelIcon, MagnifyingGlassIcon } from '@/Components/Material/Symbols';
 import Pagination from '@/Components/Pagination';
 import { formatDate } from '@/Utils/risk';
 
-const severityColors = {
-    critical: '#C53030',
-    high: '#DD6B20',
-    medium: '#D4AF37',
-    low: '#2D7D46',
-    info: '#319795',
-};
-
 function SeverityBadge({ severity }) {
-    const color = severityColors[severity] || '#718096';
-    return (
-        <span
-            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize"
-            style={{ backgroundColor: `${color}15`, color }}
-        >
-            {severity}
-        </span>
-    );
+    return <Badge status={severity} />;
 }
 
 function IncidentStatusBadge({ status }) {
-    const map = {
-        reported: { bg: 'bg-gray-100', text: 'text-gray-600' },
-        triaged: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
-        investigating: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
-        containing: { bg: 'bg-[#D4AF37]/10', text: 'text-[#D4AF37]' },
-        contained: { bg: 'bg-[#1A365D]/10', text: 'text-[#1A365D]' },
-        eradicating: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
-        recovering: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
-        resolved: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
-        closed: { bg: 'bg-gray-100', text: 'text-gray-500' },
-        post_incident: { bg: 'bg-[#1A365D]/10', text: 'text-[#1A365D]' },
-    };
-    const style = map[status] || map.reported;
-    return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${style.bg} ${style.text}`}>
-            {(status || '').replace(/_/g, ' ')}
-        </span>
-    );
+    return <Badge status={status || 'reported'} />;
 }
 
 function TypeBadge({ type }) {
-    return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-[#1A365D]/5 text-[#1A365D] capitalize">
-            {(type || '').replace(/_/g, ' ')}
-        </span>
-    );
+    return <Chip tone="neutral" variant="outlined">{(type || '').replace(/_/g, ' ')}</Chip>;
 }
 
 export default function IncidentsIndex({ incidents, filters, statuses, types }) {

@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { XMarkIcon } from '@/Components/Material/Symbols';
 
 const eff = { effective: 'text-[#2D7D46]', partially_effective: 'text-[#8A6400]', ineffective: 'font-semibold text-[#B3261E]', not_assessed: 'text-[#718096]' };
 

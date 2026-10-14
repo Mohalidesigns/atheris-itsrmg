@@ -138,11 +138,11 @@ function PolicyRow({ policy, intervals, canEdit }) {
                                 type="button"
                                 disabled={!canEdit}
                                 onClick={() => toggle(attr)}
-                                className={`rounded-full border px-2.5 py-1 text-[11px] transition ${
+                                className={`rounded-lg px-2.5 py-1 text-[11px] transition ${
                                     on
                                         ? 'border-[#0A1F44] bg-[#0A1F44] text-white'
                                         : 'border-gray-200 bg-white text-[#718096] hover:border-gray-300'
-                                }`}
+                                } whitespace-nowrap`}
                             >
                                 {label}
                             </button>

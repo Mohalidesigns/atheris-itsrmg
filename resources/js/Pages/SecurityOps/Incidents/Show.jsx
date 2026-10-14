@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import Badge from '@/Components/StatusBadge';
 import EaIncidentImpactPanel from '@/Components/Ea/EaIncidentImpactPanel';
 import { Head, Link, useForm, router } from '@inertiajs/react';
 import { useState } from 'react';
@@ -14,7 +15,7 @@ import {
     InformationCircleIcon,
     ArrowPathIcon,
     DocumentTextIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -43,23 +44,7 @@ function TabButton({ active, children, onClick }) {
 }
 
 function IncidentStatusBadge({ status }) {
-    const map = {
-        detected: { bg: 'bg-[#B3261E]/10', text: 'text-[#B3261E]' },
-        triaged: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
-        investigating: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
-        containing: { bg: 'bg-[#D4AF37]/10', text: 'text-[#D4AF37]' },
-        eradicating: { bg: 'bg-[#DD6B20]/10', text: 'text-[#DD6B20]' },
-        recovering: { bg: 'bg-[#319795]/10', text: 'text-[#319795]' },
-        resolved: { bg: 'bg-[#2D7D46]/10', text: 'text-[#2D7D46]' },
-        closed: { bg: 'bg-gray-100', text: 'text-gray-500' },
-        post_incident_review: { bg: 'bg-[#1A365D]/10', text: 'text-[#1A365D]' },
-    };
-    const style = map[status] || map.detected;
-    return (
-        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${style.bg} ${style.text}`}>
-            {(status || '').replace(/_/g, ' ')}
-        </span>
-    );
+    return <Badge status={status || 'detected'} />;
 }
 
 const eventTypeIcons = {
@@ -206,13 +191,13 @@ export default function ShowIncident({ incident, statuses, templates = [], sugge
                         <TabButton key={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)}>
                             {tab.charAt(0).toUpperCase() + tab.slice(1)}
                             {tab === 'timeline' && incident.events?.length > 0 && (
-                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-full">{incident.events.length}</span>
+                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-lg whitespace-nowrap">{incident.events.length}</span>
                             )}
                             {tab === 'alerts' && incident.alerts?.length > 0 && (
-                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-full">{incident.alerts.length}</span>
+                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-lg whitespace-nowrap">{incident.alerts.length}</span>
                             )}
                             {tab === 'notifications' && incident.notifications?.length > 0 && (
-                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-full">{incident.notifications.length}</span>
+                                <span className="ml-1 text-xs bg-gray-100 px-1.5 py-0.5 rounded-lg whitespace-nowrap">{incident.notifications.length}</span>
                             )}
                             {tab === 'breach' && incident.is_data_breach && (
                                 <span className="ml-1 w-2 h-2 rounded-full bg-[#C53030] inline-block" />
@@ -438,8 +423,8 @@ export default function ShowIncident({ incident, statuses, templates = [], sugge
                                                 <p className="text-xs text-[#718096]">{alert.source || 'Unknown source'} · received {alert.received_at ? new Date(alert.received_at).toLocaleString() : '--'}</p>
                                             </div>
                                             <div className="flex items-center gap-2 text-xs">
-                                                <span className="px-2 py-0.5 rounded-full bg-gray-100 text-[#2D3748] capitalize">{alert.severity}</span>
-                                                <span className="px-2 py-0.5 rounded-full bg-[#1A365D]/5 text-[#1A365D] capitalize">{alert.status}</span>
+                                                <span className="px-2 py-0.5 rounded-lg bg-gray-100 text-[#2D3748] capitalize">{alert.severity}</span>
+                                                <span className="px-2 py-0.5 rounded-lg bg-[#1A365D]/5 text-[#1A365D] capitalize">{alert.status}</span>
                                             </div>
                                         </li>
                                     ))}
@@ -477,13 +462,13 @@ export default function ShowIncident({ incident, statuses, templates = [], sugge
                                         </div>
                                         <div>
                                             <h4 className="text-xs text-[#718096] uppercase font-medium mb-1">NDPA Notification</h4>
-                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-semibold ${
                                                 incident.breach.ndpa_notified_at
                                                     ? 'bg-[#2D7D46]/10 text-[#2D7D46]'
                                                     : incident.breach.ndpa_notification_required
                                                         ? 'bg-[#C53030]/10 text-[#C53030]'
                                                         : 'bg-gray-100 text-gray-500'
-                                            }`}>
+                                            } whitespace-nowrap`}>
                                                 {incident.breach.ndpa_notified_at
                                                     ? 'Notified'
                                                     : incident.breach.ndpa_notification_required

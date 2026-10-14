@@ -33,7 +33,7 @@ export default function DrExercises({ exercises = [] }) {
                                 <td className="px-3 py-2 text-xs text-[#718096]">{fmt(e.started_at || e.scheduled_at)}</td>
                                 <td className="px-3 py-2"><StatusBadge status={e.status === 'completed' ? 'active' : e.status} label={e.status} /></td>
                                 <td className="px-3 py-2 text-xs">{(e.participants || []).length}</td>
-                                <td className="px-3 py-2 text-xs">{e.rto_achieved_min != null ? <span className={`rounded-full px-2 py-0.5 ${resultTone[e.result] || ''}`}>{e.rto_achieved_min} / {e.rto_target_min ?? e.runbook?.estimated_duration_min} min</span> : <span className="text-[#718096]">not measured</span>}</td>
+                                <td className="px-3 py-2 text-xs">{e.rto_achieved_min != null ? <span className={`rounded-lg px-2 py-0.5 ${resultTone[e.result] || ''}`}>{e.rto_achieved_min} / {e.rto_target_min ?? e.runbook?.estimated_duration_min} min</span> : <span className="text-[#718096]">not measured</span>}</td>
                             </tr>
                         ))}
                     </tbody>

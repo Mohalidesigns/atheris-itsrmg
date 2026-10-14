@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
-import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon } from '@/Components/Material/Symbols';
 import { ScoreDisplay, TreatmentStatusBadge } from '@/Components/Risk/RiskBadge';
 import { formatDate, humanize } from '@/Utils/risk';
 

@@ -4,7 +4,7 @@ import {
     ChevronDoubleLeftIcon,
     ChevronDoubleRightIcon,
     ShieldCheckIcon,
-} from '@heroicons/react/24/outline';
+} from '@/Components/Material/Symbols';
 import SidebarNavItem from './SidebarNavItem';
 import navigation from '@/Config/navigation';
 
@@ -46,7 +46,7 @@ export default function Sidebar() {
                 {!collapsed && (
                     <div className="overflow-hidden">
                         <h1 className="text-white font-bold text-base leading-tight tracking-tight">
-                            IT Risk Mgt
+                            Atheris Govern
                         </h1>
                         <span className="text-[#D4AF37] text-xs font-medium">
                             GRC Suite

@@ -3,7 +3,7 @@ import PageHeader from '@/Components/PageHeader';
 import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import { Head, Link } from '@inertiajs/react';
-import { BeakerIcon } from '@heroicons/react/24/outline';
+import { BeakerIcon } from '@/Components/Material/Symbols';
 
 const passFailTone = (p) => ({ pass: 'pass', partial: 'warn', fail: 'fail' })[p] || 'draft';
 

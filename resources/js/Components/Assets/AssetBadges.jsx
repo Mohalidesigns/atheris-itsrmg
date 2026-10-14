@@ -1,15 +1,17 @@
-const criticalityColors = {
-    critical: { bg: '#FEE2E2', text: '#C53030' },
-    high: { bg: '#FED7AA', text: '#C05621' },
-    medium: { bg: '#FEF3C7', text: '#8A6400' },
-    low: { bg: '#D1FAE5', text: '#2D7D46' },
+import Chip from '@/Components/Material/Chip';
+
+const criticalityChip = {
+    critical: ['error', 'keyboard_double_arrow_up'],
+    high: ['warning', 'keyboard_arrow_up'],
+    medium: ['tertiary', 'drag_handle'],
+    low: ['success', 'keyboard_arrow_down'],
 };
 
-const statusColors = {
-    active: { bg: '#D1FAE5', text: '#2D7D46' },
-    inactive: { bg: '#E2E8F0', text: '#718096' },
-    decommissioned: { bg: '#FEE2E2', text: '#C53030' },
-    under_review: { bg: '#FEF3C7', text: '#8A6400' },
+const statusChip = {
+    active: ['success', 'check_circle'],
+    inactive: ['muted', 'do_not_disturb_on'],
+    decommissioned: ['error', 'delete_forever'],
+    under_review: ['warning', 'rate_review'],
 };
 
 export const typeLabels = {
@@ -32,21 +34,11 @@ export const sourceLabels = {
 };
 
 export function CriticalityBadge({ criticality }) {
-    const colors = criticalityColors[criticality] || criticalityColors.medium;
-    return (
-        <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full capitalize"
-            style={{ backgroundColor: colors.bg, color: colors.text }}>
-            {criticality || 'medium'}
-        </span>
-    );
+    const [tone, icon] = criticalityChip[criticality] || criticalityChip.medium;
+    return <Chip tone={tone} icon={icon}>{criticality || 'medium'}</Chip>;
 }
 
 export function AssetStatusBadge({ status }) {
-    const colors = statusColors[status] || statusColors.active;
-    return (
-        <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full capitalize"
-            style={{ backgroundColor: colors.bg, color: colors.text }}>
-            {status?.replace('_', ' ')}
-        </span>
-    );
+    const [tone, icon] = statusChip[status] || statusChip.active;
+    return <Chip tone={tone} icon={icon}>{status?.replace('_', ' ')}</Chip>;
 }

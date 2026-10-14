@@ -4,7 +4,7 @@ import StatusBadge from '@/Components/StatusBadge';
 import Modal from '@/Components/Modal';
 import InputError from '@/Components/InputError';
 import { humanize } from '@/Utils/risk';
-import { CHANGE_TYPES, RISK_COLOUR, RISK_LEVELS, hoursLabel } from '@/Utils/changes';
+import { CHANGE_TYPES, RISK_LEVELS, hoursLabel } from '@/Utils/changes';
 import { Head, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -36,7 +36,7 @@ function StageForm({ form, boards, roles, users = [], keys, approverTypes, onSub
             <div>
                 <label className={label}>Applies to</label>
                 <div className="mt-1 flex gap-2">
-                    {TYPES.map((t) => <button key={t} type="button" onClick={() => toggleType(t)} className={`rounded-full border px-3 py-1 text-xs ${form.data.applies_to_types.includes(t) ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 text-[#4A5568]'}`}>{humanize(t)}</button>)}
+                    {TYPES.map((t) => <button key={t} type="button" onClick={() => toggleType(t)} className={`rounded-lg border px-3 py-1 text-xs ${form.data.applies_to_types.includes(t) ? 'border-[#0A1F44] bg-[#0A1F44] text-white' : 'border-gray-200 text-[#4A5568]'} whitespace-nowrap`}>{humanize(t)}</button>)}
                 </div>
                 <InputError message={form.errors.applies_to_types} />
             </div>
@@ -69,8 +69,8 @@ function StageRow({ stage: s, boards, roles, users, keys, approverTypes, canMana
             <tr className={`align-top ${!s.is_active ? 'opacity-50' : ''}`}>
                 <td className="px-4 py-3 font-mono text-xs text-[#718096]">{s.sequence}</td>
                 <td className="px-4 py-3"><p className="font-medium text-[#2D3748]">{s.name}</p><p className="text-[10px] text-[#718096]">{s.key}{s.key === 'change_manager' ? ' · final authority' : ''}</p></td>
-                <td className="px-4 py-3 text-xs">{(s.applies_to_types || []).map((t) => <StatusBadge key={t} status={t} label={humanize(t)} />).reduce((acc, el, i) => (i ? [...acc, ' ', el] : [el]), [])}</td>
-                <td className="px-4 py-3"><span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: RISK_COLOUR[s.min_risk_level] }}>{humanize(s.min_risk_level)}+</span></td>
+                <td className="px-4 py-3 text-xs"><span className="flex flex-wrap gap-1">{(s.applies_to_types || []).map((t) => <StatusBadge key={t} status={t} label={humanize(t)} />)}</span></td>
+                <td className="px-4 py-3"><StatusBadge status={s.min_risk_level} label={`${humanize(s.min_risk_level)} and above`} /></td>
                 <td className="px-4 py-3 text-xs text-[#2D3748]">{approverLabel(s, boards, users)}<span className="block text-[10px] text-[#718096]">{humanize(s.approver_type)}{s.approver_type === 'board' && s.quorum ? ` · quorum ${s.quorum}` : ''}</span></td>
                 <td className="px-4 py-3 text-xs text-[#2D3748]">{hoursLabel(s.sla_hours)}</td>
                 <td className="px-4 py-3 text-right text-xs">
@@ -123,7 +123,7 @@ export default function ChangePolicy({ stages = [], boards = [], roles = [], use
                 <p className="mb-3 text-xs text-[#718096]">What a change of each type and risk level is routed through today. Standard changes are pre-approved unless they fall in a freeze window, which adds the Change Manager stage.</p>
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-xs">
-                        <thead><tr className="text-left uppercase text-[#718096]"><th className="px-3 py-2">Type \ Risk</th>{RISK_LEVELS.map((r) => <th key={r} className="px-3 py-2"><span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ backgroundColor: RISK_COLOUR[r] }}>{humanize(r)}</span></th>)}</tr></thead>
+                        <thead><tr className="text-left uppercase text-[#718096]"><th className="px-3 py-2">Type \ Risk</th>{RISK_LEVELS.map((r) => <th key={r} className="px-3 py-2"><StatusBadge status={r} label={humanize(r)} /></th>)}</tr></thead>
                         <tbody className="divide-y divide-gray-100">
                             {TYPES.map((t) => (
                                 <tr key={t}>

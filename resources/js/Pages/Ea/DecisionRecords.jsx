@@ -10,7 +10,7 @@ import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
 import { tabsFor } from '@/Config/eaWorkspaces';
 import { Head, Link } from '@inertiajs/react';
-import { DocumentTextIcon } from '@heroicons/react/24/outline';
+import { DocumentTextIcon } from '@/Components/Material/Symbols';
 
 /**
  * Architecture Decision Records — WS 1.4 (B4).

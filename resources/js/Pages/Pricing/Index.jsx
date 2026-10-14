@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import { Head } from '@inertiajs/react';
-import { CheckIcon } from '@heroicons/react/24/outline';
+import { CheckIcon } from '@/Components/Material/Symbols';
 
 const fmtNgn = (n) => '₦' + Number(n).toLocaleString();
 
@@ -19,7 +19,7 @@ export default function PricingIndex({ tiers = [] }) {
                     <div key={t.id} className={`rounded-2xl border shadow-sm p-6 ${t.is_popular ? 'border-[#C9A86A] bg-[#0A1F44] text-white' : 'border-gray-200 bg-white text-[#2D3748]'}`}>
                         <div className="flex items-center justify-between">
                             <h3 className="text-lg font-semibold">{t.name}</h3>
-                            {t.is_popular && <span className="text-xs px-2 py-0.5 rounded-full bg-[#C9A86A] text-[#0A1F44] font-semibold">Most popular</span>}
+                            {t.is_popular && <span className="text-xs px-2 py-0.5 rounded-lg bg-[#C9A86A] text-[#0A1F44] font-semibold whitespace-nowrap">Most popular</span>}
                         </div>
                         <p className={`text-3xl font-bold mt-4 ${t.is_popular ? 'text-[#C9A86A]' : 'text-[#0A1F44]'}`}>{fmtNgn(t.annual_ngn)}</p>
                         <p className={`text-xs mt-1 ${t.is_popular ? 'text-white/70' : 'text-[#718096]'}`}>per year · ~${Number(t.annual_usd).toLocaleString()} equivalent</p>

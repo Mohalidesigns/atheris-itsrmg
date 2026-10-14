@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { ChevronDownIcon, ChevronRightIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon, ChevronRightIcon } from '@/Components/Material/Symbols';
 import Chip from '@/Components/Compliance/Chip';
 import { RESULT_STYLES, COVERAGE, effectivenessOf, scoreColor, formatDate } from '@/Utils/compliance';
 
@@ -60,7 +60,7 @@ export default function FrameworkShow({ framework, mappedControls, latestAssessm
     const p = posture || {};
 
     return (
-        <AuthenticatedLayout header={<div className="flex items-center gap-3"><span className={`text-xs px-2 py-0.5 rounded-full ${framework.jurisdiction === 'NG' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'}`}>{framework.jurisdiction === 'NG' ? 'Nigerian' : 'Global'}</span>{framework.name}</div>}>
+        <AuthenticatedLayout header={<div className="flex items-center gap-3"><span className={`text-xs px-2 py-0.5 rounded-lg ${framework.jurisdiction === 'NG' ? 'bg-green-50 text-green-700' : 'bg-blue-50 text-blue-700'} whitespace-nowrap`}>{framework.jurisdiction === 'NG' ? 'Nigerian' : 'Global'}</span>{framework.name}</div>}>
             <Head title={framework.short_name} />
 
             <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">

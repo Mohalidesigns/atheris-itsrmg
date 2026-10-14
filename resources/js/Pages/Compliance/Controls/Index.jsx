@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { PlusIcon, MagnifyingGlassIcon, ChevronUpIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, MagnifyingGlassIcon, ChevronUpIcon, ChevronDownIcon } from '@/Components/Material/Symbols';
 import Pagination from '@/Components/Pagination';
 import Chip from '@/Components/Compliance/Chip';
 import { CONTROL_STATUS, EFFECTIVENESS, effectivenessOf, humanize, formatDate, isOverdue } from '@/Utils/compliance';
@@ -35,7 +35,7 @@ export default function ControlsIndex({ controls, filters, domains, options, sum
                 <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-[#718096] mr-1">{controls.total} of {summary.total} controls</span>
                     {chips.map(([label, n, key]) => (
-                        <button key={key} onClick={() => toggle(key)} className={`text-xs px-2.5 py-1 rounded-full border ${filters[key] ? 'bg-[#1A365D] text-white border-[#1A365D]' : 'bg-white border-gray-200 text-[#4A5568]'}`}>
+                        <button key={key} onClick={() => toggle(key)} className={`text-xs px-2.5 py-1 rounded-lg border ${filters[key] ? 'bg-[#1A365D] text-white border-[#1A365D]' : 'bg-white border-gray-200 text-[#4A5568]'} whitespace-nowrap`}>
                             {label} · {n}
                         </button>
                     ))}

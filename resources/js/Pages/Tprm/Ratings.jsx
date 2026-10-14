@@ -4,7 +4,7 @@ import KpiCard from '@/Components/KpiCard';
 import { TierBadge, GradeBadge, Sparkline, fmtDate } from '@/Components/Vendors/VendorBadges';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon } from '@/Components/Material/Symbols';
 
 const cap = (s) => (s || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const sevTone = { critical: 'text-[#B3261E]', high: 'text-[#C05621]', medium: 'text-[#8A6400]', low: 'text-[#718096]' };

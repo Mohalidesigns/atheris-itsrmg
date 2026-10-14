@@ -89,11 +89,11 @@ export default function EditResponseProcedure({ procedure, incidentTypes = [] })
                             <div className="mt-1 flex flex-wrap gap-2">
                                 {incidentTypes.map(t => (
                                     <button key={t} type="button" onClick={() => toggleType(t)}
-                                        className={`px-2.5 py-1 rounded-full text-xs border transition-colors ${
+                                        className={`px-2.5 py-1 rounded-lg text-xs border transition-colors ${
                                             data.incident_types.includes(t)
                                                 ? 'bg-[#0A1F44] text-white border-[#0A1F44]'
                                                 : 'bg-white text-[#2D3748] border-gray-200 hover:bg-gray-50'
-                                        }`}>
+                                        } whitespace-nowrap`}>
                                         {cap(t)}
                                     </button>
                                 ))}

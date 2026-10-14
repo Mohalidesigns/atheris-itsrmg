@@ -47,7 +47,7 @@ export default function Drift({ events, buckets = {}, metrics = {}, sources = {}
             {can.scan && (
                 <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-gray-100 bg-white p-3 text-xs shadow-sm">
                     <span className="text-[#718096]">Scan now (sandbox — no live connector):</span>
-                    {scanSources.map((s) => <button key={s} onClick={() => scan(s)} className="rounded-full border border-gray-200 px-3 py-1 text-[#0A1F44] hover:bg-gray-50">{sources[s]}</button>)}
+                    {scanSources.map((s) => <button key={s} onClick={() => scan(s)} className="rounded-lg border border-gray-200 px-3 py-1 text-[#0A1F44] hover:bg-gray-50">{sources[s]}</button>)}
                     <span className="ml-auto text-[#718096]">{metrics.drift_30d ?? 0} detected in 30 days, {metrics.drift_authorised_30d ?? 0} authorised</span>
                 </div>
             )}

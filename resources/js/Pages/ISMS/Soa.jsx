@@ -4,7 +4,7 @@ import KpiCard from '@/Components/KpiCard';
 import Modal from '@/Components/Modal';
 import { Head, useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
-import { ArrowDownTrayIcon, ExclamationTriangleIcon, PencilSquareIcon } from '@heroicons/react/24/outline';
+import { ArrowDownTrayIcon, ExclamationTriangleIcon, PencilSquareIcon } from '@/Components/Material/Symbols';
 
 const implTone = { implemented: 'bg-[#D1FAE5] text-[#2D7D46]', partial: 'bg-[#FEF3C7] text-[#8A6400]', planned: 'bg-[#DBEAFE] text-[#1A365D]', not_started: 'bg-[#FEE2E2] text-[#C53030]', not_applicable: 'bg-gray-100 text-[#718096]' };
 const resultTone = { compliant: 'text-[#2D7D46]', partially_compliant: 'text-[#8A6400]', non_compliant: 'font-semibold text-[#B3261E]' };
@@ -172,7 +172,7 @@ export default function IsmsSoa({ rows = [], summary = {}, changes = {}, version
                                 </td>
                                 <td className="px-3 py-2 whitespace-nowrap">
                                     {r.is_applicable === null ? <span className="text-xs text-[#8A6400]">Undecided</span> : (
-                                        <span className={`rounded-full px-2 py-0.5 text-xs ${implTone[r.is_applicable ? r.implementation_status : 'not_applicable'] || implTone.planned}`}>
+                                        <span className={`rounded-lg px-2 py-0.5 text-xs ${implTone[r.is_applicable ? r.implementation_status : 'not_applicable'] || implTone.planned} whitespace-nowrap`}>
                                             {r.is_applicable ? label(r.implementation_status) : 'excluded'}
                                         </span>
                                     )}

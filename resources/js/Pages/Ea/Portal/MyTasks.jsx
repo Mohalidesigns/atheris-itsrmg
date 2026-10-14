@@ -4,7 +4,7 @@ import KpiCard from '@/Components/KpiCard';
 import StatusBadge from '@/Components/StatusBadge';
 import EaEmptyState from '@/Components/Ea/EaEmptyState';
 import { Head, Link } from '@inertiajs/react';
-import { InboxIcon } from '@heroicons/react/24/outline';
+import { InboxIcon } from '@/Components/Material/Symbols';
 
 /**
  * My Tasks — the in-product queue, WS 1.6.

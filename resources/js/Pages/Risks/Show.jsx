@@ -5,7 +5,7 @@ import KpiCard from '@/Components/KpiCard';
 import Modal from '@/Components/Modal';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState, useMemo } from 'react';
-import { PencilIcon, PlusIcon, ClockIcon, TrashIcon, ClipboardDocumentCheckIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, PlusIcon, ClockIcon, TrashIcon, ClipboardDocumentCheckIcon } from '@/Components/Material/Symbols';
 import { ScoreDisplay, TreatmentStatusBadge } from '@/Components/Risk/RiskBadge';
 import AtherisFlow from '@/Components/AtherisFlow';
 import { APPETITE_LABELS, SOURCE_LABELS, formatDate, humanize, ratingFor } from '@/Utils/risk';
@@ -31,7 +31,7 @@ function TabButton({ active, children, onClick, count }) {
             }`}>
             {children}
             {count != null && count > 0 && (
-                <span className="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-full">{count}</span>
+                <span className="ml-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded-md whitespace-nowrap">{count}</span>
             )}
         </button>
     );

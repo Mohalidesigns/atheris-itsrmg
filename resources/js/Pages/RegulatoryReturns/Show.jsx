@@ -274,7 +274,7 @@ export default function ReturnShow({ return: ret = {}, citations = [], citationS
                             {diff.changes.slice(0, 12).map((c) => (
                                 <span
                                     key={c.metric}
-                                    className="rounded-full border border-gray-200 px-2 py-0.5 text-[11px] text-[#2D3748]"
+                                    className="rounded-lg border border-gray-200 px-2 py-0.5 text-[11px] text-[#2D3748] whitespace-nowrap"
                                 >
                                     {c.metric.replace(/_/g, ' ')}: {c.before} → {c.after}
                                     <span className={c.direction === 'up' ? 'text-[#B3261E]' : 'text-[#2D7D46]'}>

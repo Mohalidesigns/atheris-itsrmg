@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { ArrowPathIcon } from '@heroicons/react/24/outline';
+import { ArrowPathIcon } from '@/Components/Material/Symbols';
 import { RAG_COLORS, formatDate, humanize } from '@/Utils/csat';
 
 // Matches csat_ai_recommendations.recommendation_type.

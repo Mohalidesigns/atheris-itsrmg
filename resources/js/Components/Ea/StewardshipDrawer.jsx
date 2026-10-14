@@ -6,7 +6,7 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import PrimaryButton from '@/Components/PrimaryButton';
 import DangerButton from '@/Components/DangerButton';
 import useEaPermissions from '@/Components/Ea/useEaPermissions';
-import { TrashIcon } from '@heroicons/react/24/outline';
+import { TrashIcon } from '@/Components/Material/Symbols';
 
 /**
  * StewardshipDrawer — the owner-and-seal panel for a single entity.
