@@ -25,7 +25,7 @@ class Asset extends Model
         'owner_id', 'custodian_id', 'department', 'location', 'ip_address',
         'hostname', 'vendor', 'version', 'license_type',
         'data_classification', 'purchase_date', 'end_of_life', 'tags',
-        'reviewed_at', 'reviewed_by',
+        'reviewed_at', 'reviewed_by', 'pci_scope', 'pci_scope_note',
     ];
 
     protected $appends = ['effective_criticality'];

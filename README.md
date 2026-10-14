@@ -19,10 +19,11 @@ Each sidebar module is validated end to end, in order: its features, forms, tabl
 | 8 | Vendor Management | Done | [ATH-VAL-008](docs/ATH-VAL-008_Vendor_Management_Validation_Report.md) |
 | 9 | Policy Management | Done | [ATH-VAL-009](docs/ATH-VAL-009_Policy_Management_Validation_Report.md) |
 | 10 | ISMS | Done | [ATH-VAL-010](docs/ATH-VAL-010_ISMS_Validation_Report.md) |
-| 11 | PCI Management | **Next** | — |
-| 12+ | Business Continuity → Continuous Monitoring → KRIs & Dashboards → rest of sidebar | To do | — |
+| 11 | PCI Management | Done | [ATH-VAL-011](docs/ATH-VAL-011_PCI_Management_Validation_Report.md) |
+| 12 | Business Continuity | **Next** | — |
+| 13+ | Continuous Monitoring → KRIs & Dashboards → rest of sidebar | To do | — |
 
-Last full PHP suite: 288 tests, 287 passed, 1 skipped (the route smoke test, run separately over 205 routes), 2,835 assertions (14 Oct 2026, local, PHP 8.4).
+Last full PHP suite: 294 tests, 293 passed, 1 skipped (the route smoke test, run separately over 205 routes), 2,949 assertions (14 Oct 2026, local, PHP 8.4).
 
 ## Quick start
 

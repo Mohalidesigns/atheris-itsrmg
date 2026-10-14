@@ -1,69 +1,60 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
-import StatusBadge from '@/Components/StatusBadge';
-import { Head } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
-export default function PciControls({ requirements = [], byReq = {} }) {
-    const [active, setActive] = useState(requirements[0]?.code || 'R1');
-    const current = byReq[active] || [];
+const eff = { effective: 'text-[#2D7D46]', partially_effective: 'text-[#8A6400]', ineffective: 'font-semibold text-[#B3261E]', not_assessed: 'text-[#718096]' };
+
+function MapForm({ sub, controls }) {
+    const form = useForm({ requirement_id: sub.id, control_id: '' });
+    return (
+        <form onSubmit={(e) => { e.preventDefault(); form.post(route('pci.controls.map'), { preserveScroll: true, onSuccess: () => form.reset('control_id') }); }} className="mt-1 flex gap-1">
+            <select value={form.data.control_id} onChange={(e) => form.setData('control_id', e.target.value)} className="min-w-0 flex-1 rounded border-gray-300 text-xs">
+                <option value="">Map a control…</option>
+                {controls.filter((c) => !sub.controls.some((m) => m.id === c.id)).map((c) => <option key={c.id} value={c.id}>{c.control_code} — {c.title}</option>)}
+            </select>
+            <button type="submit" disabled={!form.data.control_id} className="rounded border border-[#0A1F44] px-2 text-xs text-[#0A1F44] disabled:opacity-40">Map</button>
+        </form>
+    );
+}
+
+export default function PciControls({ requirements = [], controls = [], canEdit = false }) {
+    const [open, setOpen] = useState(requirements[0]?.code);
     return (
         <AuthenticatedLayout header="PCI Controls">
             <Head title="PCI Controls" />
-            <PageHeader
-                breadcrumbs={[{ label: 'PCI Management', href: route('pci.dashboard') }, { label: 'Controls' }]}
-                title="PCI-DSS Controls Mapping"
-                subtitle="Tenant controls mapped to each of the 12 PCI-DSS v4.0.1 requirements."
-            />
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                <aside className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 h-fit">
-                    <h3 className="text-xs font-semibold uppercase text-[#718096] mb-2">Requirements</h3>
-                    <ul className="space-y-1">
-                        {requirements.map((r) => (
-                            <li key={r.code}>
-                                <button onClick={() => setActive(r.code)}
-                                    className={`w-full text-left px-2 py-1.5 rounded-md text-xs ${active === r.code ? 'bg-[#0A1F44] text-white' : 'text-[#2D3748] hover:bg-gray-50'}`}>
-                                    <span className="font-mono font-semibold">{r.code}</span>
-                                    <span className={`block text-[10px] mt-0.5 ${active === r.code ? 'text-white/80' : 'text-[#718096]'}`}>{r.title}</span>
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                </aside>
-                <section className="lg:col-span-4 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="p-4 border-b border-gray-100">
-                        <h3 className="text-sm font-semibold text-[#0A1F44]">{active} — {requirements.find((r) => r.code === active)?.title}</h3>
-                        <p className="text-xs text-[#718096]">{current.length} tenant control(s) mapped</p>
+            <PageHeader breadcrumbs={[{ label: 'PCI Management', href: route('pci.dashboard') }, { label: 'PCI Controls' }]}
+                title="Controls mapped to PCI DSS"
+                subtitle="The bank's controls that meet each PCI DSS v4.0.1 sub-requirement, with their tested effectiveness. A sub-requirement with no control has nothing to show an assessor." />
+            <div className="space-y-2">
+                {requirements.map((r) => (
+                    <div key={r.code} className="bg-white rounded-xl border border-gray-100 shadow-sm">
+                        <button type="button" onClick={() => setOpen(open === r.code ? null : r.code)} className="flex w-full items-center justify-between px-4 py-3 text-left">
+                            <span className="text-sm text-[#2D3748]"><span className="font-mono text-xs text-[#0A1F44]">Req {r.code}</span> {r.title}</span>
+                            <span className={`text-xs ${r.unmapped ? 'font-semibold text-[#B3261E]' : 'text-[#718096]'}`}>{r.subs.length - r.unmapped}/{r.subs.length} mapped</span>
+                        </button>
+                        {open === r.code && (
+                            <ul className="divide-y divide-gray-50 border-t border-gray-100">
+                                {r.subs.map((s) => (
+                                    <li key={s.id} className="grid grid-cols-1 gap-2 px-4 py-2 md:grid-cols-2">
+                                        <p className="text-sm text-[#2D3748]"><span className="font-mono text-xs text-[#0A1F44]">{s.code}</span> {s.title}</p>
+                                        <div className="text-xs">
+                                            {s.controls.length === 0 && <p className="font-semibold text-[#B3261E]">No control mapped</p>}
+                                            {s.controls.map((c) => (
+                                                <p key={c.mapping_id} className="flex items-center justify-between gap-2">
+                                                    <span><Link href={route('controls.show', c.id)} className="font-mono text-[#1A365D] hover:underline">{c.control_code}</Link> {c.title} <span className={eff[c.effectiveness] || eff.not_assessed}>· {(c.effectiveness || 'not assessed').replace('_', ' ')}</span></span>
+                                                    {canEdit && <button type="button" onClick={() => router.delete(route('pci.controls.unmap', c.mapping_id), { preserveScroll: true })} className="text-[#C53030]" title="Remove mapping"><XMarkIcon className="h-3 w-3" /></button>}
+                                                </p>
+                                            ))}
+                                            {canEdit && <MapForm sub={s} controls={controls} />}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
                     </div>
-                    <table className="min-w-full divide-y divide-gray-100 text-sm">
-                        <thead className="bg-[#F7FAFC]">
-                            <tr className="text-left text-xs uppercase text-[#718096]">
-                                <th className="px-3 py-2">Control code</th>
-                                <th className="px-3 py-2">Title</th>
-                                <th className="px-3 py-2">Domain</th>
-                                <th className="px-3 py-2">Frequency</th>
-                                <th className="px-3 py-2">Effectiveness</th>
-                                <th className="px-3 py-2">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                            {current.map((c, idx) => (
-                                <tr key={idx}>
-                                    <td className="px-3 py-2 font-mono text-xs text-[#0A1F44]">{c.control_code}</td>
-                                    <td className="px-3 py-2 text-[#2D3748]">{c.title}</td>
-                                    <td className="px-3 py-2 text-xs text-[#718096]">{c.domain}</td>
-                                    <td className="px-3 py-2 text-xs text-[#718096]">{c.frequency}</td>
-                                    <td className="px-3 py-2">
-                                        {c.effectiveness
-                                            ? <StatusBadge status={c.effectiveness === 'effective' ? 'pass' : c.effectiveness === 'partially_effective' ? 'warn' : 'fail'} label={c.effectiveness?.replace('_', ' ')} />
-                                            : <span className="text-xs text-[#718096]">—</span>}
-                                    </td>
-                                    <td className="px-3 py-2"><StatusBadge status={c.status} /></td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </section>
+                ))}
             </div>
         </AuthenticatedLayout>
     );

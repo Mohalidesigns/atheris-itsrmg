@@ -394,6 +394,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/pci/saq', [PciController::class, 'saq'])->name('pci.saq');
         Route::get('/pci/matrix', [PciController::class, 'matrix'])->name('pci.matrix');
         Route::get('/pci/evidence', [PciController::class, 'evidence'])->name('pci.evidence');
+        Route::put('/pci/cde/{asset}', [PciController::class, 'scope'])->middleware('permission:edit pci')->name('pci.cde.scope');
+        Route::post('/pci/controls/mappings', [PciController::class, 'mapControl'])->middleware('permission:edit pci')->name('pci.controls.map');
+        Route::delete('/pci/controls/mappings/{mapping}', [PciController::class, 'unmapControl'])->middleware('permission:edit pci')->whereNumber('mapping')->name('pci.controls.unmap');
     });
 
     // BCP/DR

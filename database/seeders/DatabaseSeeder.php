@@ -139,6 +139,10 @@ class DatabaseSeeder extends Seeder
         // SoA versions and changes since; claim/evidence contradictions kept (ATH-VAL-010)
         $this->call(IsmsDemoSeeder::class);
 
+        // PCI DSS: CDE scoping of assets, control mappings to PCI DSS v4.0.1 and last year's Report on
+        // Compliance as a completed assessment with evidence (ATH-VAL-011)
+        $this->call(PciDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

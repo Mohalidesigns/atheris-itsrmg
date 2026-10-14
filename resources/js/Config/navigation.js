@@ -194,7 +194,7 @@ const navigation = [
             { name: 'Dashboard', href: 'pci.dashboard' },
             { name: 'Cardholder Data Env', href: 'pci.cde' },
             { name: 'PCI Controls', href: 'pci.controls' },
-            { name: 'Self-Assessment (SAQ)', href: 'pci.saq' },
+            { name: 'Assessment (ROC / SAQ)', href: 'pci.saq' },
             { name: 'Control Matrix', href: 'pci.matrix' },
             { name: 'Evidence Repository', href: 'pci.evidence' },
         ],

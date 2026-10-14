@@ -39,10 +39,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 7 | Asset Management | `f337190` | `docs/ATH-VAL-007_Asset_Management_Validation_Report.md` | `tests/Feature/Assets/AssetManagementModuleTest.php` (12) |
 | 8 | Vendor Management | `f57ddea` | `docs/ATH-VAL-008_Vendor_Management_Validation_Report.md` | `tests/Feature/Vendors/VendorManagementModuleTest.php` (10) |
 | 9 | Policy Management | `a81f88a` | `docs/ATH-VAL-009_Policy_Management_Validation_Report.md` | `tests/Feature/Policies/PolicyManagementModuleTest.php` (8) |
-| 10 | ISMS | see `git log` | `docs/ATH-VAL-010_ISMS_Validation_Report.md` | `tests/Feature/Isms/IsmsModuleTest.php` (6) |
+| 10 | ISMS | `e4ed5da` | `docs/ATH-VAL-010_ISMS_Validation_Report.md` | `tests/Feature/Isms/IsmsModuleTest.php` (6) |
+| 11 | PCI Management | see `git log` | `docs/ATH-VAL-011_PCI_Management_Validation_Report.md` | `tests/Feature/Pci/PciModuleTest.php` (6) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **288 tests, 287 passed, 1 skipped, 2,835 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
+Last full suite: **294 tests, 293 passed, 1 skipped, 2,949 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -150,11 +151,19 @@ Last full suite: **288 tests, 287 passed, 1 skipped, 2,835 assertions (14 Oct 20
 - **ISMS risks:** scoped to the `config/isms.php` categories, with the controls treating each risk.
 - **Demo data:** `IsmsDemoSeeder` keeps only defensible exclusions, writes real justifications, issues two approved versions and three changes since.
 
-## Next phase: module 11, PCI Management
+### PCI Management highlights (module 11)
+
+- **Framework:** PCI DSS v4.0.1 is a platform framework (12 requirements, 63 sub-requirements). Assessments run on the compliance engine; controls map via `control_framework_mappings`.
+- **CDE scoping:** `assets.pci_scope` (`cde` / `connected` / `out_of_scope`) with a required rationale (PCI DSS 12.5.2).
+- **`PciPosture`:** every page reads the bank's own assessment, mappings, evidence and scoping. Gone: the `rand()` matrix, random control mapping, generated SAQ answers, hard-coded maturity, and organisation 1's evidence shown to every bank.
+- **Bug fixed:** `pci_scope` was not fillable, so scoping silently saved nothing.
+- **Demo data:** `PciDemoSeeder` replaces the PCI assessments that `ComplianceDemoSeeder` generates on a fresh install with last year's completed ROC plus this year's in progress.
+
+## Next phase: module 12, Business Continuity (PCI section kept below for reference)
 
 Drafts are prepared in the session scratchpad. If they are lost, rebuild from this plan:
 - **Migration `2027_01_20_000001_pci_module`:**
-  - PCI DSS v4.0.1 as a platform framework (12 requirements, 64 sub-requirements), so PCI assessments run on the compliance engine and controls map through `control_framework_mappings`;
+  - PCI DSS v4.0.1 as a platform framework (12 requirements, 63 sub-requirements), so PCI assessments run on the compliance engine and controls map through `control_framework_mappings`;
   - `assets.pci_scope` (`cde` / `connected` / `out_of_scope`) and `pci_scope_note`.
 - **`PciPosture` service:** per-requirement status from the latest PCI assessment, mapped controls, evidence and scoping.
 - **Rebuilt `PciController`:** CDE scoping, control mapping, assessment, matrix and evidence. It replaces the synthetic pages: `rand()` matrix, random control mapping, generated SAQ answers, and organisation 1's evidence shown to every bank.
