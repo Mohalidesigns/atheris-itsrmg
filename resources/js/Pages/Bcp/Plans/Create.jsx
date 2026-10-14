@@ -7,33 +7,36 @@ import PrimaryButton from '@/Components/PrimaryButton';
 
 const typeLabels = { bcp: 'Business Continuity Plan', dr: 'Disaster Recovery Plan', crisis: 'Crisis Management Plan' };
 
-export default function CreatePlan({ users, nextCode, planTypes }) {
-    const { data, setData, post, processing, errors } = useForm({
-        title: '',
-        description: '',
-        plan_type: 'bcp',
-        scope: '',
-        objectives: '',
-        rto_hours: '',
-        rpo_hours: '',
-        owner_id: '',
-        next_review_date: '',
+/** Create, or edit when a plan is passed. */
+export default function CreatePlan({ users, nextCode, planTypes, services = [], plan = null, linkedServiceIds = [] }) {
+    const { data, setData, post, put, processing, errors } = useForm({
+        title: plan?.title ?? '',
+        description: plan?.description ?? '',
+        plan_type: plan?.plan_type ?? 'bcp',
+        scope: plan?.scope ?? '',
+        objectives: plan?.objectives ?? '',
+        rto_hours: plan?.rto_hours ?? '',
+        rpo_hours: plan?.rpo_hours ?? '',
+        owner_id: plan?.owner_id ?? '',
+        next_review_date: plan?.next_review_date ? String(plan.next_review_date).slice(0, 10) : '',
+        service_ids: linkedServiceIds,
     });
 
     const submit = (e) => {
         e.preventDefault();
-        post(route('bcp.plans.store'));
+        plan ? put(route('bcp.plans.update', plan.id)) : post(route('bcp.plans.store'));
     };
+    const toggleService = (id) => setData('service_ids', data.service_ids.includes(id) ? data.service_ids.filter((x) => x !== id) : [...data.service_ids, id]);
 
     return (
-        <AuthenticatedLayout header="Create BCP/DR Plan">
-            <Head title="New Plan" />
+        <AuthenticatedLayout header={plan ? `Edit ${plan.plan_code}` : 'Create BCP/DR Plan'}>
+            <Head title={plan ? `Edit ${plan.plan_code}` : 'New Plan'} />
 
             <div className="max-w-3xl">
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
                     <div className="flex items-center gap-3 mb-6">
                         <span className="font-mono text-sm bg-[#1A365D]/5 text-[#1A365D] px-3 py-1 rounded-lg font-semibold">
-                            {nextCode}
+                            {plan ? plan.plan_code : nextCode}
                         </span>
                         <h3 className="text-lg font-semibold text-[#2D3748]">Plan Details</h3>
                     </div>
@@ -165,12 +168,27 @@ export default function CreatePlan({ users, nextCode, planTypes }) {
                             <InputError message={errors.next_review_date} className="mt-1" />
                         </div>
 
+                        {services.length > 0 && (
+                            <div>
+                                <InputLabel value="Business services this plan recovers" />
+                                <div className="mt-1 grid max-h-48 grid-cols-1 gap-1 overflow-y-auto rounded-lg border border-gray-200 p-2 sm:grid-cols-2">
+                                    {services.map((sv) => (
+                                        <label key={sv.id} className="flex items-center gap-2 text-sm text-[#2D3748]">
+                                            <input type="checkbox" checked={data.service_ids.includes(sv.id)} onChange={() => toggleService(sv.id)} className="rounded border-gray-300 text-[#0A1F44]" />
+                                            <span className="font-mono text-xs text-[#718096]">{sv.code}</span> {sv.name}
+                                        </label>
+                                    ))}
+                                </div>
+                                <InputError message={errors.service_ids || errors['service_ids.0']} className="mt-1" />
+                            </div>
+                        )}
+
                         <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
                             <PrimaryButton disabled={processing}>
-                                {processing ? 'Creating...' : 'Create Plan'}
+                                {plan ? 'Save changes' : processing ? 'Creating...' : 'Create Plan'}
                             </PrimaryButton>
                             <a
-                                href={route('bcp.plans')}
+                                href={plan ? route('bcp.plans.show', plan.id) : route('bcp.plans')}
                                 className="text-sm text-[#718096] hover:text-[#2D3748]"
                             >
                                 Cancel

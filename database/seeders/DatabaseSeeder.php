@@ -143,6 +143,11 @@ class DatabaseSeeder extends Seeder
         // Compliance as a completed assessment with evidence (ATH-VAL-011)
         $this->call(PciDemoSeeder::class);
 
+        // Business Continuity: BIAs linked to the services they set RTO/RPO for, plans linked to the
+        // services they recover, DR exercises measured against target, First Bank's DR runbooks and
+        // test history (ATH-VAL-012)
+        $this->call(BusinessContinuityDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

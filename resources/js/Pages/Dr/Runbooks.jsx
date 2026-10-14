@@ -9,7 +9,7 @@ export default function DrRunbooks({ runbooks = [] }) {
             <PageHeader
                 breadcrumbs={[{ label: 'Business Continuity' }, { label: 'DR Runbooks' }]}
                 title="DR Runbook Library"
-                subtitle="Nigerian DR runbooks: NIBSS failover, switch failover, core-banking DR, ATM reroute, USSD channel failover."
+                subtitle="The bank's recovery runbooks, with the result of the latest exercise against each runbook's recovery target."
             />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {runbooks.map((r) => (
@@ -20,7 +20,7 @@ export default function DrRunbooks({ runbooks = [] }) {
                         <p className="text-xs text-[#2D3748] mt-2 line-clamp-2">{r.description}</p>
                         <div className="mt-3 flex items-center justify-between">
                             <span className="text-xs text-[#718096]">{(r.steps || []).length} steps</span>
-                            <span className="text-xs text-[#C9A86A]">{r.exercises_count || 0} exercises</span>
+                            <span className={`text-xs ${r.last_result === 'pass' ? 'text-[#2D7D46]' : r.last_result ? 'font-semibold text-[#B3261E]' : 'text-[#C9A86A]'}`}>{r.exercises_count || 0} exercises{r.last_result ? ` · last ${r.last_result === 'pass' ? 'within RTO' : 'over RTO'}` : ''}</span>
                         </div>
                     </Link>
                 ))}

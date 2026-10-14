@@ -19,12 +19,15 @@ class BiaRecord extends Model
         'description', 'criticality', 'rto_hours', 'rpo_hours',
         'mtpd_hours', 'financial_impact_per_hour',
         'dependencies', 'recovery_strategy', 'owner_id',
+        'business_service_id', 'approved_by', 'approved_at', 'applied_at',
     ];
 
     protected function casts(): array
     {
         return [
             'financial_impact_per_hour' => 'decimal:2',
+            'approved_at' => 'datetime',
+            'applied_at' => 'datetime',
         ];
     }
 
@@ -46,5 +49,16 @@ class BiaRecord extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_id');
+    }
+
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /** The EA business service this BIA assesses; an approved BIA sets its RTO/RPO (ATH-VAL-012). */
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(Ea\BusinessService::class, 'business_service_id');
     }
 }

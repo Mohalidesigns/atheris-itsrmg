@@ -14,8 +14,6 @@ use App\Models\CopilotMessage;
 use App\Models\CoreBankingIntegration;
 use App\Models\CoreBankingSnapshot;
 use App\Models\CustomField;
-use App\Models\DrExercise;
-use App\Models\DrRunbook;
 use App\Models\EvidenceVaultItem;
 use App\Models\FairRun;
 use App\Models\FairScenario;
@@ -352,27 +350,6 @@ class PlatformController extends Controller
     }
 
     /* --------------------------------- DR --------------------------------- */
-    public function drRunbooksIndex()
-    {
-        $runbooks = DrRunbook::withCount('exercises')->get();
-
-        return Inertia::render('Dr/Runbooks', compact('runbooks'));
-    }
-
-    public function drRunbookShow(DrRunbook $runbook)
-    {
-        $exercises = $runbook->exercises()->orderByDesc('scheduled_at')->get();
-
-        return Inertia::render('Dr/RunbookShow', compact('runbook', 'exercises'));
-    }
-
-    public function drExercisesIndex()
-    {
-        $exercises = DrExercise::with('runbook')->orderByDesc('scheduled_at')->take(100)->get();
-
-        return Inertia::render('Dr/Exercises', compact('exercises'));
-    }
-
     /* ------------------------------ Marketplace ------------------------------ */
     public function marketplaceIndex()
     {

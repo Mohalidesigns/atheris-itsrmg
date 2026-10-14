@@ -7,6 +7,7 @@ use App\Models\Traits\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -54,21 +55,27 @@ class BcpPlan extends Model
         return $this->hasMany(BcpTest::class, 'plan_id');
     }
 
+    /** The business services this plan recovers. */
+    public function services(): BelongsToMany
+    {
+        return $this->belongsToMany(Ea\BusinessService::class, 'bcp_plan_service', 'plan_id', 'business_service_id')
+            ->withPivot('organization_id')->withTimestamps();
+    }
+
     // Helpers
+    /** Next code in the bank's own series ("KHB-BCP-011"); never reissued. */
     public static function generateNextCode(int $organizationId): string
     {
-        $last = static::withoutGlobalScopes()
-            ->where('organization_id', $organizationId)
-            ->orderByDesc('id')
-            ->value('plan_code');
+        $codes = static::withoutGlobalScopes()->where('organization_id', $organizationId)->pluck('plan_code');
 
-        if ($last && preg_match('/BCP-(\d+)/', $last, $matches)) {
-            $next = (int) $matches[1] + 1;
-        } else {
-            $next = 1;
+        [$prefix, $max, $width] = [null, 0, 4];
+        foreach ($codes as $code) {
+            if (preg_match('/^(.*BCP-)(\d+)$/', (string) $code, $m) && (int) $m[2] >= $max) {
+                [$prefix, $max, $width] = [$m[1], (int) $m[2], strlen($m[2])];
+            }
         }
 
-        return 'BCP-'.str_pad($next, 4, '0', STR_PAD_LEFT);
+        return ($prefix ?? 'BCP-').str_pad((string) ($max + 1), $width, '0', STR_PAD_LEFT);
     }
 
     public function getActivitylogOptions(): LogOptions

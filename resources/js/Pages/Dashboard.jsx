@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null, policyPulse = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null, policyPulse = null, continuity = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const severityOrder = ['critical', 'high', 'medium', 'low'];
@@ -500,6 +500,30 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                                 ))}
                             </ul>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {continuity && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Business Continuity</h3>
+                        <Link href={route('bcp.plans')} className="text-xs text-[#0A1F44] underline">Plans →</Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                        {[
+                            ['Plans in force', continuity.active, route('bcp.plans', { status: 'active' }), false],
+                            ['Not tested in 12 months', continuity.test_overdue, route('bcp.plans', { flag: 'test_overdue' }), continuity.test_overdue > 0],
+                            ['Critical services with no BIA', continuity.critical_without_bia, route('bcp.bia'), continuity.critical_without_bia > 0],
+                            ['Critical services with no plan', continuity.critical_without_plan, route('bcp.plans'), continuity.critical_without_plan > 0],
+                            ['BIA RTO not on the service', continuity.bia_not_applied, route('bcp.bia'), continuity.bia_not_applied > 0],
+                            ['DR exercises within RTO', continuity.exercises_12m ? `${continuity.exercises_within_rto}/${continuity.exercises_12m}` : '—', route('dr.exercises'), continuity.exercises_12m > 0 && continuity.exercises_within_rto < continuity.exercises_12m],
+                        ].map(([label, n, href, alert]) => (
+                            <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                <p className="text-[11px] text-[#718096]">{label}</p>
+                            </Link>
+                        ))}
                     </div>
                 </div>
             )}

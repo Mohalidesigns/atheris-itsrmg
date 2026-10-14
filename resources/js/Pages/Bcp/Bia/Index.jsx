@@ -27,12 +27,24 @@ function CriticalityBadge({ criticality }) {
     );
 }
 
-export default function BiaIndex({ records, filters, criticalities, users }) {
+function ApplyButton({ record }) {
+    const [error, setError] = useState(null);
+    const apply = () => router.post(route('bcp.bia.apply', record.id), {}, { preserveScroll: true, onError: (e) => setError(Object.values(e).join(' ')) });
+    return (
+        <span>
+            <button type="button" onClick={apply} className="rounded border border-[#0A1F44] px-2 py-0.5 text-[11px] text-[#0A1F44] hover:bg-[#0A1F44] hover:text-white">Approve &amp; apply</button>
+            {error && <span className="block text-[10px] text-[#C53030]">{error}</span>}
+        </span>
+    );
+}
+
+export default function BiaIndex({ records, filters, criticalities, users, services = [], unassessed = [], can = {} }) {
     const [showForm, setShowForm] = useState(false);
     const [search, setSearch] = useState(filters.search || '');
 
     const { data, setData, post, processing, errors, reset } = useForm({
         process_name: '',
+        business_service_id: '',
         department: '',
         description: '',
         criticality: 'medium',
@@ -66,7 +78,7 @@ export default function BiaIndex({ records, filters, criticalities, users }) {
 
     const formatCurrency = (val) => {
         if (val == null) return '-';
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+        return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN', maximumFractionDigits: 0 }).format(val);
     };
 
     return (
@@ -91,6 +103,12 @@ export default function BiaIndex({ records, filters, criticalities, users }) {
             </div>
 
             {/* Inline Form */}
+            {unassessed.length > 0 && (
+                <div className="mb-4 rounded-xl border border-[#E5A100]/40 bg-[#FFF8E6] p-3 text-xs text-[#8A6400]">
+                    <strong>{unassessed.length} critical or high business service{unassessed.length === 1 ? '' : 's'} with no BIA:</strong> {unassessed.map((sv) => sv.name).join(', ')}.
+                </div>
+            )}
+
             {showForm && (
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
                     <h3 className="text-sm font-semibold text-[#2D3748] uppercase tracking-wide mb-4">New BIA Record</h3>
@@ -203,6 +221,15 @@ export default function BiaIndex({ records, filters, criticalities, users }) {
                                 <InputError message={errors.financial_impact_per_hour} className="mt-1" />
                             </div>
                             <div>
+                                <InputLabel htmlFor="bia_service" value="Business service assessed" />
+                                <select id="bia_service" value={data.business_service_id} onChange={e => setData('business_service_id', e.target.value)}
+                                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-[#1A365D] focus:ring-[#1A365D]/30 text-sm">
+                                    <option value="">Not linked</option>
+                                    {services.map(sv => <option key={sv.id} value={sv.id}>{sv.code} — {sv.name}</option>)}
+                                </select>
+                                <InputError message={errors.business_service_id} className="mt-1" />
+                            </div>
+                            <div>
                                 <InputLabel htmlFor="bia_owner" value="Owner" />
                                 <select
                                     id="bia_owner"
@@ -306,6 +333,7 @@ export default function BiaIndex({ records, filters, criticalities, users }) {
                                 <th className="text-left px-4 py-3 font-medium text-[#718096]">MTPD</th>
                                 <th className="text-left px-4 py-3 font-medium text-[#718096]">Financial Impact/hr</th>
                                 <th className="text-left px-4 py-3 font-medium text-[#718096]">Owner</th>
+                                <th className="text-left px-4 py-3 font-medium text-[#718096]">Business service</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -324,11 +352,22 @@ export default function BiaIndex({ records, filters, criticalities, users }) {
                                         {formatCurrency(record.financial_impact_per_hour)}
                                     </td>
                                     <td className="px-4 py-3 text-[#718096]">{record.owner?.name || '-'}</td>
+                                    <td className="px-4 py-3 text-xs">
+                                        {record.service ? (
+                                            <div>
+                                                <p className="text-[#2D3748]">{record.service.name}</p>
+                                                {record.service_mismatch
+                                                    ? <p className="text-[#B3261E]">Service RTO {Math.round(record.service.rto_minutes / 6) / 10}h ≠ BIA {record.rto_hours}h</p>
+                                                    : <p className="text-[#2D7D46]">RTO applied{record.applied_at ? ` · ${new Date(record.applied_at).toLocaleDateString('en-GB')}` : ''}</p>}
+                                                {can.approve && (record.service_mismatch || !record.applied_at) && <ApplyButton record={record} />}
+                                            </div>
+                                        ) : <span className="text-[#8A6400]">Not linked</span>}
+                                    </td>
                                 </tr>
                             ))}
                             {records.data.length === 0 && (
                                 <tr>
-                                    <td colSpan="7" className="px-4 py-12 text-center text-[#718096]">
+                                    <td colSpan="8" className="px-4 py-12 text-center text-[#718096]">
                                         No BIA records found. Add your first business impact analysis record.
                                     </td>
                                 </tr>

@@ -40,10 +40,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 8 | Vendor Management | `f57ddea` | `docs/ATH-VAL-008_Vendor_Management_Validation_Report.md` | `tests/Feature/Vendors/VendorManagementModuleTest.php` (10) |
 | 9 | Policy Management | `a81f88a` | `docs/ATH-VAL-009_Policy_Management_Validation_Report.md` | `tests/Feature/Policies/PolicyManagementModuleTest.php` (8) |
 | 10 | ISMS | `e4ed5da` | `docs/ATH-VAL-010_ISMS_Validation_Report.md` | `tests/Feature/Isms/IsmsModuleTest.php` (6) |
-| 11 | PCI Management | see `git log` | `docs/ATH-VAL-011_PCI_Management_Validation_Report.md` | `tests/Feature/Pci/PciModuleTest.php` (6) |
+| 11 | PCI Management | `b09d047` | `docs/ATH-VAL-011_PCI_Management_Validation_Report.md` | `tests/Feature/Pci/PciModuleTest.php` (6) |
+| 12 | Business Continuity | see `git log` | `docs/ATH-VAL-012_Business_Continuity_Validation_Report.md` | `tests/Feature/Continuity/BusinessContinuityModuleTest.php` (6) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **294 tests, 293 passed, 1 skipped, 2,949 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
+Last full suite: **300 tests, 299 passed, 1 skipped, 3,084 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -159,25 +160,27 @@ Last full suite: **294 tests, 293 passed, 1 skipped, 2,949 assertions (14 Oct 20
 - **Bug fixed:** `pci_scope` was not fillable, so scoping silently saved nothing.
 - **Demo data:** `PciDemoSeeder` replaces the PCI assessments that `ComplianceDemoSeeder` generates on a fresh install with last year's completed ROC plus this year's in progress.
 
-## Next phase: module 12, Business Continuity (PCI section kept below for reference)
+### Business Continuity highlights (module 12)
 
-Drafts are prepared in the session scratchpad. If they are lost, rebuild from this plan:
-- **Migration `2027_01_20_000001_pci_module`:**
-  - PCI DSS v4.0.1 as a platform framework (12 requirements, 63 sub-requirements), so PCI assessments run on the compliance engine and controls map through `control_framework_mappings`;
-  - `assets.pci_scope` (`cde` / `connected` / `out_of_scope`) and `pci_scope_note`.
-- **`PciPosture` service:** per-requirement status from the latest PCI assessment, mapped controls, evidence and scoping.
-- **Rebuilt `PciController`:** CDE scoping, control mapping, assessment, matrix and evidence. It replaces the synthetic pages: `rand()` matrix, random control mapping, generated SAQ answers, and organisation 1's evidence shown to every bank.
-- **Demo data:** `PciDemoSeeder`.
+- **Tenancy:** `DrRunbook` and `DrExercise` are strictly scoped; `dr_exercises.organization_id` was added and backfilled from the runbook. DR pages moved out of `PlatformController` into `DrController`, gated on `view bcp-plans`.
+- **Plans:** edit, approve (not by the owner; scope and RTO required) and record tests. A material change to an approved plan sends it back to under review. Plans link to the services they recover (`bcp_plan_service`), with the plan RTO checked against each service's.
+- **BIA:** each record names its EA business service. "Approve & apply" (not by the process owner) writes RTO/RPO onto `ea_business_services`, closing module 7's deferred item. Changing objectives clears the approval.
+- **DR exercises:** recorded against the runbook's target: pass within it, partial up to 1.5×, fail beyond.
+- **`ContinuityMetrics`:** feeds the plan register tiles and the dashboard's Business Continuity panel.
+- **Bug fixed:** the new BIA fields were missing from `$fillable` (indentation mismatch on the first edit).
+- **Demo data:** `BusinessContinuityDemoSeeder` links BIAs and plans to services, gives First Bank runbooks and test history, and leaves deliberate gaps (two unapplied BIAs, two plans untested for over a year).
 
-**Remaining order after that:** Business Continuity, then Continuous Monitoring, then KRIs & Dashboards, then the rest.
+## Next phase: module 13, Continuous Monitoring
 
-**Business Continuity recon (14 Oct 2026):**
-- **Cross-bank leaks:**
-  - `DrRunbook` and `DrExercise` have no tenant scope; `dr_exercises` has no `organization_id` at all.
-  - `BcpController::drPlanIndex` and `testIndex` query `dr_runbooks`, `dr_exercises` and `bcp_tests` without a bank filter.
-- **No workflow:** no plan approval or edit flow, no way to record a test, and the owner picker is not tenant-checked.
-- **BIA not linked:** BIA records are not linked to EA business services. Module 7 deferred to this module the job of writing RTO/RPO onto services.
-- **Data:** First Bank has no BCP tests or DR runbooks.
+Sidebar items: Dashboard (`monitoring.dashboard`), CCM Console (`ccm.index`, `view platform`), Controls Monitoring, Drift Detection and Access Reviews (`monitoring.*`, `view monitoring`).
+
+Start with recon, as for the earlier modules:
+- tenant scoping on the monitoring and CCM models, and whether the pages are `PlatformController` stubs with hard-coded or random data;
+- whether CCM test results feed control effectiveness, issues and the compliance engine;
+- access reviews: segregation of duties (the reviewer cannot certify their own access) and tenant-checked pickers;
+- demo data for both banks (CCM is Kano-only per CLAUDE.md).
+
+**Remaining order after that:** KRIs & Dashboards, then the rest of the sidebar.
 
 ### Patterns from modules 5-9 to reuse
 

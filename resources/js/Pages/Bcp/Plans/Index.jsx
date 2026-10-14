@@ -39,7 +39,7 @@ function StatusBadge({ status }) {
     );
 }
 
-export default function PlansIndex({ plans, filters, planTypes, statuses }) {
+export default function PlansIndex({ plans, filters, planTypes, statuses, metrics = {}, testMonths = 12 }) {
     const [search, setSearch] = useState(filters.search || '');
     const [showFilters, setShowFilters] = useState(false);
 
@@ -77,6 +77,24 @@ export default function PlansIndex({ plans, filters, planTypes, statuses }) {
                         New Plan
                     </Link>
                 </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7 mb-4">
+                {[
+                    ['Plans in force', metrics.active, () => applyFilter('status', filters.status === 'active' ? '' : 'active'), false],
+                    ['Drafts', metrics.draft, () => applyFilter('status', filters.status === 'draft' ? '' : 'draft'), false],
+                    [`Not tested in ${testMonths} months`, metrics.test_overdue, () => applyFilter('flag', filters.flag === 'test_overdue' ? '' : 'test_overdue'), metrics.test_overdue > 0],
+                    ['Review overdue', metrics.review_overdue, () => applyFilter('flag', filters.flag === 'review_overdue' ? '' : 'review_overdue'), metrics.review_overdue > 0],
+                    ['Critical services with no plan', metrics.critical_without_plan, null, metrics.critical_without_plan > 0],
+                    ['Critical services with no BIA', metrics.critical_without_bia, () => router.get(route('bcp.bia')), metrics.critical_without_bia > 0],
+                    ['Tests failed (12 months)', metrics.tests_failed_12m, () => router.get(route('bcp.tests')), metrics.tests_failed_12m > 0],
+                ].map(([label, n, onClick, alert]) => (
+                    <button key={label} type="button" onClick={onClick || undefined} disabled={!onClick}
+                        className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-left shadow-sm hover:bg-gray-50 disabled:cursor-default">
+                        <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                        <p className="text-[11px] text-[#718096]">{label}</p>
+                    </button>
+                ))}
             </div>
 
             {/* Search & Filters */}

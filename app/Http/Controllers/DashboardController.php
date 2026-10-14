@@ -27,6 +27,7 @@ use App\Services\Assets\AssetMetrics;
 use App\Services\Change\ChangeApprovalRouter;
 use App\Services\Change\ChangeMetrics;
 use App\Services\ComplianceScoreService;
+use App\Services\Continuity\ContinuityMetrics;
 use App\Services\Issues\IssueMetrics;
 use App\Services\Policies\PolicyMetrics;
 use App\Services\SecurityOps\SecurityOpsMetrics;
@@ -189,6 +190,7 @@ class DashboardController extends Controller
             'assets' => $orgId ? $this->assetsPulse() : null,
             'vendors' => $orgId ? app(VendorMetrics::class)->summary() : null,
             'policyPulse' => $orgId ? app(PolicyMetrics::class)->summary() : null,
+            'continuity' => $orgId ? app(ContinuityMetrics::class)->summary() : null,
             'changes' => $orgId ? $this->changesPulse($request->user()) : null,
         ]);
     }

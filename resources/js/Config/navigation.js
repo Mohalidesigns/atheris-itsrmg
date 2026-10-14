@@ -205,8 +205,8 @@ const navigation = [
         children: [
             { name: 'BCP Plans', href: 'bcp.plans', permission: 'view bcp-plans' },
             { name: 'DR Plans', href: 'bcp.dr-plans', permission: 'view bcp-plans' },
-            { name: 'DR Runbooks', href: 'dr.runbooks', permission: 'view platform' },
-            { name: 'DR Exercises', href: 'dr.exercises', permission: 'view platform' },
+            { name: 'DR Runbooks', href: 'dr.runbooks', permission: 'view bcp-plans' },
+            { name: 'DR Exercises', href: 'dr.exercises', permission: 'view bcp-plans' },
             { name: 'Business Impact Analysis', href: 'bcp.bia', permission: 'view bcp-plans' },
             { name: 'Tests & Exercises', href: 'bcp.tests', permission: 'view bcp-plans' },
         ],

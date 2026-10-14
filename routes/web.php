@@ -11,6 +11,7 @@ use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\Auth\SamlController;
 use App\Http\Controllers\Auth\ScimController;
 use App\Http\Controllers\BcpController;
+use App\Http\Controllers\DrController;
 use App\Http\Controllers\BusinessAssetController;
 use App\Http\Controllers\Change\ChangeCabController;
 use App\Http\Controllers\Change\ChangePolicyController;
@@ -407,6 +408,18 @@ Route::middleware('auth')->group(function () {
         Route::post('/bcp/plans', [BcpController::class, 'planStore'])
             ->middleware('permission:create bcp-plans')->name('bcp.plans.store');
         Route::get('/bcp/plans/{bcpPlan}', [BcpController::class, 'planShow'])->name('bcp.plans.show');
+        Route::get('/bcp/plans/{bcpPlan}/edit', [BcpController::class, 'planEdit'])->middleware('permission:edit bcp-plans')->name('bcp.plans.edit');
+        Route::put('/bcp/plans/{bcpPlan}', [BcpController::class, 'planUpdate'])->middleware('permission:edit bcp-plans')->name('bcp.plans.update');
+        Route::post('/bcp/plans/{bcpPlan}/approve', [BcpController::class, 'planApprove'])->middleware('permission:approve bcp-plans')->name('bcp.plans.approve');
+        Route::post('/bcp/plans/{bcpPlan}/tests', [BcpController::class, 'planTest'])->middleware('permission:edit bcp-plans')->name('bcp.plans.tests.store');
+        Route::put('/bcp/bia/{biaRecord}', [BcpController::class, 'biaUpdate'])->middleware('permission:edit bcp-plans')->name('bcp.bia.update');
+        Route::post('/bcp/bia/{biaRecord}/apply', [BcpController::class, 'biaApply'])->middleware('permission:approve bcp-plans')->name('bcp.bia.apply');
+
+        // DR runbooks and exercises (moved from the platform group; ATH-VAL-012)
+        Route::get('/dr/runbooks', [DrController::class, 'runbooks'])->name('dr.runbooks');
+        Route::get('/dr/runbooks/{runbook}', [DrController::class, 'show'])->name('dr.runbook.show');
+        Route::post('/dr/runbooks/{runbook}/exercises', [DrController::class, 'record'])->middleware('permission:edit bcp-plans')->name('dr.exercises.store');
+        Route::get('/dr/exercises', [DrController::class, 'exercises'])->name('dr.exercises');
         Route::get('/bcp/bia', [BcpController::class, 'biaIndex'])->name('bcp.bia');
         Route::post('/bcp/bia', [BcpController::class, 'biaStore'])
             ->middleware('permission:create bcp-plans')->name('bcp.bia.store');
@@ -681,9 +694,6 @@ Route::middleware('auth')->group(function () {
         Route::get('/core-banking/snapshots', [PlatformController::class, 'coreBankingSnapshots'])->name('core-banking.snapshots');
 
         // Phase 7: DR
-        Route::get('/dr/runbooks', [PlatformController::class, 'drRunbooksIndex'])->name('dr.runbooks');
-        Route::get('/dr/runbooks/{runbook}', [PlatformController::class, 'drRunbookShow'])->name('dr.runbook.show');
-        Route::get('/dr/exercises', [PlatformController::class, 'drExercisesIndex'])->name('dr.exercises');
 
         // Phase 8: Marketplace
         Route::get('/marketplace', [PlatformController::class, 'marketplaceIndex'])->name('marketplace.index');
