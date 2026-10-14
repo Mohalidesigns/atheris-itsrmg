@@ -23,7 +23,6 @@ import {
     ChatBubbleLeftRightIcon,
     NewspaperIcon,
     PuzzlePieceIcon,
-    CurrencyDollarIcon,
     BriefcaseIcon,
     ScaleIcon,
     BuildingLibraryIcon,
@@ -264,15 +263,17 @@ const navigation = [
     },
 
     {
+        // ATH-VAL-016: the approval workflows of every process in the platform, configured in one
+        // place, and the inbox of approvals awaiting a decision.
         name: 'Workflow Studio',
         icon: PuzzlePieceIcon,
-        permission: 'view platform',
+        permission: 'view workflows',
         children: [
-            { name: 'Workflows', href: 'workflows.index' },
-            { name: 'Marketplace', href: 'workflows.marketplace' },
-            { name: 'Active Instances', href: 'workflows.instances' },
+            { name: 'Approval Workflows', href: 'workflows.index' },
+            { name: 'Approval Inbox', href: 'workflows.inbox' },
         ],
     },
+
     {
         name: 'Core Banking',
         icon: BuildingLibraryIcon,
@@ -293,16 +294,7 @@ const navigation = [
             { name: 'Scheduled Reports', href: 'reports.scheduled' },
         ],
     },
-    {
-        name: 'Marketplace',
-        icon: CurrencyDollarIcon,
-        permission: 'view platform',
-        children: [
-            { name: 'Content Marketplace', href: 'marketplace.index' },
-            { name: 'Installed Packs', href: 'marketplace.installs' },
-            { name: 'Pricing', href: 'pricing.index' },
-        ],
-    },
+
     {
         name: 'Identity & Access',
         icon: UserGroupIcon,

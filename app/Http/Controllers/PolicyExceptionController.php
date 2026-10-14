@@ -7,6 +7,7 @@ use App\Models\Policy;
 use App\Models\PolicyException;
 use App\Models\Risk;
 use App\Models\User;
+use App\Services\Approvals\ApprovalEngine;
 use App\Services\Policies\PolicyMetrics;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -79,6 +80,7 @@ class PolicyExceptionController extends Controller
             throw ValidationException::withMessages(['compensating_controls' => 'A high or critical exception needs compensating controls.']);
         }
 
+        app(ApprovalEngine::class)->assertCanInitiate('policy.exception', $request->user());
         $exception = PolicyException::create($data + [
             'organization_id' => $orgId,
             'exception_code' => PolicyException::generateNextCode($orgId),
@@ -86,6 +88,8 @@ class PolicyExceptionController extends Controller
             'requested_by' => $request->user()->id,
             'owner_id' => $data['owner_id'] ?? $request->user()->id,
         ]);
+
+        app(ApprovalEngine::class)->start('policy.exception', $exception, $request->user());
 
         return back()->with('success', "Exception {$exception->exception_code} requested.");
     }
@@ -111,6 +115,15 @@ class PolicyExceptionController extends Controller
         if ($data['decision'] === 'approve' && ! empty($data['expires_on'])) {
             // The approver may shorten the term, within the rating's limit.
             $this->checkDuration($exception->risk_rating, $exception->starts_on?->toDateString(), $data['expires_on']);
+        }
+
+        // Workflow Studio stages (ATH-VAL-016): an approval stays "requested" until the last stage.
+        $approvals = app(ApprovalEngine::class);
+        if ($data['decision'] === 'approve' && ($pending = $approvals->gate('policy.exception', $exception, $user, $data['notes'] ?? null))) {
+            return back()->with('success', "Exception {$exception->exception_code}: {$pending}");
+        }
+        if ($data['decision'] === 'reject') {
+            $approvals->reject('policy.exception', $exception, $user, $data['notes']);
         }
 
         $exception->update([

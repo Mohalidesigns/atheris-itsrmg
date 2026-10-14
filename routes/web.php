@@ -66,6 +66,7 @@ use App\Http\Controllers\Vendors\SecurityRatingController;
 use App\Http\Controllers\Vendors\SharedDirectoryController;
 use App\Http\Controllers\VulnerabilityController;
 use App\Http\Controllers\VulnerabilityTicketController;
+use App\Http\Controllers\Workflows\WorkflowStudioController;
 use App\Modules\CBNCSAT\Http\Controllers\CsatAssessmentController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -482,6 +483,23 @@ Route::middleware('auth')->group(function () {
         Route::post('/board-packs/{run}/approve', [BoardPackController::class, 'approve'])->middleware('permission:approve reports')->name('board-packs.approve');
     });
 
+    // Workflow Studio: who starts and who approves each process in the platform (ATH-VAL-016).
+    // The marketplace and pricing pages were removed from the product.
+    // A record page's approval trail: gated on the record's module in the controller, so anyone who
+    // can see the record sees where its approval stands.
+    Route::get('/workflows/trail', [WorkflowStudioController::class, 'trail'])->name('workflows.trail');
+    Route::middleware('permission:view workflows')->prefix('workflows')->name('workflows.')->group(function () {
+        Route::get('/', [WorkflowStudioController::class, 'index'])->name('index');
+        Route::get('/inbox', [WorkflowStudioController::class, 'inbox'])->name('inbox');
+        Route::put('/csat-stages', [WorkflowStudioController::class, 'csatUpdate'])->middleware('permission:edit workflows')->name('csat.update');
+        Route::get('/process/{process}', [WorkflowStudioController::class, 'show'])->name('process');
+        Route::put('/process/{process}', [WorkflowStudioController::class, 'update'])->middleware('permission:edit workflows')->name('process.update');
+        Route::post('/process/{process}/stages', [WorkflowStudioController::class, 'stageStore'])->middleware('permission:edit workflows')->name('stages.store');
+        Route::put('/stages/{stage}', [WorkflowStudioController::class, 'stageUpdate'])->middleware('permission:edit workflows')->name('stages.update');
+        Route::delete('/stages/{stage}', [WorkflowStudioController::class, 'stageDestroy'])->middleware('permission:edit workflows')->name('stages.destroy');
+        Route::post('/stages/{stage}/move', [WorkflowStudioController::class, 'stageMove'])->middleware('permission:edit workflows')->name('stages.move');
+    });
+
     // CBN-CSAT Module
     Route::prefix('csat')->name('csat.')->middleware('permission:view csat')->group(function () {
         Route::get('/', [CsatAssessmentController::class, 'index'])->name('index');
@@ -659,9 +677,6 @@ Route::middleware('auth')->group(function () {
         // Phase 3: Evidence Vault (WORM)
         Route::get('/evidence-vault', [PlatformController::class, 'evidenceVaultIndex'])->name('evidence-vault.index');
 
-        // Phase 3: Pricing
-        Route::get('/pricing', [PlatformController::class, 'pricingIndex'])->name('pricing.index');
-
         // Phase 4: TPRM
 
         // Phase 5: SIEM (signed webhook ingest is registered outside auth, below SCIM)
@@ -715,22 +730,11 @@ Route::middleware('auth')->group(function () {
         Route::post('/returns/{run}/transition', [RegulatoryIntelligenceController::class, 'returnsTransition'])
             ->name('returns.transition');
 
-        // Phase 7: Workflows
-        Route::get('/workflows', [PlatformController::class, 'workflowsIndex'])->name('workflows.index');
-        Route::get('/workflows/marketplace', [PlatformController::class, 'workflowsMarketplace'])->name('workflows.marketplace');
-        Route::get('/workflows/instances', [PlatformController::class, 'workflowsInstances'])->name('workflows.instances');
-        Route::get('/workflows/{workflow}', [PlatformController::class, 'workflowShow'])->name('workflows.show');
-
         // Phase 7: Core Banking
         Route::get('/core-banking', [PlatformController::class, 'coreBankingIndex'])->name('core-banking.index');
         Route::get('/core-banking/snapshots', [PlatformController::class, 'coreBankingSnapshots'])->name('core-banking.snapshots');
 
         // Phase 7: DR
-
-        // Phase 8: Marketplace
-        Route::get('/marketplace', [PlatformController::class, 'marketplaceIndex'])->name('marketplace.index');
-        Route::get('/marketplace/installs', [PlatformController::class, 'marketplaceInstalls'])->name('marketplace.installs');
-        Route::post('/marketplace/{item}/install', [PlatformController::class, 'marketplaceInstall'])->name('marketplace.install');
 
         // Integrations Hub (per-category connector pages)
         Route::get('/integrations', [IntegrationsController::class, 'index'])->name('integrations.index');

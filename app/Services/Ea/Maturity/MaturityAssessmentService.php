@@ -8,6 +8,7 @@ use App\Models\Ea\MaturityQuestion;
 use App\Models\Ea\MaturityResponse;
 use App\Models\LegalEntity;
 use App\Models\User;
+use App\Services\Approvals\ApprovalEngine;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -97,11 +98,14 @@ class MaturityAssessmentService
         $results = $this->results($assessment);
         $missing = $results['total'] - $results['answered'];
         $missing > 0 && throw ValidationException::withMessages(['assessment' => "{$missing} practice area(s) still need a rating."]);
+        app(ApprovalEngine::class)->assertCanInitiate('ea.maturity', $actor);
 
         $assessment->update(['status' => 'submitted', 'submitted_by' => $actor->id, 'submitted_at' => now(), 'results' => $results, 'overall_score' => $results['overall']]);
+        app(ApprovalEngine::class)->start('ea.maturity', $assessment, $actor);
     }
 
-    public function approve(MaturityAssessment $assessment, User $actor, ?string $note): void
+    /** Returns a message when Workflow Studio stages remain (the assessment stays submitted), else null. */
+    public function approve(MaturityAssessment $assessment, User $actor, ?string $note): ?string
     {
         $assessment->status === 'submitted' || throw ValidationException::withMessages(['assessment' => 'Only a submitted assessment can be approved.']);
         (int) $assessment->submitted_by === (int) $actor->id
@@ -111,17 +115,24 @@ class MaturityAssessmentService
         $flagged->isNotEmpty() && blank($note)
             && throw ValidationException::withMessages(['approval_note' => 'Rated well above the repository evidence: '.$flagged->implode(', ').'. Record why you accept the rating.']);
 
+        if ($pending = app(ApprovalEngine::class)->gate('ea.maturity', $assessment, $actor, $note)) {
+            return $pending;
+        }
+
         DB::transaction(function () use ($assessment, $actor, $note, $results) {
             MaturityAssessment::withoutGlobalScopes()->where('organization_id', $assessment->organization_id)->where('status', 'approved')
                 ->where('id', '!=', $assessment->id)->where('year', $assessment->year)->update(['status' => 'superseded']);
             $assessment->update(['status' => 'approved', 'approved_by' => $actor->id, 'approved_at' => now(), 'approval_note' => $note,
                 'results' => $results, 'overall_score' => $results['overall']]);
         });
+
+        return null;
     }
 
     public function returnToDraft(MaturityAssessment $assessment, User $actor, string $note): void
     {
         $assessment->status === 'submitted' || throw ValidationException::withMessages(['assessment' => 'Only a submitted assessment can be returned.']);
+        app(ApprovalEngine::class)->reject('ea.maturity', $assessment, $actor, $note);
         $assessment->update(['status' => 'draft', 'approval_note' => "Returned by {$actor->name}: {$note}", 'submitted_by' => null, 'submitted_at' => null]);
     }
 

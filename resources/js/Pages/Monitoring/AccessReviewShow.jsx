@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ApprovalTrail from '@/Components/Approvals/ApprovalTrail';
 import PageHeader from '@/Components/PageHeader';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -53,6 +54,7 @@ export default function AccessReviewShow({ campaign, items = [], counts = {}, fi
                 actions={open && can.complete && <button onClick={() => router.post(route('access-reviews.complete', campaign.id), {}, { preserveScroll: true })} disabled={counts.decided < counts.total || counts.total === 0} className="rounded-lg bg-[#0A1F44] px-3 py-2 text-sm text-white disabled:opacity-40">Complete campaign</button>}
             />
             {(errors.review || errors.comment) && <p className="mb-3 rounded-lg bg-[#FEE2E2] px-3 py-2 text-xs text-[#C53030]">{errors.review || errors.comment}</p>}
+            <div className="mb-4"><ApprovalTrail process="access_review.signoff" id={campaign.id} /></div>
             <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
                 <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm md:col-span-2">
                     <div className="flex items-center justify-between text-xs"><Pill value={campaign.overdue ? 'overdue' : campaign.status} /><span className={campaign.overdue ? 'text-[#C53030]' : 'text-[#718096]'}>{open ? `due ${fmtDate(campaign.due_at)}` : `completed ${fmtDateTime(campaign.completed_at)} by ${campaign.completer?.name || '—'}`}</span></div>

@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ApprovalTrail from '@/Components/Approvals/ApprovalTrail';
 import PageHeader from '@/Components/PageHeader';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
@@ -138,6 +139,7 @@ export default function MaturityShow({ assessment, domains = [], responses = {},
                     })}
                 </div>
                 <aside className="space-y-4">
+                    {['submitted', 'approved'].includes(assessment.status) && <ApprovalTrail process="ea.maturity" id={assessment.id} />}
                     <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
                         <h3 className="text-sm font-semibold text-[#2D3748]">Results</h3>
                         <p className="mt-1 text-3xl font-bold text-[#0A1F44]">{results.overall ?? '—'}</p>

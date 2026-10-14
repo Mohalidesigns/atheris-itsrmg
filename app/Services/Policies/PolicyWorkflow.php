@@ -5,6 +5,7 @@ namespace App\Services\Policies;
 use App\Models\Policy;
 use App\Models\PolicyAttestation;
 use App\Models\User;
+use App\Services\Approvals\ApprovalEngine;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -28,6 +29,11 @@ class PolicyWorkflow
 
     public const ATTESTATION_DAYS = 30;
 
+    /** Set by apply('approve') when Workflow Studio stages remain: the message to show instead. */
+    public ?string $pending = null;
+
+    public function __construct(private ApprovalEngine $approvals) {}
+
     public function apply(Policy $policy, string $action, User $user, ?string $note = null): Policy
     {
         $rule = self::TRANSITIONS[$action] ?? null;
@@ -41,14 +47,23 @@ class PolicyWorkflow
         }
 
         $updates = ['status' => $rule['to'], 'status_note' => $note];
+        $this->pending = null;
         switch ($action) {
             case 'submit':
                 $this->checkReadyForReview($policy);
+                $this->approvals->assertCanInitiate('policy.approval', $user);
                 $updates += ['submitted_by' => $user->id, 'submitted_at' => now()];
                 break;
             case 'approve':
                 $this->checkApprover($policy, $user);
+                // Workflow Studio stages (ATH-VAL-016): the policy stays in review until the last one.
+                if ($this->pending = $this->approvals->gate('policy.approval', $policy, $user, $note)) {
+                    return $policy;
+                }
                 $updates += ['approved_by' => $user->id, 'approved_at' => now()];
+                break;
+            case 'return':
+                $this->approvals->reject('policy.approval', $policy, $user, $note) || $this->approvals->cancel('policy.approval', $policy, 'Returned to the author');
                 break;
             case 'publish':
                 $updates += [
@@ -62,8 +77,11 @@ class PolicyWorkflow
                 break;
         }
 
-        DB::transaction(function () use ($policy, $updates, $action) {
+        DB::transaction(function () use ($policy, $updates, $action, $user) {
             $policy->update($updates);
+            if ($action === 'submit') {
+                $this->approvals->start('policy.approval', $policy, $user);
+            }
             if ($action === 'publish' && $policy->is_mandatory) {
                 $this->launchCampaign($policy);
             }

@@ -6,6 +6,7 @@ use App\Models\BoardPackRun;
 use App\Models\BoardPackTemplate;
 use App\Models\Risk;
 use App\Models\User;
+use App\Services\Approvals\ApprovalEngine;
 use App\Services\ComplianceScoreService;
 use App\Services\Kri\KriMetrics;
 use App\Services\Monitoring\MonitoringMetrics;
@@ -56,8 +57,9 @@ class BoardPackBuilder
     {
         $orgId = (int) $actor->organization_id;
         $period ??= now()->format('Y-m');
+        app(ApprovalEngine::class)->assertCanInitiate('board_pack.approval', $actor);
 
-        return BoardPackRun::withoutGlobalScopes()->create([
+        $run = BoardPackRun::withoutGlobalScopes()->create([
             'organization_id' => $orgId,
             'template_id' => $template->id,
             'title' => "{$template->name} — ".now()->parse($period.'-01')->format('F Y'),
@@ -67,14 +69,23 @@ class BoardPackBuilder
             'prepared_by' => $actor->id,
             'generated_at' => $at ?? now(),
         ]);
+        app(ApprovalEngine::class)->start('board_pack.approval', $run, $actor);
+
+        return $run;
     }
 
-    public function approve(BoardPackRun $run, User $actor, ?string $notes = null): void
+    /** Returns a message when Workflow Studio stages remain (the pack stays a draft), else null. */
+    public function approve(BoardPackRun $run, User $actor, ?string $notes = null): ?string
     {
         $run->status === 'draft' || throw ValidationException::withMessages(['pack' => 'Only a draft pack can be approved.']);
         (int) $run->prepared_by === (int) $actor->id
             && throw ValidationException::withMessages(['pack' => 'The person who prepared the pack cannot approve it for the board.']);
+        if ($pending = app(ApprovalEngine::class)->gate('board_pack.approval', $run, $actor, $notes)) {
+            return $pending;
+        }
         $run->update(['status' => 'approved', 'approved_by' => $actor->id, 'approved_at' => now(), 'notes' => $notes]);
+
+        return null;
     }
 
     /** Section key => ['title' => ..., 'data' => ...] for each section the template lists. */

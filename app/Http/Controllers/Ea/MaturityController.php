@@ -110,7 +110,9 @@ class MaturityController extends Controller
     {
         $assessment = $this->assessment($assessment);
         $data = $request->validate(['approval_note' => 'nullable|string|max:2000']);
-        $this->service->approve($assessment, $request->user(), $data['approval_note'] ?? null);
+        if ($pending = $this->service->approve($assessment, $request->user(), $data['approval_note'] ?? null)) {
+            return back()->with('success', $pending);
+        }
 
         return back()->with('success', 'Assessment approved. It is now the bank\'s rated maturity.');
     }

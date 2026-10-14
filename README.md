@@ -24,10 +24,11 @@ Each sidebar module is validated end to end, in order: its features, forms, tabl
 | 13 | Continuous Monitoring | Done | [ATH-VAL-013](docs/ATH-VAL-013_Continuous_Monitoring_Validation_Report.md) |
 | 14 | KRIs & Dashboards | Done | [ATH-VAL-014](docs/ATH-VAL-014_KRIs_Dashboards_Validation_Report.md) |
 | 15 | Enterprise Architecture (CBN blueprint domains + CMMI maturity) | Done | [ATH-VAL-015](docs/ATH-VAL-015_Enterprise_Architecture_Validation_Report.md) |
-| 16 | Workflow Studio | **Next** | — |
-| 17+ | Core Banking → Reports → rest of sidebar | To do | — |
+| 16 | Workflow Studio (redesigned: approval workflows for every process; marketplace and pricing removed) | Done | [ATH-VAL-016](docs/ATH-VAL-016_Workflow_Studio_Validation_Report.md) |
+| 17 | Core Banking | **Next** | — |
+| 18+ | Reports → rest of sidebar | To do | — |
 
-Last full PHP suite: 318 tests, 317 passed, 1 skipped (the route smoke test, run separately), 3,454 assertions (14 Oct 2026, local, PHP 8.4).
+Last full PHP suite: 324 tests, 323 passed, 1 skipped (the route smoke test, run separately), 3,565 assertions (14 Oct 2026, local, PHP 8.4).
 
 ## Quick start
 

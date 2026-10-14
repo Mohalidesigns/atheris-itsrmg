@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ApprovalTrail from '@/Components/Approvals/ApprovalTrail';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { ClockIcon, ShieldCheckIcon, DocumentTextIcon } from '@/Components/Material/Symbols';
@@ -70,6 +71,7 @@ export default function ShowPlan({ plan, testOverdue = false, testTypes = [], ca
             <Head title={`${plan.plan_code} - ${plan.title}`} />
 
             {/* Header Cards */}
+            {['draft', 'under_review'].includes(plan.status) && <div className="mb-4"><ApprovalTrail process="bcp.plan" id={plan.id} /></div>}
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
                 <div className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm">
                     <p className="text-xs text-[#718096] uppercase font-medium">Type</p>

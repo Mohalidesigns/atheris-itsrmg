@@ -117,7 +117,9 @@ class AccessReviewController extends Controller
 
     public function complete(Request $request, AccessReviewCampaign $campaign, AccessReviewService $service)
     {
-        $service->complete($campaign, $request->user());
+        if ($pending = $service->complete($campaign, $request->user())) {
+            return back()->with('success', "{$campaign->campaign_code}: {$pending}");
+        }
 
         return back()->with('success', "{$campaign->campaign_code} completed.");
     }

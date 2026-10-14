@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\AucsControl;
 use App\Models\AucsFrameworkMapping;
-use App\Models\ContentInstall;
 use App\Models\CopilotConversation;
 use App\Models\CopilotMessage;
 use App\Models\CoreBankingIntegration;
@@ -15,9 +14,7 @@ use App\Models\FairRun;
 use App\Models\FairScenario;
 use App\Models\FeatureFlag;
 use App\Models\FrameworkClause;
-use App\Models\MarketplaceItem;
 use App\Models\Obligation;
-use App\Models\PricingTier;
 use App\Models\Risk;
 use App\Models\RiskCategory;
 use App\Models\ScimToken;
@@ -25,8 +22,6 @@ use App\Models\SsoConnection;
 use App\Models\Tenant;
 use App\Models\TenantTheme;
 use App\Models\Vulnerability;
-use App\Models\Workflow;
-use App\Models\WorkflowInstance;
 use App\Services\FairMonteCarloService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -167,14 +162,6 @@ class PlatformController extends Controller
         return Inertia::render('EvidenceVault/Index', compact('evidence', 'stats'));
     }
 
-    /* ------------------------------- Pricing ------------------------------- */
-    public function pricingIndex()
-    {
-        $tiers = PricingTier::orderBy('annual_ngn')->get();
-
-        return Inertia::render('Pricing/Index', compact('tiers'));
-    }
-
     /* --------------------------------- FAIR --------------------------------- */
     public function fairIndex()
     {
@@ -231,35 +218,6 @@ class PlatformController extends Controller
             : 'Scenario unlinked.');
     }
 
-    /* ------------------------------- Workflows ------------------------------- */
-    public function workflowsIndex()
-    {
-        $workflows = Workflow::orderBy('name')->get();
-
-        return Inertia::render('Workflows/Index', compact('workflows'));
-    }
-
-    public function workflowsMarketplace()
-    {
-        $templates = Workflow::where('status', 'template')->get();
-
-        return Inertia::render('Workflows/Marketplace', compact('templates'));
-    }
-
-    public function workflowShow(Workflow $workflow)
-    {
-        $workflow->load(['instances' => fn ($q) => $q->orderByDesc('started_at')->take(20)]);
-
-        return Inertia::render('Workflows/Show', ['workflow' => $workflow]);
-    }
-
-    public function workflowsInstances()
-    {
-        $instances = WorkflowInstance::with('workflow', 'tasks')->orderByDesc('started_at')->take(100)->get();
-
-        return Inertia::render('Workflows/Instances', compact('instances'));
-    }
-
     /* ------------------------------ Core Banking ------------------------------ */
     public function coreBankingIndex()
     {
@@ -276,35 +234,6 @@ class PlatformController extends Controller
     }
 
     /* --------------------------------- DR --------------------------------- */
-    /* ------------------------------ Marketplace ------------------------------ */
-    public function marketplaceIndex()
-    {
-        $items = MarketplaceItem::orderByDesc('rating')->get();
-
-        return Inertia::render('Marketplace/Index', compact('items'));
-    }
-
-    public function marketplaceInstalls()
-    {
-        $installs = ContentInstall::with('item')->orderByDesc('installed_at')->get();
-
-        return Inertia::render('Marketplace/Installs', compact('installs'));
-    }
-
-    public function marketplaceInstall(MarketplaceItem $item)
-    {
-        ContentInstall::create([
-            'organization_id' => 1,
-            'marketplace_item_id' => $item->id,
-            'version' => $item->version,
-            'installed_at' => now(),
-            'status' => 'active',
-        ]);
-        $item->increment('installs_count');
-
-        return redirect()->route('marketplace.installs')->with('success', "Installed {$item->name}");
-    }
-
     /* --------------------------- Identity & Access --------------------------- */
     public function identitySso()
     {

@@ -47,6 +47,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'ea',
             'csat',
             'platform',
+            // Workflow Studio: who initiates and who approves each process (ATH-VAL-016).
+            'workflows',
         ];
 
         $actions = ['view', 'create', 'edit', 'delete', 'approve', 'export'];
@@ -84,6 +86,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view vendor-assessments', 'create vendor-assessments', 'edit vendor-assessments',
             // Continuous Monitoring: reads CCM results and drift against the risk register (ATH-VAL-013).
             'view monitoring',
+            'view workflows',
             // KRIs & Dashboards: the CRO prepares the board packs (ATH-VAL-014).
             'create reports',
         ]);
@@ -108,6 +111,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'view changes', 'create changes', 'approve changes',
             // Continuous Monitoring: runs access-review campaigns and owns CCM evidence (ATH-VAL-013).
             'view monitoring', 'create monitoring', 'edit monitoring', 'approve monitoring',
+            'view workflows',
         ]);
 
         // Security Analyst - security operations

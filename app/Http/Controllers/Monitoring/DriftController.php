@@ -104,7 +104,9 @@ class DriftController extends Controller
         });
         abort_if($action === 'accept' && ! $request->user()->can('approve monitoring'), 403);
 
-        $service->transition($drift, $action, $request->user(), $input);
+        if ($pending = $service->transition($drift, $action, $request->user(), $input)) {
+            return back()->with('success', "{$drift->drift_code}: {$pending}");
+        }
 
         return back()->with('success', match ($action) {
             'investigate' => "{$drift->drift_code} is under investigation.",

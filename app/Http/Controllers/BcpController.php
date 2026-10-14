@@ -9,6 +9,7 @@ use App\Models\DrExercise;
 use App\Models\DrRunbook;
 use App\Models\Ea\BusinessService;
 use App\Models\User;
+use App\Services\Approvals\ApprovalEngine;
 use App\Services\Continuity\ContinuityMetrics;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -120,6 +121,9 @@ class BcpController extends Controller
         if ($material && $bcpPlan->status === 'active') {
             $validated += ['status' => 'under_review', 'approved_by' => null, 'approved_at' => null];
         }
+        if ($material) {
+            app(ApprovalEngine::class)->cancel('bcp.plan', $bcpPlan, 'The plan changed materially');
+        }
 
         DB::transaction(function () use ($bcpPlan, $validated, $services) {
             $bcpPlan->update($validated);
@@ -141,6 +145,13 @@ class BcpController extends Controller
         }
         if (blank($bcpPlan->scope) || $bcpPlan->rto_hours === null) {
             throw ValidationException::withMessages(['plan' => 'A plan needs its scope and recovery time objective before it can be approved.']);
+        }
+
+        // Workflow Studio stages (ATH-VAL-016): the plan stays under review until the last stage.
+        if ($pending = app(ApprovalEngine::class)->gate('bcp.plan', $bcpPlan, $request->user())) {
+            $bcpPlan->status === 'draft' && $bcpPlan->update(['status' => 'under_review']);
+
+            return back()->with('success', "{$bcpPlan->plan_code}: {$pending}");
         }
 
         $bcpPlan->update([
@@ -255,6 +266,7 @@ class BcpController extends Controller
 
     public function biaStore(Request $request)
     {
+        app(ApprovalEngine::class)->assertCanInitiate('bcp.bia', $request->user());
         $validated = $this->biaValidated($request);
         $validated['organization_id'] = auth()->user()->organization_id;
 
@@ -269,6 +281,7 @@ class BcpController extends Controller
         // Changed objectives need approving and applying again.
         if (($validated['rto_hours'] ?? null) != $biaRecord->rto_hours || ($validated['rpo_hours'] ?? null) != $biaRecord->rpo_hours) {
             $validated += ['approved_by' => null, 'approved_at' => null, 'applied_at' => null];
+            app(ApprovalEngine::class)->cancel('bcp.bia', $biaRecord, 'The objectives changed');
         }
         $biaRecord->update($validated);
 
@@ -289,6 +302,10 @@ class BcpController extends Controller
         }
         if ($biaRecord->rto_hours === null || $biaRecord->rpo_hours === null) {
             throw ValidationException::withMessages(['bia' => 'The BIA needs both an RTO and an RPO.']);
+        }
+
+        if ($pending = app(ApprovalEngine::class)->gate('bcp.bia', $biaRecord, $request->user())) {
+            return back()->with('success', "BIA {$biaRecord->process_name}: {$pending}");
         }
 
         DB::transaction(function () use ($biaRecord, $request) {

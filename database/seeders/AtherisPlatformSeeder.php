@@ -14,7 +14,6 @@ use App\Models\BusinessService;
 use App\Models\CcmTenantTest;
 use App\Models\CcmTest;
 use App\Models\CcmTestRun;
-use App\Models\ContentInstall;
 use App\Models\CopilotConversation;
 use App\Models\CopilotMessage;
 use App\Models\CoreBankingIntegration;
@@ -32,11 +31,9 @@ use App\Models\IssueEvent;
 use App\Models\Kri;
 use App\Models\KriBreach;
 use App\Models\KriReading;
-use App\Models\MarketplaceItem;
 use App\Models\NotificationTemplate;
 use App\Models\Obligation;
 use App\Models\Organization;
-use App\Models\PricingTier;
 use App\Models\RegulatoryCircular;
 use App\Models\RegulatoryReference;
 use App\Models\ReturnTemplate;
@@ -47,9 +44,6 @@ use App\Models\Tenant;
 use App\Models\TenantTheme;
 use App\Models\ThreatAdvisory;
 use App\Models\User;
-use App\Models\Workflow;
-use App\Models\WorkflowInstance;
-use App\Models\WorkflowTask;
 use App\Services\FairMonteCarloService;
 use App\Services\ReturnsCentre\ReturnRunPopulator;
 use Illuminate\Database\Seeder;
@@ -65,7 +59,7 @@ class AtherisPlatformSeeder extends Seeder
      * This used to be a hard-coded `1` — the "Acme Nigeria Ltd" organisation
      * created by DatabaseSeeder. That made SSO, SCIM, the public API, CCM,
      * KRIs, the evidence vault, board packs, Copilot, SIEM, FAIR, doc-intel,
-     * workflows, core banking, DR, the marketplace, theming and the obligations
+     * core banking, DR, theming and the obligations
      * register invisible from either bank demo login: tenancy scoping shows a
      * session only its own organisation's rows, and nobody demos as Acme.
      * Whole modules read as empty product.
@@ -88,7 +82,6 @@ class AtherisPlatformSeeder extends Seeder
         $this->evidenceVault();
         $this->kri();
         $this->boardPacks();
-        $this->pricing();
         $this->obligations();
         $this->circulars();
         $this->copilot();
@@ -97,10 +90,8 @@ class AtherisPlatformSeeder extends Seeder
         $this->fair();
         $this->advisories();
         $this->returns();
-        $this->workflows();
         $this->coreBanking();
         $this->dr();
-        $this->marketplace();
         $this->identity();
         $this->theming();
         $this->auditSamples();
@@ -192,10 +183,8 @@ class AtherisPlatformSeeder extends Seeder
             'notifications.cbn_24h' => true, 'notifications.ndpc_72h' => true, 'notifications.nfiu_sar' => true,
             'doc_intel.circulars' => true, 'doc_intel.vendor_ddq' => true,
             'returns.cbn_crms' => true, 'returns.ndpc_audit' => true,
-            'workflows.marketplace' => true,
             'core_banking.finacle' => true, 'core_banking.flexcube' => true, 'core_banking.t24' => false, 'core_banking.bankone' => true,
             'dr.runbooks' => true,
-            'marketplace.public' => true,
             'i18n.french' => false, 'i18n.portuguese' => false, 'i18n.arabic' => false, 'i18n.swahili' => false,
             'theming.per_tenant' => true,
         ];
@@ -619,32 +608,6 @@ class AtherisPlatformSeeder extends Seeder
         }
     }
 
-    private function pricing(): void
-    {
-        if (PricingTier::count() > 0) {
-            return;
-        }
-        PricingTier::create([
-            'tier' => 'essentials', 'name' => 'Essentials',
-            'annual_ngn' => 12_000_000, 'annual_usd' => 8_000,
-            'features' => ['Risk Register & Assessments', 'Policy Management', 'Incident Register', 'Vendor Register', 'AUCS Browser (read-only)', 'Up to 25 users'],
-            'limits' => ['users' => '25', 'storage' => '50 GB', 'api' => '300 rpm'],
-        ]);
-        PricingTier::create([
-            'tier' => 'professional', 'name' => 'Professional',
-            'annual_ngn' => 36_000_000, 'annual_usd' => 24_000,
-            'features' => ['Everything in Essentials', 'CBN-CSAT bundled free', 'Continuous Controls Monitoring', 'KRI Pack & Board Packs', 'Atheris Copilot', 'Regulatory Intelligence', 'SSO (SAML/OIDC) + SCIM', 'Up to 200 users'],
-            'limits' => ['users' => '200', 'storage' => '500 GB', 'api' => '1,200 rpm'],
-            'is_popular' => true,
-        ]);
-        PricingTier::create([
-            'tier' => 'enterprise', 'name' => 'Enterprise',
-            'annual_ngn' => 96_000_000, 'annual_usd' => 64_000,
-            'features' => ['Everything in Professional', 'Air-gapped on-prem deployment', 'Core-Banking Adapters', 'FAIR quantification', 'Document Intelligence', 'Dedicated Customer Success', 'Unlimited users'],
-            'limits' => ['users' => 'Unlimited', 'storage' => 'Unlimited', 'api' => 'Custom', 'hosting' => 'SaaS / Dedicated / On-prem'],
-        ]);
-    }
-
     private function obligations(): void
     {
         if (Obligation::count() > 0) {
@@ -930,66 +893,6 @@ class AtherisPlatformSeeder extends Seeder
         }
     }
 
-    private function workflows(): void
-    {
-        if (Workflow::count() > 0) {
-            return;
-        }
-        $wfs = [
-            ['CBN ITSM Incident Response', 'incident', [
-                ['start'], ['classify'], ['investigate'], ['notify_cbn_24h'], ['remediate'], ['lessons_learned'], ['close'],
-            ]],
-            ['NDPC DPIA', 'privacy', [
-                ['start'], ['scoping'], ['risk_assessment'], ['control_mapping'], ['dpo_review'], ['approval'], ['end'],
-            ]],
-            ['NAICOM Breach Notification', 'incident', [
-                ['start'], ['triage'], ['notify_naicom'], ['customer_notice'], ['close'],
-            ]],
-            ['NDIC Risk Finding Closure', 'audit', [
-                ['start'], ['root_cause'], ['remediation_plan'], ['verify'], ['close'],
-            ]],
-            ['Vendor Onboarding DDQ', 'tprm', [
-                ['start'], ['ddq_send'], ['ddq_review'], ['risk_accept'], ['contract'], ['end'],
-            ]],
-            ['Policy Exception Review', 'governance', [
-                ['start'], ['submit'], ['ciso_review'], ['cro_approval'], ['track'], ['expire'],
-            ]],
-        ];
-        foreach ($wfs as [$name, $cat, $steps]) {
-            $def = [
-                'nodes' => array_map(fn ($s, $i) => ['id' => $i, 'label' => $s[0]], $steps, array_keys($steps)),
-                'edges' => array_map(fn ($i) => ['source' => $i, 'target' => $i + 1], range(0, count($steps) - 2)),
-            ];
-            $w = Workflow::create([
-                'organization_id' => $this->orgId, 'name' => $name, 'version' => '1.0',
-                'definition_json' => $def, 'status' => 'published', 'category' => $cat,
-            ]);
-            // Marketplace templates are separate
-            Workflow::create([
-                'organization_id' => null, 'name' => $name.' (Template)', 'version' => '1.0',
-                'definition_json' => $def, 'status' => 'template', 'category' => $cat,
-            ]);
-            // Instance
-            $inst = WorkflowInstance::create([
-                'workflow_id' => $w->id,
-                'subject_type' => 'Incident', 'subject_id' => $this->realIdFor('Incident'),
-                'state_json' => ['current' => $steps[2][0] ?? 'start'],
-                'status' => 'running',
-                'started_at' => now()->subDays(rand(1, 5)),
-            ]);
-            foreach ($steps as $i => $step) {
-                WorkflowTask::create([
-                    'instance_id' => $inst->id,
-                    'key' => $step[0], 'assignee_id' => null,
-                    'due_at' => now()->addDays($i),
-                    'completed_at' => $i < 2 ? now()->subDays(rand(0, 3)) : null,
-                    'outcome' => $i < 2 ? 'completed' : null,
-                    'status' => $i < 2 ? 'completed' : 'pending',
-                ]);
-            }
-        }
-    }
-
     private function coreBanking(): void
     {
         if (CoreBankingIntegration::count() > 0) {
@@ -1059,43 +962,6 @@ class AtherisPlatformSeeder extends Seeder
                     'status' => 'completed',
                 ]);
             }
-        }
-    }
-
-    private function marketplace(): void
-    {
-        if (MarketplaceItem::count() > 0) {
-            return;
-        }
-        $items = [
-            ['Atheris', 'regulator_pack', 'cbn-2026', 'CBN Regulator Pack 2026', 'Full CBN pack: circulars, obligations, KRIs, notification templates.', 0, 4.9, 142],
-            ['Atheris', 'regulator_pack', 'ndpc-2026', 'NDPC Regulator Pack 2026', 'Full NDPC pack with §39 breach form + DPIA templates.', 0, 4.8, 128],
-            ['Atheris', 'kri_pack', 'nigerian-dmb-kri', 'Nigerian DMB KRI Pack (30 KRIs)', 'Board-ready KRIs for Nigerian DMBs.', 1_500_000, 4.9, 86],
-            ['Atheris', 'ccm_pack', 'cbn-rbcsf-ccm', 'CBN RBCSF CCM Starter', '40+ CCM tests mapped to CBN RBCSF.', 0, 4.7, 94],
-            ['Partner: Bowmans', 'regulator_pack', 'sarb-za', 'SARB Regulator Pack (South Africa)', 'South Africa SARB obligations + circulars.', 3_500_000, 4.6, 22],
-            ['Partner: KPMG', 'workflow_template', 'ndpc-dpia', 'NDPC DPIA Workflow', 'Drop-in DPIA workflow template.', 800_000, 4.5, 45],
-            ['Partner: PwC', 'control_pack', 'pci-dss-4', 'PCI-DSS 4.0.1 Control Pack', 'Mapped controls + test procedures.', 2_000_000, 4.8, 38],
-            ['Atheris', 'regulator_pack', 'bog-gh', 'BoG Regulator Pack (Ghana)', 'Bank of Ghana obligations + circulars.', 2_500_000, 4.5, 12],
-            ['Atheris', 'regulator_pack', 'cbk-ke', 'CBK Regulator Pack (Kenya)', 'Central Bank of Kenya obligations + circulars.', 2_500_000, 4.4, 9],
-            ['Atheris', 'workflow_template', 'cbn-itsm', 'CBN ITSM Incident Workflow', 'CBN-aligned incident response workflow.', 0, 4.7, 67],
-        ];
-        foreach ($items as [$pub, $type, $slug, $name, $desc, $price, $rating, $installs]) {
-            MarketplaceItem::create([
-                'publisher' => $pub, 'type' => $type, 'slug' => $slug, 'name' => $name,
-                'description' => $desc,
-                'version' => '1.0', 'status' => 'published',
-                'manifest_json' => ['signed' => true, 'signer' => 'cosign://atheris'],
-                'price_ngn' => $price, 'installs_count' => $installs, 'rating' => $rating,
-            ]);
-        }
-
-        // Seed a few installs
-        foreach (MarketplaceItem::inRandomOrder()->take(3)->get() as $m) {
-            ContentInstall::create([
-                'organization_id' => $this->orgId, 'marketplace_item_id' => $m->id,
-                'version' => $m->version, 'installed_at' => now()->subDays(rand(1, 30)),
-                'status' => 'active',
-            ]);
         }
     }
 

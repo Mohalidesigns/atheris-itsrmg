@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ApprovalTrail from '@/Components/Approvals/ApprovalTrail';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { fmtDate, fmtDateTime } from '@/Components/Monitoring/format';
 
@@ -97,6 +98,7 @@ export default function BoardPackShow({ run, can = {} }) {
             </div>
             {errors.pack && <p className="no-print mb-3 rounded-lg bg-[#FEE2E2] px-3 py-2 text-xs text-[#C53030]">{errors.pack}</p>}
             {run.status === 'draft' && !can.approve && <p className="no-print mb-3 rounded-lg bg-[#FEF3C7] px-3 py-2 text-xs text-[#8A6400]">Draft. Someone other than the preparer, with approval rights, approves it for the board.</p>}
+            <div className="no-print mb-4"><ApprovalTrail process="board_pack.approval" id={run.id} /></div>
             <div className="pack-section mb-4 rounded-xl bg-[#0A1F44] p-8 text-white shadow-sm">
                 <p className="text-xs uppercase tracking-widest text-[#C9A86A]">{org}</p>
                 <h1 className="mt-2 text-2xl font-bold">{run.title}</h1>

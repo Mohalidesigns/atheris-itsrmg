@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ApprovalTrail from '@/Components/Approvals/ApprovalTrail';
 import { PolicyStatus, fmtDate, isPast } from '@/Components/Policies/PolicyBadges';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
@@ -147,6 +148,7 @@ export default function ShowPolicy({ policy, attestationSummary = {}, recentAtte
                 )}
             </div>
 
+            {['in_review', 'approved'].includes(policy.status) && <div className="mb-4"><ApprovalTrail process="policy.approval" id={policy.id} /></div>}
             <div className="mb-4 flex gap-1 border-b border-gray-200">
                 {[['text', 'Policy text'], ['controls', `Controls (${(policy.controls || []).length})`], ['attestations', 'Attestations'], ['exceptions', `Exceptions (${(policy.exceptions || []).length})`], ['versions', `Versions (${(policy.versions || []).length})`], ['history', 'History']].map(([k, label]) => (
                     <button key={k} type="button" onClick={() => setTab(k)} className={`px-4 py-2 text-sm border-b-2 ${tab === k ? 'border-[#C9A86A] text-[#0A1F44] font-semibold' : 'border-transparent text-[#718096]'}`}>{label}</button>

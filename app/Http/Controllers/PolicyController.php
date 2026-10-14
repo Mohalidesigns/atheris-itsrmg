@@ -205,6 +205,9 @@ class PolicyController extends Controller
         abort_unless($request->user()->can($needs), 403);
 
         $this->workflow->apply($policy, $data['action'], $request->user(), $data['note'] ?? null);
+        if ($this->workflow->pending) {
+            return back()->with('success', "{$policy->policy_code}: {$this->workflow->pending}");
+        }
 
         $asked = $data['action'] === 'publish' && $policy->is_mandatory
             ? ' '.PolicyAttestation::query()->where('policy_id', $policy->id)->where('version_number', $policy->version_number)->where('status', 'pending')->count().' staff asked to attest.'

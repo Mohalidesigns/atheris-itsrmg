@@ -3,19 +3,18 @@ import { test, expect } from '@playwright/test';
 
 test.use({ storageState: 'tests/Playwright/.auth/kano-heritage-ciso.json' });
 
-test.describe('Phase 7 — Workflow / Core Banking / DR', () => {
-    test('Workflow Studio lists workflows and loads Show with React-Flow canvas', async ({ page }) => {
+test.describe('Phase 7 — Workflow Studio / Core Banking / DR', () => {
+    test('Workflow Studio lists every approval process and opens its configuration', async ({ page }) => {
         await page.goto('/workflows');
-        // The marketplace template of the same name also renders here, suffixed
-        // "(Template)". Take the tenant's own workflow.
-        await page.getByRole('link', { name: /^CBN ITSM Incident Response(?! \(Template\))/ }).first().click();
-        await expect(page.locator('.react-flow__node').first()).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Approval Workflows' })).toBeVisible();
+        await page.getByRole('link', { name: /Policy approval/ }).first().click();
+        await expect(page.getByRole('heading', { name: 'Approval stages' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Who may start it' })).toBeVisible();
     });
 
-    test('Workflow Marketplace shows 6 Nigerian templates', async ({ page }) => {
-        await page.goto('/workflows/marketplace');
-        await expect(page.getByRole('heading', { name: /NDPC DPIA/i })).toBeVisible();
-        await expect(page.getByRole('heading', { name: /NAICOM Breach/i })).toBeVisible();
+    test('Approval Inbox lists approvals awaiting a decision', async ({ page }) => {
+        await page.goto('/workflows/inbox');
+        await expect(page.getByRole('heading', { name: 'Approval Inbox' })).toBeVisible();
     });
 
     test('Core Banking page lists 6 adapters', async ({ page }) => {

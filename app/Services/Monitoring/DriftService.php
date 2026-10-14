@@ -7,6 +7,7 @@ use App\Models\Change\ChangeRequest;
 use App\Models\ConfigDriftEvent;
 use App\Models\Issue;
 use App\Models\User;
+use App\Services\Approvals\ApprovalEngine;
 use App\Services\Issues\IssueWorkflow;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -157,7 +158,8 @@ class DriftService
             ->filter(fn ($c) => in_array($assetId, array_map('intval', (array) $c->affected_asset_ids), true))->values();
     }
 
-    public function transition(ConfigDriftEvent $event, string $action, User $actor, array $input = []): void
+    /** Returns a message when Workflow Studio stages remain (the drift stays open), else null. */
+    public function transition(ConfigDriftEvent $event, string $action, User $actor, array $input = []): ?string
     {
         $fail = fn (string $m) => throw ValidationException::withMessages(['drift' => $m]);
 
@@ -169,12 +171,16 @@ class DriftService
 
             case 'remediate':
                 $event->isOpen() || $fail('This drift is already closed.');
+                app(ApprovalEngine::class)->cancel('drift.acceptance', $event, 'Remediated instead');
                 $event->update(['status' => 'remediated', 'resolved_by' => $actor->id, 'resolved_at' => now(), 'resolution_note' => $input['note']]);
                 break;
 
             case 'accept':
                 $event->isOpen() || $fail('This drift is already closed.');
                 (int) $event->owner_id === (int) $actor->id && $fail('The owner of the drift cannot accept its risk; another approver must.');
+                if ($pending = app(ApprovalEngine::class)->gate('drift.acceptance', $event, $actor, $input['note'] ?? null)) {
+                    return $pending;
+                }
                 $event->update(['status' => 'accepted', 'resolved_by' => $actor->id, 'resolved_at' => now(),
                     'resolution_note' => $input['note'], 'accepted_until' => $input['accepted_until']]);
                 break;
@@ -203,6 +209,8 @@ class DriftService
             default:
                 $fail('Unknown action.');
         }
+
+        return null;
     }
 
     private function raiseIssue(ConfigDriftEvent $event, ?User $actor): Issue

@@ -51,7 +51,9 @@ class BoardPackController extends Controller
     public function approve(Request $request, BoardPackRun $run, BoardPackBuilder $builder)
     {
         $data = $request->validate(['notes' => 'nullable|string|max:2000']);
-        $builder->approve($run, $request->user(), $data['notes'] ?? null);
+        if ($pending = $builder->approve($run, $request->user(), $data['notes'] ?? null)) {
+            return back()->with('success', $pending);
+        }
 
         return back()->with('success', 'Board pack approved for the board.');
     }

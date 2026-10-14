@@ -9,6 +9,7 @@ use App\Models\Gap;
 use App\Models\Risk;
 use App\Models\SoaVersion;
 use App\Models\StatementOfApplicability;
+use App\Services\Approvals\ApprovalEngine;
 use App\Services\Isms\StatementOfApplicabilityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -210,6 +211,7 @@ class IsmsController extends Controller
     {
         $orgId = $this->orgId();
         abort_if(SoaVersion::query()->where('status', 'submitted')->exists(), 422, 'A version is already awaiting approval.');
+        app(ApprovalEngine::class)->assertCanInitiate('isms.soa', $request->user());
         $rows = $soa->rows($orgId);
         $summary = $soa->summary($rows);
         if ($summary['pending'] > 0) {
@@ -227,6 +229,8 @@ class IsmsController extends Controller
             'prepared_at' => now(),
         ]);
 
+        app(ApprovalEngine::class)->start('isms.soa', $version, $request->user());
+
         return back()->with('success', "SoA version {$version->version_no} submitted for approval.");
     }
 
@@ -240,6 +244,15 @@ class IsmsController extends Controller
         abort_unless($version->status === 'submitted', 422, 'This version has already been decided.');
         if ($request->user()->id === (int) $version->prepared_by) {
             throw ValidationException::withMessages(['decision' => 'The person who prepared a version cannot approve it.']);
+        }
+
+        // Workflow Studio stages (ATH-VAL-016): the version stays submitted until the last stage approves.
+        $approvals = app(ApprovalEngine::class);
+        if ($data['decision'] === 'approve' && ($pending = $approvals->gate('isms.soa', $version, $request->user(), $data['notes'] ?? null))) {
+            return back()->with('success', "SoA version {$version->version_no}: {$pending}");
+        }
+        if ($data['decision'] === 'return') {
+            $approvals->reject('isms.soa', $version, $request->user(), $data['notes']);
         }
 
         $version->update([

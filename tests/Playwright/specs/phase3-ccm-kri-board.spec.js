@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 
 test.use({ storageState: 'tests/Playwright/.auth/kano-heritage-ciso.json' });
 
-test.describe('Phase 3 — CCM / KRI / Board Packs / Evidence / Pricing', () => {
+test.describe('Phase 3 — CCM / KRI / Board Packs / Evidence', () => {
     test('CCM Console renders 40 tests with status chips', async ({ page }) => {
         await page.goto('/ccm');
         await expect(page.getByText(/Tests enabled/i)).toBeVisible();
@@ -22,23 +22,14 @@ test.describe('Phase 3 — CCM / KRI / Board Packs / Evidence / Pricing', () => 
         await expect(page.getByRole('heading', { name: /Evidence Vault \(WORM\)/i })).toBeVisible();
     });
 
-    test('KRI Dashboard shows 30 KRIs with sparklines', async ({ page }) => {
+    test('KRI Dashboard shows the KRI register', async ({ page }) => {
         await page.goto('/kri');
-        await expect(page.getByText(/Nigerian KRI Pack/i)).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Key Risk Indicators' })).toBeVisible();
     });
 
-    test('Board Pack Generator creates a PPTX run', async ({ page }) => {
+    test('Board Pack Generator creates a draft pack from current figures', async ({ page }) => {
         await page.goto('/board-packs');
-        await page.getByRole('button', { name: /Generate now/i }).click();
+        await page.getByRole('button', { name: /Generate from current figures/i }).click();
         await expect(page.getByText(/Board pack generated/i)).toBeVisible({ timeout: 10_000 });
-    });
-
-    test('Pricing page displays 3 Naira tiers', async ({ page }) => {
-        await page.goto('/pricing');
-        // Each tier names itself in its card heading, its CTA button and the
-        // next tier's "everything in …" line.
-        await expect(page.getByRole('heading', { name: 'Essentials' })).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Professional' })).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Enterprise' })).toBeVisible();
     });
 });

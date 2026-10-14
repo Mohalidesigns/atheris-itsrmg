@@ -9,6 +9,7 @@ use App\Modules\CBNCSAT\Models\CsatAssessment;
 use App\Modules\CBNCSAT\Models\CsatIrQuestion;
 use App\Modules\CBNCSAT\Models\CsatMaStatement;
 use App\Modules\CBNCSAT\Models\CsatStakeholderEngagement;
+use App\Services\Approvals\ApprovalEngine;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
@@ -154,6 +155,8 @@ class CsatWorkflowService
         if (! $this->isEditable($assessment)) {
             throw ValidationException::withMessages(['workflow' => 'Only a draft or in-progress assessment can be submitted.']);
         }
+        // Who may submit is set in Workflow Studio (ATH-VAL-016).
+        app(ApprovalEngine::class)->assertCanInitiate('csat.assessment', $user);
         $missing = collect($this->checklist($assessment))->reject(fn ($i) => $i['done'])->pluck('label');
         if ($missing->isNotEmpty()) {
             throw ValidationException::withMessages(['workflow' => 'Submission checklist incomplete: '.$missing->implode('; ').'.']);

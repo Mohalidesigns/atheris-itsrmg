@@ -14,6 +14,7 @@ use App\Notifications\Change\ChangeApprovalRequestedNotification;
 use App\Notifications\Change\ChangeDecisionNotification;
 use App\Notifications\Change\ChangeOutcomeNotification;
 use App\Notifications\Change\ChangeScheduledNotification;
+use App\Services\Approvals\ApprovalEngine;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -132,6 +133,8 @@ class ChangeWorkflow
         if ($change->status !== 'draft') {
             $this->fail('action', 'Only a draft can be submitted.');
         }
+        // Who may raise changes for approval is set in Workflow Studio (ATH-VAL-016).
+        app(ApprovalEngine::class)->assertCanInitiate('change.approval', $actor);
         if (! empty($input['freeze_override_reason'])) {
             $change->freeze_override_reason = trim((string) $input['freeze_override_reason']);
         }

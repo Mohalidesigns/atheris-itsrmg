@@ -16,7 +16,7 @@ npx playwright install chromium             # one-time
 ```
 
 The suite needs a **freshly seeded** database. Several journeys write to it — a
-CCM test run, a board pack, a marketplace install, a compiled return — so a
+CCM test run, a board pack, a compiled return — so a
 database that has drifted a long way from seed will not behave the way the specs
 describe. They are written to be re-runnable (anything a journey consumes, it
 provisions), but re-seeding is the reliable starting point.
@@ -39,7 +39,7 @@ data they could not see.
 
 | org | login | holds |
 | --- | --- | --- |
-| 2 | `admin@kanoheritage.ng` | Tier-2 bank demo — risks, CSAT, assets, issues — **and the whole platform layer**: SSO, SCIM, public API, CCM, KRIs, evidence vault, board packs, Copilot, SIEM, FAIR, doc-intel, workflows, core banking, DR, marketplace, theming, obligations |
+| 2 | `admin@kanoheritage.ng` | Tier-2 bank demo — risks, CSAT, assets, issues — **and the whole platform layer**: SSO, SCIM, public API, CCM, KRIs, evidence vault, board packs, Copilot, SIEM, FAIR, doc-intel, approval workflows, core banking, DR, theming, obligations |
 | 3 | `admin@firstbanknigeria.ng` | Tier-1 bank demo **and the entire EA repository**, including the institution half of the Nigerian reference pack — vendor register, legal-entity tree, channel estate |
 
 The reference pack's market structure — 19 data centres and 16 payment rails —
@@ -90,12 +90,12 @@ these specs came to be written against tenants that held none of their data.
 | 0 | `phase0-foundations.spec.js` | Kano | Dashboard widgets, breadcrumbs on every landing page |
 | 1 | `phase1-csat-sso-api.spec.js` | Kano | CBN-CSAT index, SSO/SCIM pages, Public API portal |
 | 2 | `phase2-risk-aucs-issues.spec.js` | Kano | Risk Register + heat-map toggle, Risk Show 10 tabs, AUCS, BS graph, Issues Kanban |
-| 3 | `phase3-ccm-kri-board.spec.js` | Kano | CCM run-now, Evidence Vault, KRI, Board-pack generator, Pricing |
+| 3 | `phase3-ccm-kri-board.spec.js` | Kano | CCM run-now, Evidence Vault, KRI, Board-pack generator |
 | 4 | `phase4-copilot-regintel-tprm.spec.js` | Kano | Copilot chat, Reg-intel, Obligations, Vendor Ratings |
 | 5 | `phase5-siem-fair-notif.spec.js` | Kano | SIEM, Notifications (CBN 24h / NDPC 72h / NFIU), FAIR Monte Carlo, Vulns |
 | 6 | `phase6-docintel-returns.spec.js` | Kano | Doc intel queue, Returns generator |
-| 7 | `phase7-workflows-corebanking-dr.spec.js` | Kano | Workflow Studio (React-Flow), Core Banking adapters, DR runbooks & exercises |
-| 8 | `phase8-marketplace-theme-integrations.spec.js` | Kano | Marketplace, Theme editor, Feature flags, Integrations Hub + per-connector pages |
+| 7 | `phase7-workflows-corebanking-dr.spec.js` | Kano | Workflow Studio (approval workflows, inbox), Core Banking adapters, DR runbooks & exercises |
+| 8 | `phase8-marketplace-theme-integrations.spec.js` | Kano | Theme editor, Feature flags, Integrations Hub + per-connector pages |
 | EA | `ea-phase4-depth-and-scale.spec.js` | **First Bank** | ATH-EAR-002 WS 4.1–4.7: diagram editor, n-hop impact, plateau diff, round-trip gate, GraphQL draft-and-approve, cost model, and the four §9 journeys (ARB, survey campaign, DPIA, return generation) |
 
 The Phase 0–8 specs run as Kano Heritage, which now owns both the bank data and

@@ -3,21 +3,7 @@ import { test, expect } from '@playwright/test';
 
 test.use({ storageState: 'tests/Playwright/.auth/kano-heritage-ciso.json' });
 
-test.describe('Phase 8 — Marketplace / Theming / Integrations Hub', () => {
-    test('Marketplace shows 10 published packs', async ({ page }) => {
-        await page.goto('/marketplace');
-        await expect(page.getByRole('heading', { name: /Content Marketplace/i })).toBeVisible();
-        await expect(page.getByText(/CBN Regulator Pack 2026/i)).toBeVisible();
-        await expect(page.getByText(/NDPC Regulator Pack 2026/i)).toBeVisible();
-    });
-
-    test('Marketplace Install flow creates an install record', async ({ page }) => {
-        await page.goto('/marketplace');
-        await page.getByRole('button', { name: /^Install$/ }).first().click();
-        await page.goto('/marketplace/installs');
-        await expect(page.getByText(/Installed Content Packs/i)).toBeVisible();
-    });
-
+test.describe('Phase 8 — Theming / Integrations Hub', () => {
     test('Tenant Theme settings page shows colour tokens', async ({ page }) => {
         await page.goto('/settings/theme');
         await expect(page.getByRole('heading', { name: /Colour tokens/i })).toBeVisible();

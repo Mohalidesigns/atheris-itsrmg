@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ApprovalTrail from '@/Components/Approvals/ApprovalTrail';
 import PageHeader from '@/Components/PageHeader';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { fmtDate, fmtDateTime, Pill, severityTone } from '@/Components/Monitoring/format';
@@ -47,6 +48,7 @@ export default function DriftShow({ drift, sourceLabel, changes = [], users = []
                     )}
                 </div>
                 <aside className="space-y-4">
+                    {['open', 'investigating', 'accepted'].includes(drift.status) && <ApprovalTrail process="drift.acceptance" id={drift.id} />}
                     <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 text-xs space-y-2">
                         <p><span className="text-[#718096]">Asset:</span> {drift.asset ? <Link href={route('assets.show', drift.asset.id)} className="text-[#0A1F44] underline">{drift.asset.asset_id_code} {drift.asset.name}</Link> : '—'}</p>
                         <p><span className="text-[#718096]">Owner:</span> {drift.owner?.name || 'unassigned'}</p>

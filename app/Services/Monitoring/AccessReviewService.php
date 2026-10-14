@@ -5,6 +5,7 @@ namespace App\Services\Monitoring;
 use App\Models\AccessReviewCampaign;
 use App\Models\AccessReviewItem;
 use App\Models\User;
+use App\Services\Approvals\ApprovalEngine;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -40,6 +41,7 @@ class AccessReviewService
     public function launch(array $data, User $actor): AccessReviewCampaign
     {
         $orgId = (int) $actor->organization_id;
+        app(ApprovalEngine::class)->assertCanInitiate('access_review.signoff', $actor);
 
         return DB::transaction(function () use ($data, $actor, $orgId) {
             $campaign = AccessReviewCampaign::create($data + [
@@ -107,14 +109,20 @@ class AccessReviewService
         $item->update(['confirmed_by' => $actor->id, 'revocation_confirmed_at' => now()]);
     }
 
-    public function complete(AccessReviewCampaign $campaign, User $actor): void
+    /** Returns a message when Workflow Studio stages remain (the campaign stays open), else null. */
+    public function complete(AccessReviewCampaign $campaign, User $actor): ?string
     {
         $campaign->status === 'in_progress' || $this->fail('This campaign is already complete.');
         $open = $campaign->items()->whereNull('decision')->count();
         $campaign->items()->exists() || $this->fail('Add the entitlements to review first.');
         $open && $this->fail("{$open} entitlement(s) still need a decision.");
+        if ($pending = app(ApprovalEngine::class)->gate('access_review.signoff', $campaign, $actor)) {
+            return $pending;
+        }
 
         $campaign->update(['status' => 'completed', 'completed_at' => now(), 'completed_by' => $actor->id]);
+
+        return null;
     }
 
     private function fail(string $message, string $key = 'review'): never

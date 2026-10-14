@@ -44,10 +44,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 12 | Business Continuity | `25a5ec5` | `docs/ATH-VAL-012_Business_Continuity_Validation_Report.md` | `tests/Feature/Continuity/BusinessContinuityModuleTest.php` (6) |
 | 13 | Continuous Monitoring | `0d238b2` | `docs/ATH-VAL-013_Continuous_Monitoring_Validation_Report.md` | `tests/Feature/Monitoring/ContinuousMonitoringModuleTest.php` (6) |
 | 14 | KRIs & Dashboards | `989abf4` | `docs/ATH-VAL-014_KRIs_Dashboards_Validation_Report.md` | `tests/Feature/Kri/KriDashboardsModuleTest.php` (6) |
-| 15 | Enterprise Architecture | see `git log` | `docs/ATH-VAL-015_Enterprise_Architecture_Validation_Report.md` | `tests/Feature/Ea/EaMaturityModuleTest.php` (6) |
+| 15 | Enterprise Architecture | `30dd1a7` | `docs/ATH-VAL-015_Enterprise_Architecture_Validation_Report.md` | `tests/Feature/Ea/EaMaturityModuleTest.php` (6) |
+| 16 | Workflow Studio | see `git log` | `docs/ATH-VAL-016_Workflow_Studio_Validation_Report.md` | `tests/Feature/Workflows/WorkflowStudioModuleTest.php` (6) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **318 tests, 317 passed, 1 skipped, 3,454 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
+Last full suite: **324 tests, 323 passed, 1 skipped, 3,565 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -201,13 +202,22 @@ Last full suite: **318 tests, 317 passed, 1 skipped, 3,454 assertions (14 Oct 20
 - **Write routes and binding:** the authorisation test calls write routes with id 1, so new EA write routes must resolve their record inside the controller (after the permission middleware), not by implicit binding, or a Viewer gets 404 instead of 403.
 - **Demo data:** `EaMaturityDemoSeeder`: First Bank 2024 (1.6) and 2025 (2.6) approved, 2026 in progress, a real evidence pack; Kano 2026 approved (1.4) with an overstated Security rating and the approver's note.
 
-## Next phase: module 16, Workflow Studio
+### Workflow Studio highlights (module 16)
 
-Sidebar items: Workflows (`workflows.index`, `workflows.show`), Marketplace (`workflows.marketplace`), Active Instances (`workflows.instances`), all `PlatformController` methods under `view platform`.
+- **Redesigned at the user's request** into the single place where a bank configures every approval: who may start each process and the ordered stages that approve it (role, named person, job title, record owner or permission holder; approvals needed; SLA; optional condition such as "only critical drift").
+- **Engine** (`app/Services/Approvals`): `ApprovalProcesses` is the registry of the 11 approval points; `ApprovalEngine::gate()` is called by each module's approve action and returns a message while stages remain, so the module completes its own transition only at the last stage. SoD: the initiator never approves, nobody decides two stages, the record owner never approves where the module forbids it. No stages configured means the module's own single approval (unchanged behaviour).
+- **Integrated:** policy approval, policy exceptions, SoA, BCP plans, BIA, drift acceptance, access reviews, board packs, EA maturity (generic engine); Change Management and CSAT keep their engines, with stages edited from the Studio and initiators enforced at submission.
+- **Pages:** Approval Workflows (catalogue), process editor (flow diagram, initiators, stage add/edit/delete/reorder), Approval Inbox (all pending, "awaiting me"), and an approval trail component on record pages.
+- **Removed:** the marketplace (content, installs, workflow templates) and Pricing — routes, pages, models, tables, nav, seed data, feature flags, Playwright specs.
+- **Adding a new approval point:** register it in `ApprovalProcesses::PROCESSES`, call `assertCanInitiate()` / `start()` where it begins and `gate()` (and `reject()` / `cancel()`) in the approve / return paths.
 
-Start with recon, as for the earlier modules: tenant scoping on the workflow models, whether instances actually run against platform records, how the marketplace installs templates, and demo data for both banks.
+## Next phase: module 17, Core Banking
 
-**Remaining order after that:** Core Banking, Reports, then the rest of the sidebar.
+Sidebar items: Integrations (`core-banking.index`) and Snapshots (`core-banking.snapshots`), both `PlatformController` stubs under `view platform`.
+
+Start with recon, as for the earlier modules: tenant scoping on `CoreBankingIntegration` / `CoreBankingSnapshot`, whether snapshots come from a real (or sandboxed) adapter run, and demo data for both banks.
+
+**Remaining order after that:** Reports, then the rest of the sidebar.
 
 ### Patterns from modules 5-9 to reuse
 

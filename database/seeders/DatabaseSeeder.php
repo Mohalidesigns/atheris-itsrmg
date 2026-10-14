@@ -159,6 +159,9 @@ class DatabaseSeeder extends Seeder
         // assessment service, and a real evidence pack from the approved assessment (ATH-VAL-015)
         $this->call(EaMaturityDemoSeeder::class);
 
+        // Workflow Studio: approval flows per bank and live approvals for the inbox (ATH-VAL-016)
+        $this->call(WorkflowStudioDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);
