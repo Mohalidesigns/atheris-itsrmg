@@ -4,9 +4,10 @@ namespace App\Services\Returns;
 
 use App\Models\Ea\Initiative;
 use App\Models\Ea\MaturityAssessment;
-use App\Models\Ea\MaturityDomain;
-use App\Models\Ea\MaturityResponse;
+use App\Models\Ea\MaturityQuestion;
 use App\Models\LegalEntity;
+use App\Services\Ea\Maturity\DomainEvidence;
+use App\Services\Ea\Maturity\MaturityAssessmentService;
 use App\Services\Ea\ScoreCardService;
 
 /**
@@ -61,14 +62,15 @@ class ItsbMaturityMapper extends ReturnMapper
     }
 
     /**
-     * The four TOGAF ADM domains the ITSB requires, mapped onto the Score Card
-     * aspect areas that evidence them.
+     * The CBN IT blueprint's five EA domains (ATH-VAL-015): the four TOGAF ADM domains the ITSB
+     * requires, plus Security Architecture & Assurance. Keys are the maturity framework's codes.
      */
-    private const ADM_DOMAINS = [
-        'business' => ['label' => 'Business Architecture', 'aspect' => 'business'],
-        'information' => ['label' => 'Information (Data) Architecture', 'aspect' => 'information'],
-        'application' => ['label' => 'Application Architecture', 'aspect' => 'systems'],
-        'technology' => ['label' => 'Technology Architecture', 'aspect' => 'technology'],
+    private const DOMAINS = [
+        'BA' => 'Business Architecture',
+        'AA' => 'Application Architecture',
+        'DA' => 'Information (Data) Architecture',
+        'TA' => 'Technology Architecture',
+        'SA' => 'Security Architecture & Assurance',
     ];
 
     public function compile(?LegalEntity $entity, string $period): array
@@ -76,14 +78,17 @@ class ItsbMaturityMapper extends ReturnMapper
         $sections = [];
         $citations = [];
 
-        $scoreCard = (new ScoreCardService())->compute();
+        $scoreCard = (new ScoreCardService)->compute();
+        $orgId = (int) ($entity?->organization_id ?? auth()->user()?->organization_id);
+        $approved = MaturityAssessment::withoutGlobalScopes()->where('organization_id', $orgId)
+            ->where('framework', MaturityAssessmentService::FRAMEWORK)->where('status', 'approved')->orderByDesc('approved_at')->first();
 
         $target = $entity?->itsbTargetLevel();
         $category = $entity?->itsbCategory();
 
-        $domains = $this->admDomains($scoreCard, $target, $citations);
+        $domains = $this->admDomains($orgId, $approved, $target, $citations);
         $sections[] = $this->domainSection($domains, $target, $category, $entity);
-        $sections[] = $this->questionnaireSection($citations, $period);
+        $sections[] = $this->questionnaireSection($approved, $citations);
         $sections[] = $this->gapSection($domains, $target, $citations);
 
         $overall = (int) round(collect($domains)->avg('level') * 10) / 10;
@@ -110,53 +115,52 @@ class ItsbMaturityMapper extends ReturnMapper
     }
 
     /**
-     * Score each ADM domain 0–5 from documentation completeness.
+     * Score each blueprint domain 0-5.
      *
-     * The mapping is deliberately conservative: COBIT Level 3 "Defined" means
-     * documented, formally trained and integrated via policy. Documentation
-     * completeness evidences the first of those three, so the ceiling here is
-     * Level 4 — reaching 5 requires evidence this repository cannot see, and
-     * claiming it would be exactly the sort of overstatement BOFIA 2020 treats
-     * as a breach.
+     * Where the bank has an approved CBN EA maturity assessment, its CMMI staged rating per domain
+     * is the reported level: it was rated practice by practice, with evidence, and approved by a
+     * second person. Otherwise the level is what the repository's documentation supports, which is
+     * deliberately capped at 4: COBIT/CMMI Level 5 "Optimised" needs evidence a repository cannot
+     * see, and claiming it would be exactly the sort of overstatement BOFIA 2020 treats as a breach.
+     * Both readings are reported so the Council sees the self-rating beside the documentation.
      */
-    private function admDomains(array $scoreCard, ?int $target, array &$citations): array
+    private function admDomains(int $orgId, ?MaturityAssessment $approved, ?int $target, array &$citations): array
     {
+        $evidence = app(DomainEvidence::class);
+        $documentation = $evidence->domains($orgId);
+        $practices = $evidence->practices($orgId);
+        $rated = $approved?->results['domains'] ?? [];
         $domains = [];
 
-        foreach (self::ADM_DOMAINS as $key => $definition) {
-            $score = $scoreCard['overall']['by_aspect'][$definition['aspect']] ?? 0;
+        foreach (self::DOMAINS as $code => $label) {
+            $docLevel = $documentation[$code]['level'] ?? 0;
+            $ratedLevel = $rated[$code]['level'] ?? null;
+            $level = $ratedLevel ?? $docLevel;
+            $domainPractices = collect($practices)->filter(fn ($p, $k) => str_starts_with($k, $code.'-'));
 
-            $level = match (true) {
-                $score >= 88 => 4,
-                $score >= 70 => 3,
-                $score >= 45 => 2,
-                $score >= 20 => 1,
-                default => 0,
-            };
-
-            $cells = collect($scoreCard['cells'])
-                ->filter(fn ($c) => $c['aspect'] === $definition['aspect']);
-
-            foreach ($cells->where('route', '!=', null)->take(6) as $cell) {
+            foreach ($domainPractices->flatMap(fn ($p) => $p['indicators'])->filter(fn ($i) => $i['route'])->take(4) as $indicator) {
                 $citations[] = [
-                    'question_ref' => 'ITSB-'.strtoupper($key),
+                    'question_ref' => 'ITSB-'.$code,
                     'entity_type' => '',
                     'entity_id' => 0,
-                    'label' => $cell['hint'],
-                    'note' => "{$cell['count']} record(s), score {$cell['score']}",
+                    'label' => $indicator['label'],
+                    'note' => $indicator['value'].', score '.$indicator['score'],
                 ];
             }
 
-            $domains[$key] = [
-                'domain' => $key,
-                'label' => $definition['label'],
-                'documentation_score' => $score,
+            $domains[$code] = [
+                'domain' => $code,
+                'label' => $label,
+                'documentation_score' => $documentation[$code]['score'] ?? 0,
+                'documentation_level' => $docLevel,
+                'assessed_level' => $ratedLevel,
                 'level' => $level,
+                'basis' => $ratedLevel !== null ? 'approved assessment' : 'documentation',
                 'level_label' => $this->levelLabel($level),
                 'target' => $target,
                 'meets_target' => $target !== null ? $level >= $target : null,
-                'weakest_cells' => $cells->sortBy('score')->take(3)
-                    ->map(fn ($c) => ['hint' => $c['hint'], 'score' => $c['score'], 'state' => $c['state']])
+                'weakest_cells' => $domainPractices->sortBy('score')->take(3)
+                    ->map(fn ($p, $k) => ['hint' => $k, 'score' => $p['score'], 'state' => $p['score'] >= 65 ? 'ok' : 'weak'])
                     ->values()->all(),
             ];
         }
@@ -184,9 +188,9 @@ class ItsbMaturityMapper extends ReturnMapper
 
         return $this->section(
             'ITSB-ADM',
-            'Architecture maturity by TOGAF ADM domain',
-            'ITSB v2.1 adopts TOGAF 9.2 and requires all four ADM domains — Business, Application, '
-                .'Information and Technology Architecture — assessed on a COBIT-style 0–5 scale.',
+            'Architecture maturity by CBN blueprint domain',
+            'ITSB v2.1 adopts TOGAF 9.2 and requires the ADM domains — Business, Application, Information '
+                .'and Technology Architecture; the CBN blueprint adds Security Architecture & Assurance. Scored 0–5.',
             [
                 'institution' => $entity?->name,
                 'licence_class' => $entity?->licence_class,
@@ -207,61 +211,53 @@ class ItsbMaturityMapper extends ReturnMapper
         );
     }
 
-    /** Responses to the existing CBN maturity questionnaire, where one exists. */
-    private function questionnaireSection(array &$citations, string $period): array
+    /** The approved CBN EA maturity assessment (CMMI, five blueprint domains), where one exists. */
+    private function questionnaireSection(?MaturityAssessment $approved, array &$citations): array
     {
-        $assessment = MaturityAssessment::orderByDesc('year')->first();
-        $domains = MaturityDomain::with('questions')->get();
+        $total = MaturityQuestion::whereHas('domain', fn ($q) => $q->where('framework', MaturityAssessmentService::FRAMEWORK))->count();
 
-        if (! $assessment) {
+        if (! $approved) {
             return $this->section(
                 'ITSB-QUESTIONNAIRE',
-                'ITSB maturity questionnaire responses',
+                'ITSB maturity self-assessment',
                 'Institutions must submit to a formal assessment by the IT Standards Governance Council.',
-                ['assessment' => null, 'answered' => 0, 'total' => $domains->sum(fn ($d) => $d->questions->count())],
+                ['assessment' => null, 'answered' => 0, 'total' => $total],
                 0,
-                'No maturity self-assessment has been completed. The computed domain levels above are '
-                    .'derived from repository completeness alone and are not a substitute for the questionnaire.',
+                'No maturity self-assessment has been approved. The domain levels above are derived from '
+                    .'repository documentation alone and are not a substitute for the assessment.',
             );
         }
 
-        $responses = MaturityResponse::where('assessment_id', $assessment->id)->get()->keyBy('question_id');
-        $total = $domains->sum(fn ($d) => $d->questions->count());
-        $answered = $responses->count();
-
+        $results = $approved->results ?? [];
         $citations[] = [
             'question_ref' => 'ITSB-QUESTIONNAIRE',
             'entity_type' => MaturityAssessment::class,
-            'entity_id' => $assessment->id,
-            'label' => "Maturity assessment {$assessment->year}",
+            'entity_id' => $approved->id,
+            'label' => "Approved maturity assessment {$approved->year}",
         ];
 
         return $this->section(
             'ITSB-QUESTIONNAIRE',
-            'ITSB maturity questionnaire responses',
+            'ITSB maturity self-assessment',
             'Institutions must submit to a formal assessment by the IT Standards Governance Council.',
             [
-                'assessment_year' => $assessment->year,
-                'framework' => $assessment->framework,
-                'overall_score' => $assessment->overall_score,
-                'answered' => $answered,
+                'assessment_year' => $approved->year,
+                'framework' => $approved->framework,
+                'overall_score' => $approved->overall_score,
+                'approved_at' => optional($approved->approved_at)->toDateString(),
+                'answered' => $results['answered'] ?? 0,
                 'total' => $total,
-                'by_domain' => $domains->map(function ($domain) use ($responses) {
-                    $answers = $domain->questions->map(fn ($q) => $responses->get($q->id))->filter();
-
-                    return [
-                        'domain' => $domain->name ?? $domain->code,
-                        'answered' => $answers->count(),
-                        'total' => $domain->questions->count(),
-                        'average_level' => $answers->count()
-                            ? round($answers->avg('selected_level'), 2)
-                            : null,
-                    ];
-                })->values(),
+                'by_domain' => collect($results['domains'] ?? [])->map(fn ($d) => [
+                    'domain' => $d['name'],
+                    'level' => $d['level'],
+                    'average_level' => $d['average'],
+                    'documentation_supports' => $d['indicative'],
+                    'overstated' => $d['overstated'],
+                ])->values(),
             ],
-            $total ? (int) round($answered / $total * 100) : 0,
-            $answered < $total
-                ? ($total - $answered).' question(s) remain unanswered.'
+            $total ? (int) round(($results['answered'] ?? 0) / $total * 100) : 0,
+            collect($results['domains'] ?? [])->contains('overstated', true)
+                ? 'Some domains are rated two or more levels above what the repository documents; the approval note records why.'
                 : null,
         );
     }

@@ -47,7 +47,7 @@ class AnomalyEngine
         foreach ($rules as $code => $fn) {
             $rows = $fn();
             foreach ($rows as $row) {
-                $existing = AnomalyFinding::where('rule_code', $code)
+                $existing = AnomalyFinding::withoutGlobalScopes()->where('rule_code', $code)
                     ->where('entity_type', $row['entity_type'])
                     ->where('entity_id', $row['entity_id'])
                     ->first();
@@ -55,6 +55,9 @@ class AnomalyEngine
                     $existing->update(['last_seen_at' => now(), 'detail' => $row['detail']]);
                 } else {
                     $newFindings[] = AnomalyFinding::create([
+                        // The finding belongs to the bank of the record it is about (ATH-VAL-015);
+                        // the scheduled run has no signed-in user to take it from.
+                        'organization_id' => $this->organizationOf($row['entity_type'], $row['entity_id']),
                         'rule_code' => $code,
                         'severity' => $row['severity'],
                         'entity_type' => $row['entity_type'],
@@ -76,7 +79,9 @@ class AnomalyEngine
     public function ownerlessApps(): array
     {
         return EaApplication::query()
-            ->where(function ($q) { $q->whereNull('owner_role')->orWhere('owner_role', ''); })
+            ->where(function ($q) {
+                $q->whereNull('owner_role')->orWhere('owner_role', '');
+            })
             ->get()
             ->map(fn ($a) => [
                 'entity_type' => EaApplication::class,
@@ -103,6 +108,7 @@ class AnomalyEngine
                 ];
             }
         }
+
         return $missing;
     }
 
@@ -112,7 +118,7 @@ class AnomalyEngine
             ->where('status', 'active')
             ->where(function ($q) {
                 $q->whereIn('source_app_id', EaApplication::where('lifecycle', 'retired')->pluck('id'))
-                  ->orWhereIn('target_app_id', EaApplication::where('lifecycle', 'retired')->pluck('id'));
+                    ->orWhereIn('target_app_id', EaApplication::where('lifecycle', 'retired')->pluck('id'));
             })
             ->get()
             ->map(fn ($i) => [
@@ -135,11 +141,11 @@ class AnomalyEngine
             $replacement = Initiative::query()
                 ->where(function ($q) use ($t) {
                     $q->whereLike('description', "%{$t->name}%")
-                      ->orWhereLike('name', "%{$t->name}%");
+                        ->orWhereLike('name', "%{$t->name}%");
                 })
                 ->whereIn('status', ['proposed', 'approved', 'in_flight'])
                 ->exists();
-            if (!$replacement) {
+            if (! $replacement) {
                 $missing[] = [
                     'entity_type' => TechComponent::class,
                     'entity_id' => $t->id,
@@ -149,6 +155,7 @@ class AnomalyEngine
                 ];
             }
         }
+
         return $missing;
     }
 
@@ -163,10 +170,11 @@ class AnomalyEngine
                     'entity_id' => $d->id,
                     'severity' => 'critical',
                     'title' => "Info domain '{$d->name}' carries PII but has no DPO assignment",
-                    'detail' => "NDPA Article 32 requires a named data-protection officer for processing personal data.",
+                    'detail' => 'NDPA Article 32 requires a named data-protection officer for processing personal data.',
                 ];
             }
         }
+
         return $rows;
     }
 
@@ -178,7 +186,7 @@ class AnomalyEngine
             $hasDpia = DpiaAssessment::where('data_flow_id', $f->id)
                 ->whereIn('status', ['in_review', 'approved'])
                 ->exists();
-            if (!$hasDpia) {
+            if (! $hasDpia) {
                 $rows[] = [
                     'entity_type' => DataFlow::class,
                     'entity_id' => $f->id,
@@ -188,13 +196,16 @@ class AnomalyEngine
                 ];
             }
         }
+
         return $rows;
     }
 
     public function apisMissingContract(): array
     {
         return EaApi::query()
-            ->where(function ($q) { $q->whereNull('contract_text')->orWhere('contract_text', ''); })
+            ->where(function ($q) {
+                $q->whereNull('contract_text')->orWhere('contract_text', '');
+            })
             ->get()
             ->map(fn ($api) => [
                 'entity_type' => EaApi::class,
@@ -203,5 +214,15 @@ class AnomalyEngine
                 'title' => "API '{$api->name}' missing contract definition",
                 'detail' => "Auth: {$api->auth_method}. Version: {$api->version}. Add an OpenAPI / AsyncAPI / WSDL document so consumers can be onboarded.",
             ])->all();
+    }
+
+    private function organizationOf(?string $type, $id): ?int
+    {
+        if (! $type || ! class_exists($type) || ! $id) {
+            return null;
+        }
+        $org = $type::withoutGlobalScopes()->whereKey($id)->value('organization_id');
+
+        return $org !== null ? (int) $org : null;
     }
 }

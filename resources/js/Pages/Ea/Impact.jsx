@@ -81,7 +81,7 @@ export default function Impact({
         <AuthenticatedLayout header="Change Impact">
             <Head title="Change Impact" />
             <PageHeader
-                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Integration Architecture' }, { label: 'Change Impact' }]}
+                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Application Integration' }, { label: 'Change Impact' }]}
                 title="n-hop Change Impact"
                 subtitle="Pick any entity and a depth. The traversal crosses every edge the repository holds — the generic ArchiMate graph, interfaces, the capability pivot, process links, technology assignments, hosting sites, vendors and data flows."
             />

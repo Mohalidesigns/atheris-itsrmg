@@ -59,7 +59,7 @@ export default function CostModel({ view, portfolio, perCapability, perProcess, 
         <AuthenticatedLayout header="Cost & TCO">
             <Head title="Cost & TCO" />
             <PageHeader
-                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Portfolio' }, { label: 'Cost & TCO' }]}
+                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Application Architecture' }, { label: 'Cost & TCO' }]}
                 title="Cost, TCO and technical debt"
                 subtitle="Licence cost is the number a bank has; total cost of ownership is the number it needs. Uplift factors are explicit and configurable rather than a single magic multiplier, so each one can be argued with."
             />

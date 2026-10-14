@@ -35,7 +35,7 @@ export default function FxExposure({ dashboard = {}, stressTest = {}, renewals =
         <AuthenticatedLayout header="FX Exposure">
             <Head title="FX Exposure" />
             <PageHeader
-                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Portfolio' }, { label: 'FX Exposure' }]}
+                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Application Architecture' }, { label: 'FX Exposure' }]}
                 title="FX Exposure on the Application Portfolio"
                 subtitle="What the estate costs, in which currency, and what happens to that when the naira moves."
             />

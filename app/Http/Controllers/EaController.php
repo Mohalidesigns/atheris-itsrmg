@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\Ea\ArbDecisionRecorded;
+use App\Events\Ea\EvidencePackGenerated;
 use App\Http\Requests\Ea\ApplicationRequest;
 use App\Http\Requests\Ea\ArbRequest;
 use App\Http\Requests\Ea\CapabilityRequest;
@@ -9,6 +11,7 @@ use App\Http\Requests\Ea\DpiaRequest;
 use App\Http\Requests\Ea\InterfaceRequest;
 use App\Http\Requests\Ea\PrincipleRequest;
 use App\Http\Requests\Ea\StandardRequest;
+use App\Http\Requests\Ea\TechComponentRequest;
 use App\Models\Ea\AdmDeliverable;
 use App\Models\Ea\AnomalyFinding;
 use App\Models\Ea\ArbSubmission;
@@ -24,8 +27,8 @@ use App\Models\Ea\EaApi;
 use App\Models\Ea\EaApplication;
 use App\Models\Ea\EaInterface;
 use App\Models\Ea\EvidencePack;
-use App\Models\Ea\ExchangeJob;
 use App\Models\Ea\Exception as EaException;
+use App\Models\Ea\ExchangeJob;
 use App\Models\Ea\FeedRun;
 use App\Models\Ea\GlossaryTerm;
 use App\Models\Ea\Goal;
@@ -35,8 +38,6 @@ use App\Models\Ea\InitiativeDependency;
 use App\Models\Ea\KriDefinition;
 use App\Models\Ea\LogicalEntity;
 use App\Models\Ea\MaturityAssessment;
-use App\Models\Ea\MaturityDomain;
-use App\Models\Ea\MaturityResponse;
 use App\Models\Ea\Outcome;
 use App\Models\Ea\Pattern;
 use App\Models\Ea\Plateau;
@@ -46,12 +47,14 @@ use App\Models\Ea\Relationship;
 use App\Models\Ea\Solution;
 use App\Models\Ea\Stakeholder;
 use App\Models\Ea\Standard;
+use App\Models\Ea\Subscription;
 use App\Models\Ea\TechComponent;
 use App\Models\Ea\ThreatModel;
 use App\Models\Ea\ThreatTechnique;
 use App\Models\Ea\ValueStream;
 use App\Models\Ea\Zone;
 use App\Models\Ea\ZoneAssignment;
+use App\Models\User;
 use App\Repositories\Ea\EaRepository;
 use App\Services\Ea\AnomalyEngine;
 use App\Services\Ea\ArchiMateExchange;
@@ -72,7 +75,9 @@ use App\Services\Ea\ScoreCardService;
 use App\Services\Ea\TechObsolescenceService;
 use App\Services\Ea\VendorConcentrationService;
 use App\Services\Ea\ViewpointGenerator;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
@@ -85,9 +90,7 @@ use Inertia\Inertia;
  */
 class EaController extends Controller
 {
-    public function __construct(protected EaRepository $repo)
-    {
-    }
+    public function __construct(protected EaRepository $repo) {}
 
     /* =========================== Phase 1 — Reads =========================== */
 
@@ -113,9 +116,10 @@ class EaController extends Controller
         $eolNext12 = TechComponent::whereNotNull('eol_date')
             ->whereBetween('eol_date', [now(), now()->addYear()])
             ->orderBy('eol_date')->take(10)->get();
-        $assessment = MaturityAssessment::orderByDesc('year')->first();
+        $assessment = MaturityAssessment::where('status', 'approved')->orderByDesc('approved_at')->first(['id', 'title', 'year', 'results']);
         $kris = KriDefinition::with(['values' => fn ($q) => $q->orderByDesc('recorded_at')->limit(1)])
             ->limit(10)->get();
+
         return Inertia::render('Ea/CommandCentre', compact('kpis', 'lifecycle', 'time', 'radar', 'eolNext12', 'assessment', 'kris'));
     }
 
@@ -130,7 +134,7 @@ class EaController extends Controller
     {
         Gate::authorize('viewAny', Capability::class);
 
-        $service = new ScoreCardService();
+        $service = new ScoreCardService;
         $grid = $service->compute();
 
         return Inertia::render('Ea/ScoreCard', $grid + [
@@ -138,7 +142,7 @@ class EaController extends Controller
             // §7.1's single-graph precondition: a return that cites an entity
             // must be able to resolve it, so the health of cross-module
             // references belongs next to the completeness reading.
-            'graphHealth' => (new GraphResolver())->audit(),
+            'graphHealth' => (new GraphResolver)->audit(),
         ]);
     }
 
@@ -149,12 +153,13 @@ class EaController extends Controller
         $counts = ['bian' => $tree->where('source', 'bian')->count(), 'custom' => $tree->where('source', 'custom')->count()];
         $overlay = $r->query('overlay', 'criticality'); // criticality | app_count | maturity | cost | risk
         $overlayMap = $this->capabilityOverlay($tree, $overlay);
+
         return Inertia::render('Ea/CapabilityMap', compact('tree', 'byParent', 'counts', 'overlay', 'overlayMap') + [
             'options' => [
                 'parents' => $tree->map(fn ($c) => ['value' => $c->id, 'label' => "{$c->code} — {$c->name}"])->values(),
                 'plateaux' => $this->plateauOptions(),
             ],
-            'seals' => (new QualitySealService())->mapFor(Capability::class, $tree->pluck('id')),
+            'seals' => (new QualitySealService)->mapFor(Capability::class, $tree->pluck('id')),
             'stewardship' => $this->stewardshipOptions(Capability::class),
         ]);
     }
@@ -171,12 +176,14 @@ class EaController extends Controller
                     $r->where('target_type', Capability::class)->where('target_id', $capability->id);
                 });
             })->get();
+
         return Inertia::render('Ea/CapabilityShow', compact('capability', 'linkedApps', 'relationships'));
     }
 
     public function valueStreams()
     {
         $streams = ValueStream::orderBy('code')->get();
+
         return Inertia::render('Ea/ValueStreams', compact('streams'));
     }
 
@@ -185,8 +192,12 @@ class EaController extends Controller
         $filter = $request->query('filter');
         $overlay = $request->query('overlay', 'quadrant');
         $query = EaApplication::query();
-        if ($filter === 'critical') $query->where('criticality', 'critical');
-        if ($filter === 'eliminate') $query->where('time_score', 'Eliminate');
+        if ($filter === 'critical') {
+            $query->where('criticality', 'critical');
+        }
+        if ($filter === 'eliminate') {
+            $query->where('time_score', 'Eliminate');
+        }
         $apps = $query->orderByDesc('criticality')->orderBy('name')->get();
 
         $timeCounts = EaApplication::select('time_score', DB::raw('count(*) as c'))
@@ -202,10 +213,11 @@ class EaController extends Controller
                 $grid[] = ['bf' => $b, 'tf' => $t, 'apps' => $cell, 'count' => $cell->count(), 'cost' => $cost, 'users' => $users];
             }
         }
+
         return Inertia::render('Ea/ApplicationPortfolio', compact('apps', 'timeCounts', 'sixRCounts', 'grid', 'filter', 'overlay') + [
             'options' => $this->applicationFormOptions(),
             // Phase 1 (WS 1.3): "seal indicator on every entity".
-            'seals' => (new QualitySealService())->mapFor(EaApplication::class, $apps->pluck('id')),
+            'seals' => (new QualitySealService)->mapFor(EaApplication::class, $apps->pluck('id')),
             'stewardship' => $this->stewardshipOptions(EaApplication::class),
         ]);
     }
@@ -217,12 +229,13 @@ class EaController extends Controller
         $interfaces = EaInterface::where('source_app_id', $application->id)
             ->orWhere('target_app_id', $application->id)->get();
         $zone = ZoneAssignment::where('application_id', $application->id)->with('zone')->first();
-        $controls = (new ControlInheritanceService())->resolveForApplication($application->id);
+        $controls = (new ControlInheritanceService)->resolveForApplication($application->id);
         $threats = ThreatModel::with('techniques')
             ->where('subject_type', EaApplication::class)
             ->where('subject_id', $application->id)
             ->get();
-        $impact = (new BlastRadiusService())->changeImpact($application->id, 2);
+        $impact = (new BlastRadiusService)->changeImpact($application->id, 2);
+
         return Inertia::render('Ea/ApplicationShow', compact('application', 'capabilities', 'tech', 'interfaces', 'zone', 'controls', 'threats', 'impact'));
     }
 
@@ -232,9 +245,10 @@ class EaController extends Controller
         $byStatus = $components->groupBy('radar_status');
         $eolWindow = $components->filter(fn ($t) => $t->eol_date && $t->eol_date->between(now(), now()->addYear()))->values();
         $debtTop = $components->sortByDesc('tech_debt_score')->take(15)->values();
+
         return Inertia::render('Ea/TechnologyRadar', compact('components', 'byStatus', 'eolWindow', 'debtTop') + [
             'options' => ['plateaux' => $this->plateauOptions()],
-            'seals' => (new QualitySealService())->mapFor(TechComponent::class, $components->pluck('id')),
+            'seals' => (new QualitySealService)->mapFor(TechComponent::class, $components->pluck('id')),
             'stewardship' => $this->stewardshipOptions(TechComponent::class),
         ]);
     }
@@ -242,6 +256,7 @@ class EaController extends Controller
     public function infoDomains()
     {
         $domains = InfoDomain::withCount('entities')->orderBy('name')->get();
+
         return Inertia::render('Ea/InfoDomains', compact('domains'));
     }
 
@@ -249,6 +264,7 @@ class EaController extends Controller
     {
         $entities = LogicalEntity::with('domain')->orderBy('name')->get();
         $byClassification = $entities->groupBy('classification');
+
         return Inertia::render('Ea/LogicalEntities', compact('entities', 'byClassification'));
     }
 
@@ -256,32 +272,8 @@ class EaController extends Controller
     {
         $flows = DataFlow::with('source', 'target')->orderBy('name')->get();
         $crossBorder = $flows->where('cross_border', true)->count();
-        return Inertia::render('Ea/DataFlows', compact('flows', 'crossBorder'));
-    }
 
-    public function cbnMaturity()
-    {
-        $assessment = MaturityAssessment::orderByDesc('year')->first();
-        $domains = MaturityDomain::with('questions')->orderBy('code')->get();
-        $responses = $assessment
-            ? MaturityResponse::where('assessment_id', $assessment->id)->get()->keyBy('question_id')
-            : collect();
-        $byDomain = [];
-        foreach ($domains as $d) {
-            $answered = 0; $sum = 0;
-            foreach ($d->questions as $q) {
-                $r = $responses->get($q->id);
-                if ($r) { $answered++; $sum += $r->selected_level; }
-            }
-            $byDomain[] = [
-                'domain' => $d,
-                'answered' => $answered,
-                'total' => $d->questions->count(),
-                'avg' => $answered ? round($sum / $answered, 2) : 0,
-            ];
-        }
-        $history = MaturityAssessment::orderBy('year')->get(['year', 'framework', 'overall_score']);
-        return Inertia::render('Ea/CbnMaturity', compact('assessment', 'domains', 'responses', 'byDomain', 'history'));
+        return Inertia::render('Ea/DataFlows', compact('flows', 'crossBorder'));
     }
 
     /* =========================== Phase 2 — Reads =========================== */
@@ -299,11 +291,12 @@ class EaController extends Controller
             'external' => $items->whereIn('counterparty_type', ['regulator', 'switch', 'third_party'])->count(),
             'review_overdue' => $items->filter(fn ($i) => $this->reviewOverdue($i))->count(),
         ];
+
         return Inertia::render('Ea/Interfaces', [
             'interfaces' => $items,
             'cbn' => $cbn,
             'options' => ['applications' => $this->applicationOptions()],
-            'seals' => (new QualitySealService())->mapFor(EaInterface::class, $items->pluck('id')),
+            'seals' => (new QualitySealService)->mapFor(EaInterface::class, $items->pluck('id')),
             'stewardship' => $this->stewardshipOptions(EaInterface::class),
         ]);
     }
@@ -311,6 +304,7 @@ class EaController extends Controller
     public function apis()
     {
         $apis = EaApi::with('interface')->orderBy('name')->get();
+
         return Inertia::render('Ea/Apis', compact('apis'));
     }
 
@@ -320,9 +314,10 @@ class EaController extends Controller
         $depth = (int) min(4, max(1, $r->query('depth', 3)));
         $app = EaApplication::find($appId);
         $impact = $app
-            ? (new BlastRadiusService())->changeImpact($appId, $depth)
+            ? (new BlastRadiusService)->changeImpact($appId, $depth)
             : ['radius' => ['nodes' => [], 'edges' => [], 'by_type' => [], 'levels' => []], 'summary' => []];
         $applications = EaApplication::orderBy('name')->get(['id', 'name', 'criticality']);
+
         return Inertia::render('Ea/BlastRadius', compact('app', 'impact', 'applications', 'depth'));
     }
 
@@ -330,6 +325,7 @@ class EaController extends Controller
     {
         $zones = Zone::with('assignments.application')->orderBy('trust_level')->orderBy('code')->get();
         $assignments = ZoneAssignment::with('zone', 'application')->get();
+
         return Inertia::render('Ea/SecurityZones', compact('zones', 'assignments'));
     }
 
@@ -338,7 +334,8 @@ class EaController extends Controller
         $framework = $r->query('framework', 'CBN');
         $mappings = ControlMapping::query()->when($framework !== '*', fn ($q) => $q->where('framework', $framework))->get();
         $coverage = $mappings->groupBy('coverage')->map->count();
-        $portfolioCoverage = (new ControlInheritanceService())->portfolioCoverageReport($framework);
+        $portfolioCoverage = (new ControlInheritanceService)->portfolioCoverageReport($framework);
+
         return Inertia::render('Ea/ControlMappings', compact('mappings', 'coverage', 'portfolioCoverage', 'framework'));
     }
 
@@ -346,18 +343,21 @@ class EaController extends Controller
     {
         $procs = Process::orderBy('level')->orderBy('code')->get();
         $byLevel = $procs->groupBy('level');
+
         return Inertia::render('Ea/Processes', compact('procs', 'byLevel'));
     }
 
     public function principles()
     {
         $principles = Principle::orderBy('code')->get();
+
         return Inertia::render('Ea/Principles', compact('principles'));
     }
 
     public function standards()
     {
         $standards = Standard::orderBy('category')->orderBy('code')->get();
+
         return Inertia::render('Ea/Standards', compact('standards'));
     }
 
@@ -365,12 +365,14 @@ class EaController extends Controller
     {
         $submissions = ArbSubmission::orderByDesc('created_at')->get();
         $buckets = $submissions->groupBy('status')->map->count();
+
         return Inertia::render('Ea/Arb', compact('submissions', 'buckets'));
     }
 
     public function arbShow(ArbSubmission $submission)
     {
-        $principleImpact = (new PrincipleImpactEngine())->analyse($submission->title, $submission->summary ?? '', $submission->impact_blast_radius ?? []);
+        $principleImpact = (new PrincipleImpactEngine)->analyse($submission->title, $submission->summary ?? '', $submission->impact_blast_radius ?? []);
+
         return Inertia::render('Ea/ArbShow', compact('submission', 'principleImpact'));
     }
 
@@ -380,6 +382,7 @@ class EaController extends Controller
         $standards = Standard::get(['id', 'code', 'name']);
         $principles = Principle::get(['id', 'code', 'name']);
         $plateaux = Plateau::orderBy('plateau_type')->get();
+
         return Inertia::render('Ea/ArbWizard', compact('apps', 'standards', 'principles', 'plateaux'));
     }
 
@@ -388,6 +391,7 @@ class EaController extends Controller
         $exceptions = EaException::with('standard', 'principle')->orderByDesc('expires_at')->get();
         $expiringSoon = $exceptions->filter(fn ($e) => $e->expires_at && $e->expires_at->between(now(), now()->addDays(90)))->count();
         $expired = $exceptions->filter(fn ($e) => $e->expires_at && $e->expires_at->isPast() && $e->status === 'active')->count();
+
         return Inertia::render('Ea/Exceptions', compact('exceptions', 'expiringSoon', 'expired') + [
             'options' => [
                 'standards' => Standard::orderBy('code')->get()->map(fn ($x) => ['value' => $x->id, 'label' => "{$x->code} — {$x->name}"])->values(),
@@ -398,12 +402,13 @@ class EaController extends Controller
 
     public function vendorConcentration()
     {
-        $rows = (new VendorConcentrationService())->compute(20);
+        $rows = (new VendorConcentrationService)->compute(20);
         $totals = [
             'total_apps' => array_sum(array_column($rows, 'apps')),
             'total_spend' => array_sum(array_column($rows, 'annual_spend_ngn')),
-            'top_share' => !empty($rows) ? round(($rows[0]['apps'] ?? 0) / max(EaApplication::count(), 1) * 100, 1) : 0,
+            'top_share' => ! empty($rows) ? round(($rows[0]['apps'] ?? 0) / max(EaApplication::count(), 1) * 100, 1) : 0,
         ];
+
         return Inertia::render('Ea/VendorConcentration', ['rows' => $rows, 'totals' => $totals]);
     }
 
@@ -413,6 +418,7 @@ class EaController extends Controller
     {
         $plateaux = Plateau::orderBy('effective_from')->get();
         $initiatives = Initiative::with('plateau')->orderBy('start_date')->get();
+
         return Inertia::render('Ea/Plateaux', compact('plateaux', 'initiatives'));
     }
 
@@ -422,6 +428,7 @@ class EaController extends Controller
         $byStatus = $initiatives->groupBy('status')->map->count();
         $byPhase = $initiatives->groupBy('adm_phase')->map->count();
         $dependencies = InitiativeDependency::with('predecessor', 'successor')->get();
+
         return Inertia::render('Ea/Initiatives', compact('initiatives', 'byStatus', 'byPhase', 'dependencies') + [
             'options' => [
                 'initiatives' => $initiatives->map(fn ($i) => ['value' => $i->id, 'label' => "{$i->code} — {$i->name}"])->values(),
@@ -435,6 +442,7 @@ class EaController extends Controller
         $initiatives = Initiative::with('plateau')->orderBy('start_date')->get();
         $plateaux = Plateau::orderBy('effective_from')->get();
         $dependencies = InitiativeDependency::with('predecessor', 'successor')->get();
+
         return Inertia::render('Ea/Roadmap', compact('initiatives', 'plateaux', 'dependencies'));
     }
 
@@ -443,37 +451,43 @@ class EaController extends Controller
         $initiatives = Initiative::with('deliverables')->orderBy('adm_phase')->orderBy('name')->get();
         $byPhase = $initiatives->groupBy('adm_phase')->map->count();
         $phases = ['Pre', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'Req'];
+
         return Inertia::render('Ea/AdmTracker', compact('initiatives', 'byPhase', 'phases'));
     }
 
     public function patterns()
     {
         $patterns = Pattern::orderBy('category')->orderBy('name')->get();
+
         return Inertia::render('Ea/Patterns', compact('patterns'));
     }
 
     public function solutions()
     {
         $solutions = Solution::with('pattern', 'initiative')->orderBy('name')->get();
+
         return Inertia::render('Ea/Solutions', compact('solutions'));
     }
 
     public function kri()
     {
         $definitions = KriDefinition::with(['values' => fn ($q) => $q->orderByDesc('recorded_at')->limit(12)])->get();
+
         return Inertia::render('Ea/Kri', compact('definitions'));
     }
 
     public function kriRecompute()
     {
         Gate::authorize('update', KriDefinition::class);
-        $results = (new KriCalculator())->compute();
+        $results = (new KriCalculator)->compute();
+
         return back()->with('success', count($results).' KRIs recomputed.');
     }
 
     public function exchange()
     {
         $jobs = ExchangeJob::orderByDesc('created_at')->take(50)->get();
+
         return Inertia::render('Ea/Exchange', compact('jobs'));
     }
 
@@ -481,7 +495,7 @@ class EaController extends Controller
     {
         Gate::authorize('create', ExchangeJob::class);
         $type = $r->input('type', 'export');
-        $exchange = new ArchiMateExchange();
+        $exchange = new ArchiMateExchange;
         if ($type === 'export') {
             $rel = 'exchange/ea-export-'.now()->format('YmdHis').'.xml';
             $result = $exchange->exportToDisk($rel);
@@ -494,6 +508,7 @@ class EaController extends Controller
                 'file_path' => $result['file_path'],
                 'message' => "Exported {$result['element_count']} elements and {$result['relationship_count']} relationships. SHA-256: ".substr($result['sha256'], 0, 12).'…',
             ]);
+
             return redirect()->route('ea.exchange')->with('success', 'ArchiMate export job completed.');
         }
         if ($type === 'import' && $r->hasFile('file')) {
@@ -508,8 +523,10 @@ class EaController extends Controller
                 'file_path' => null,
                 'message' => 'Parsed '.count($parsed['elements']).' elements + '.count($parsed['relationships']).' relationships from upload.',
             ]);
+
             return redirect()->route('ea.exchange')->with('success', 'ArchiMate XML parsed successfully.');
         }
+
         return back()->withErrors(['file' => 'Provide an XML file to import or use type=export.']);
     }
 
@@ -518,25 +535,27 @@ class EaController extends Controller
         if (! $job->file_path || ! Storage::exists($job->file_path)) {
             return back()->withErrors(['file' => 'Export artefact no longer available.']);
         }
+
         return Storage::download($job->file_path);
     }
 
     public function evidencePacks()
     {
         $packs = EvidencePack::with('assessment')->orderByDesc('generated_at')->get();
+
         return Inertia::render('Ea/EvidencePacks', compact('packs'));
     }
 
     public function evidencePackGenerate(Request $r)
     {
         Gate::authorize('export', EvidencePack::class);
-        $pack = (new EvidencePackGenerator())->generate(
+        $pack = (new EvidencePackGenerator)->generate(
             $r->input('assessment_id') ? (int) $r->input('assessment_id') : null,
             $r->input('signed_by') ?: optional($r->user())->email
         );
         // Contract I-10 (§7.3) — register in the Evidence Vault so an auditor
         // finds the pack where they look, rather than on local disk.
-        \App\Events\Ea\EvidencePackGenerated::dispatch($pack);
+        EvidencePackGenerated::dispatch($pack);
 
         return redirect()->route('ea.evidence-packs')->with('success', "Evidence pack {$pack->code} generated. SHA-256: ".substr($pack->pdf_hash ?? '', 0, 12).'…');
     }
@@ -547,6 +566,7 @@ class EaController extends Controller
         if (! $path || ! Storage::exists($path)) {
             return back()->withErrors(['file' => 'Artefact not yet generated.']);
         }
+
         return Storage::download($path);
     }
 
@@ -561,13 +581,14 @@ class EaController extends Controller
 
     public function viewpoint(string $viewpoint)
     {
-        $payload = (new ViewpointGenerator())->generate($viewpoint);
+        $payload = (new ViewpointGenerator)->generate($viewpoint);
+
         return Inertia::render('Ea/Viewpoint', compact('viewpoint', 'payload'));
     }
 
     public function viewpointJson(string $viewpoint)
     {
-        return response()->json((new ViewpointGenerator())->generate($viewpoint));
+        return response()->json((new ViewpointGenerator)->generate($viewpoint));
     }
 
     /* =========================== Phase 4 — DPIA / Glossary / Motivation =========================== */
@@ -580,6 +601,7 @@ class EaController extends Controller
         $approved = $assessments->where('status', 'approved')->count();
         $flows = DataFlow::orderBy('name')->get(['id', 'name', 'cross_border']);
         $entities = LogicalEntity::orderBy('name')->get(['id', 'name', 'pii_flag']);
+
         return Inertia::render('Ea/Dpia', compact('assessments', 'consent', 'crossBorder', 'approved', 'flows', 'entities'));
     }
 
@@ -591,6 +613,7 @@ class EaController extends Controller
         $attrs['risk_band'] = $attrs['risk_band'] ?? $this->dpiaBand($attrs['answers'] ?? []);
         $attrs['risk_score'] = $attrs['risk_score'] ?? $this->dpiaScore($attrs['answers'] ?? []);
         $assessment = $this->repo->create(DpiaAssessment::class, $attrs);
+
         return redirect()->route('ea.dpia')->with('success', "DPIA {$assessment->code} created.");
     }
 
@@ -598,6 +621,7 @@ class EaController extends Controller
     {
         $terms = GlossaryTerm::orderBy('term')->get();
         $byCategory = $terms->groupBy('category')->map->count();
+
         return Inertia::render('Ea/Glossary', compact('terms', 'byCategory'));
     }
 
@@ -612,6 +636,7 @@ class EaController extends Controller
             'owner_role' => 'nullable|string|max:64',
         ]);
         $term = $this->repo->create(GlossaryTerm::class, $data);
+
         return back()->with('success', "Glossary term '{$term->term}' added.");
     }
 
@@ -621,6 +646,7 @@ class EaController extends Controller
         $drivers = Driver::orderBy('code')->get();
         $stakeholders = Stakeholder::orderBy('code')->get();
         $coa = CourseOfAction::with('initiative')->orderBy('code')->get();
+
         return Inertia::render('Ea/Motivation', compact('goals', 'drivers', 'stakeholders', 'coa'));
     }
 
@@ -636,7 +662,9 @@ class EaController extends Controller
             'course-of-action' => CourseOfAction::class,
             default => null,
         };
-        if (! $modelClass) return back()->withErrors(['kind' => 'Unknown motivation element kind.']);
+        if (! $modelClass) {
+            return back()->withErrors(['kind' => 'Unknown motivation element kind.']);
+        }
         $data = $r->validate([
             'code' => 'required|string|max:32',
             'name' => 'required|string|max:255',
@@ -647,6 +675,7 @@ class EaController extends Controller
             'initiative_id' => 'nullable|integer|exists:ea_initiatives,id',
         ]);
         $this->repo->create($modelClass, $data);
+
         return back()->with('success', ucfirst($kind).' created.');
     }
 
@@ -656,6 +685,7 @@ class EaController extends Controller
     {
         $models = ThreatModel::with('techniques')->orderByDesc('updated_at')->get();
         $byMethodology = $models->groupBy('methodology')->map->count();
+
         return Inertia::render('Ea/Threats', compact('models', 'byMethodology') + [
             'options' => ['applications' => $this->applicationOptions()],
         ]);
@@ -673,6 +703,7 @@ class EaController extends Controller
             'summary' => 'nullable',
         ]);
         $model = $this->repo->create(ThreatModel::class, $data);
+
         return back()->with('success', "Threat model {$model->code} created.");
     }
 
@@ -691,6 +722,7 @@ class EaController extends Controller
         ]);
         $data['model_id'] = $model->id;
         $this->repo->create(ThreatTechnique::class, $data);
+
         return back()->with('success', 'Threat technique added.');
     }
 
@@ -700,13 +732,15 @@ class EaController extends Controller
         $byStatus = $findings->groupBy('status')->map->count();
         $bySeverity = $findings->groupBy('severity')->map->count();
         $byRule = $findings->groupBy('rule_code')->map->count();
+
         return Inertia::render('Ea/Anomalies', compact('findings', 'byStatus', 'bySeverity', 'byRule'));
     }
 
     public function anomaliesRun()
     {
         Gate::authorize('update', AnomalyFinding::class);
-        $r = (new AnomalyEngine())->run();
+        $r = (new AnomalyEngine)->run();
+
         return back()->with('success', $r['created'].' new anomaly findings recorded.');
     }
 
@@ -714,6 +748,7 @@ class EaController extends Controller
     {
         Gate::authorize('update', $finding);
         $finding->update(['status' => 'acknowledged', 'acknowledged_by' => optional(request()->user())->id]);
+
         return back()->with('success', 'Finding acknowledged.');
     }
 
@@ -721,6 +756,7 @@ class EaController extends Controller
     {
         Gate::authorize('update', $finding);
         $finding->update(['status' => 'resolved']);
+
         return back()->with('success', 'Finding resolved.');
     }
 
@@ -729,25 +765,28 @@ class EaController extends Controller
     public function search(Request $r)
     {
         $query = (string) $r->query('q', '');
-        $result = $query ? (new NlSearchService())->search($query, 50) : ['hits' => [], 'intents' => [], 'count' => 0, 'query' => ''];
+        $result = $query ? (new NlSearchService)->search($query, 50) : ['hits' => [], 'intents' => [], 'count' => 0, 'query' => ''];
+
         return Inertia::render('Ea/NlSearch', compact('result', 'query'));
     }
 
     public function searchJson(Request $r)
     {
-        return response()->json((new NlSearchService())->search((string) $r->query('q', ''), 25));
+        return response()->json((new NlSearchService)->search((string) $r->query('q', ''), 25));
     }
 
     public function mcpInfo()
     {
-        $tools = (new McpServer())->tools();
+        $tools = (new McpServer)->tools();
+
         return Inertia::render('Ea/Mcp', ['tools' => $tools, 'endpoint' => route('ea.mcp.rpc')]);
     }
 
     public function mcpRpc(Request $r)
     {
         Gate::authorize('create', EaApplication::class);
-        return response()->json((new McpServer())->handle($r->all()));
+
+        return response()->json((new McpServer)->handle($r->all()));
     }
 
     /* =========================== Phase 4 — Dependencies / ADM =========================== */
@@ -778,6 +817,7 @@ class EaController extends Controller
             'notes' => 'nullable|string',
         ]);
         $this->repo->create(InitiativeDependency::class, $data);
+
         return back()->with('success', 'Initiative dependency added.');
     }
 
@@ -793,6 +833,7 @@ class EaController extends Controller
         ]);
         $data['initiative_id'] = $initiative->id;
         $this->repo->create(AdmDeliverable::class, $data);
+
         return back()->with('success', 'ADM deliverable added.');
     }
 
@@ -804,6 +845,7 @@ class EaController extends Controller
             'due_date' => 'nullable|date',
         ]);
         $this->repo->update($deliverable, $data);
+
         return back()->with('success', 'Deliverable updated.');
     }
 
@@ -813,6 +855,7 @@ class EaController extends Controller
     {
         Gate::authorize('create', Capability::class);
         $c = $this->repo->create(Capability::class, $r->validated());
+
         return redirect()->route('ea.capabilities.show', $c->id)->with('success', "Capability {$c->code} created.");
     }
 
@@ -820,6 +863,7 @@ class EaController extends Controller
     {
         Gate::authorize('update', $capability);
         $this->repo->update($capability, $r->validated());
+
         return back()->with('success', 'Capability updated.');
     }
 
@@ -840,6 +884,7 @@ class EaController extends Controller
         }
 
         $this->repo->delete($capability);
+
         return redirect()->route('ea.capabilities')->with('success', 'Capability deleted.');
     }
 
@@ -847,6 +892,7 @@ class EaController extends Controller
     {
         Gate::authorize('create', EaApplication::class);
         $a = $this->repo->create(EaApplication::class, $r->validated());
+
         return redirect()->route('ea.applications.show', $a->id)->with('success', "Application {$a->code} created.");
     }
 
@@ -854,6 +900,7 @@ class EaController extends Controller
     {
         Gate::authorize('update', $application);
         $this->repo->update($application, $r->validated());
+
         return back()->with('success', 'Application updated.');
     }
 
@@ -873,20 +920,23 @@ class EaController extends Controller
         }
 
         $this->repo->delete($application);
+
         return redirect()->route('ea.applications')->with('success', 'Application deleted.');
     }
 
-    public function techStore(\App\Http\Requests\Ea\TechComponentRequest $r)
+    public function techStore(TechComponentRequest $r)
     {
         Gate::authorize('create', TechComponent::class);
         $t = $this->repo->create(TechComponent::class, $r->validated());
+
         return back()->with('success', "Tech component {$t->code} created.");
     }
 
-    public function techUpdate(\App\Http\Requests\Ea\TechComponentRequest $r, TechComponent $tech)
+    public function techUpdate(TechComponentRequest $r, TechComponent $tech)
     {
         Gate::authorize('update', $tech);
         $this->repo->update($tech, $r->validated());
+
         return back()->with('success', 'Tech component updated.');
     }
 
@@ -907,6 +957,7 @@ class EaController extends Controller
         }
 
         $this->repo->delete($tech);
+
         return back()->with('success', 'Tech component deleted.');
     }
 
@@ -914,6 +965,7 @@ class EaController extends Controller
     {
         Gate::authorize('create', EaInterface::class);
         $this->repo->create(EaInterface::class, $r->validated());
+
         return back()->with('success', 'Interface created.');
     }
 
@@ -921,6 +973,7 @@ class EaController extends Controller
     {
         Gate::authorize('update', $interface);
         $this->repo->update($interface, $r->validated());
+
         return back()->with('success', 'Interface updated.');
     }
 
@@ -936,6 +989,7 @@ class EaController extends Controller
         }
 
         $this->repo->delete($interface);
+
         return back()->with('success', 'Interface deleted.');
     }
 
@@ -943,6 +997,7 @@ class EaController extends Controller
     {
         Gate::authorize('create', Principle::class);
         $this->repo->create(Principle::class, $r->validated());
+
         return back()->with('success', 'Principle created.');
     }
 
@@ -950,6 +1005,7 @@ class EaController extends Controller
     {
         Gate::authorize('update', $principle);
         $this->repo->update($principle, $r->validated());
+
         return back()->with('success', 'Principle updated.');
     }
 
@@ -963,10 +1019,12 @@ class EaController extends Controller
         $exceptions = EaException::where('principle_id', $principle->id)->count();
         if ($exceptions) {
             $this->repo->update($principle, ['status' => 'retired']);
+
             return back()->with('success', "Principle {$principle->code} retired ({$exceptions} exception(s) still cite it, so the record is preserved).");
         }
 
         $this->repo->delete($principle);
+
         return back()->with('success', 'Principle deleted.');
     }
 
@@ -974,6 +1032,7 @@ class EaController extends Controller
     {
         Gate::authorize('create', Standard::class);
         $this->repo->create(Standard::class, $r->validated());
+
         return back()->with('success', 'Standard created.');
     }
 
@@ -981,6 +1040,7 @@ class EaController extends Controller
     {
         Gate::authorize('update', $standard);
         $this->repo->update($standard, $r->validated());
+
         return back()->with('success', 'Standard updated.');
     }
 
@@ -993,10 +1053,12 @@ class EaController extends Controller
         $exceptions = EaException::where('standard_id', $standard->id)->count();
         if ($exceptions) {
             $this->repo->update($standard, ['status' => 'retired']);
+
             return back()->with('success', "Standard {$standard->code} retired ({$exceptions} exception(s) still cite it, so the record is preserved).");
         }
 
         $this->repo->delete($standard);
+
         return back()->with('success', 'Standard deleted.');
     }
 
@@ -1006,11 +1068,12 @@ class EaController extends Controller
         $data = $r->validated();
         $data['code'] = $data['code'] ?? 'ARB-'.now()->format('YmdHis');
         $data['status'] = 'submitted';
-        $impact = (new PrincipleImpactEngine())->analyse($data['title'], $data['summary'] ?? '', $data['impact_blast_radius'] ?? []);
+        $impact = (new PrincipleImpactEngine)->analyse($data['title'], $data['summary'] ?? '', $data['impact_blast_radius'] ?? []);
         $data['impacted_principles'] = $data['impacted_principles'] ?? $impact['impacted_principles']->pluck('principle.id')->all();
         $data['impacted_standards'] = $data['impacted_standards'] ?? $impact['impacted_standards']->pluck('standard.id')->all();
         $data['risk_band'] = $data['risk_band'] ?? $impact['risk_band'];
         $sub = $this->repo->create(ArbSubmission::class, $data);
+
         return redirect()->route('ea.arb.show', $sub->id)->with('success', "ARB submission {$sub->code} created.");
     }
 
@@ -1038,7 +1101,7 @@ class EaController extends Controller
         ]);
         // Contract I-9 (§7.3) — conditions attached to an approval become owned
         // Issues with due dates, rather than staying in the minutes.
-        \App\Events\Ea\ArbDecisionRecorded::dispatch(
+        ArbDecisionRecorded::dispatch(
             $submission->refresh(),
             (array) $r->input('conditions', []),
         );
@@ -1063,6 +1126,7 @@ class EaController extends Controller
         $data['code'] = $data['code'] ?? 'EXC-'.now()->format('YmdHis');
         $data['status'] = 'active';
         $this->repo->create(EaException::class, $data);
+
         return back()->with('success', "Exception {$data['code']} created.");
     }
 
@@ -1071,6 +1135,7 @@ class EaController extends Controller
         Gate::authorize('approve', $exception);
         $newExp = ($exception->expires_at ?? now())->copy()->addYear();
         $this->repo->update($exception, ['expires_at' => $newExp, 'status' => 'renewed']);
+
         return back()->with('success', "Exception {$exception->code} renewed until {$newExp->toDateString()}.");
     }
 
@@ -1084,19 +1149,22 @@ class EaController extends Controller
             'csv' => 'required|file',
         ]);
         $csv = file_get_contents($r->file('csv')->getRealPath());
-        $result = (new BulkImporter())->import($r->input('type'), $csv);
+        $result = (new BulkImporter)->import($r->input('type'), $csv);
+
         return back()->with('success', "Imported: {$result['created']} created, {$result['updated']} updated, ".count($result['errors']).' errors.');
     }
 
     public function bulkTemplate(string $type)
     {
-        $body = (new BulkImporter())->template($type);
+        $body = (new BulkImporter)->template($type);
+
         return response($body, 200, ['Content-Type' => 'text/csv', 'Content-Disposition' => 'attachment; filename="ea-'.$type.'-template.csv"']);
     }
 
     public function bulkImportPage()
     {
         $templates = array_keys(BulkImporter::TEMPLATES);
+
         return Inertia::render('Ea/BulkImport', compact('templates'));
     }
 
@@ -1168,7 +1236,7 @@ class EaController extends Controller
     public function assetSync()
     {
         Gate::authorize('admin', EaApplication::class);
-        $r = (new AssetApplicationClient())->syncIntoEa();
+        $r = (new AssetApplicationClient)->syncIntoEa();
 
         // The asset client reads a local table, so "live" means the circuit
         // breaker was closed and the table was actually readable.
@@ -1184,8 +1252,8 @@ class EaController extends Controller
     public function eolSync()
     {
         Gate::authorize('admin', TechComponent::class);
-        $r = (new EolFeedClient())->sync();
-        (new TechObsolescenceService())->recompute();
+        $r = (new EolFeedClient)->sync();
+        (new TechObsolescenceService)->recompute();
 
         $this->recordFeedRun('eol', $r['provenance'], $r['endpoint'], $r['touched'], $r['updated'],
             "{$r['live_hits']} live match(es), {$r['fixture_hits']} fixture match(es).");
@@ -1198,7 +1266,7 @@ class EaController extends Controller
     public function cveSync()
     {
         Gate::authorize('admin', TechComponent::class);
-        $r = (new CveFeedClient())->sync();
+        $r = (new CveFeedClient)->sync();
 
         $this->recordFeedRun('cve', $r['provenance'], $r['endpoint'], $r['touched'], $r['created'],
             "{$r['live_hits']} live match(es), {$r['fixture_hits']} fixture match(es).");
@@ -1249,6 +1317,7 @@ class EaController extends Controller
             ->limit(500)
             ->get();
         $byAction = $logs->groupBy('action')->map->count();
+
         return Inertia::render('Ea/AuditTrail', compact('logs', 'byAction', 'entity'));
     }
 
@@ -1261,14 +1330,14 @@ class EaController extends Controller
      * DiagramEditor, where connecting two elements means typing element IDs
      * into three sequential window.prompt() dialogs.
      */
-    protected function applicationOptions(): \Illuminate\Support\Collection
+    protected function applicationOptions(): Collection
     {
         return EaApplication::orderBy('name')->get(['id', 'code', 'name'])
             ->map(fn ($a) => ['value' => $a->id, 'label' => trim("{$a->code} — {$a->name}", ' —')])
             ->values();
     }
 
-    protected function plateauOptions(): \Illuminate\Support\Collection
+    protected function plateauOptions(): Collection
     {
         return Plateau::orderBy('effective_from')->get(['id', 'code', 'name', 'plateau_type'])
             ->map(fn ($p) => ['value' => $p->id, 'label' => trim("{$p->name} ({$p->plateau_type})")])
@@ -1298,11 +1367,11 @@ class EaController extends Controller
     {
         return [
             'entity_type' => $entityType,
-            'users' => \App\Models\User::orderBy('name')->get(['id', 'name', 'email'])
+            'users' => User::orderBy('name')->get(['id', 'name', 'email'])
                 ->map(fn ($u) => ['value' => $u->id, 'label' => $u->name.' ('.$u->email.')'])->values(),
-            'roles' => collect(\App\Models\Ea\Subscription::ROLES)->map(fn ($r) => [
+            'roles' => collect(Subscription::ROLES)->map(fn ($r) => [
                 'value' => $r,
-                'label' => \App\Models\Ea\Subscription::ROLE_LABELS[$r],
+                'label' => Subscription::ROLE_LABELS[$r],
             ])->values(),
         ];
     }
@@ -1332,7 +1401,7 @@ class EaController extends Controller
             default => 12,
         };
 
-        return \Carbon\Carbon::parse($interface->last_reviewed_at)->addMonths($months)->isPast();
+        return Carbon::parse($interface->last_reviewed_at)->addMonths($months)->isPast();
     }
 
     protected function capabilityOverlay($tree, string $overlay): array
@@ -1349,6 +1418,7 @@ class EaController extends Controller
                 default => $c->criticality,
             };
         }
+
         return $map;
     }
 
@@ -1356,15 +1426,20 @@ class EaController extends Controller
     {
         $score = 0;
         foreach ($answers as $a) {
-            if (is_array($a) && isset($a['weight'])) $score += (float) $a['weight'];
-            elseif (is_numeric($a)) $score += (float) $a;
+            if (is_array($a) && isset($a['weight'])) {
+                $score += (float) $a['weight'];
+            } elseif (is_numeric($a)) {
+                $score += (float) $a;
+            }
         }
+
         return round($score, 2);
     }
 
     protected function dpiaBand(array $answers): string
     {
         $s = $this->dpiaScore($answers);
+
         return match (true) {
             $s >= 7 => 'high',
             $s >= 4 => 'medium',

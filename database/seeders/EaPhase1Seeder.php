@@ -7,15 +7,10 @@ use App\Models\Ea\DataFlow;
 use App\Models\Ea\EaApplication;
 use App\Models\Ea\InfoDomain;
 use App\Models\Ea\LogicalEntity;
-use App\Models\Ea\MaturityAssessment;
-use App\Models\Ea\MaturityDomain;
-use App\Models\Ea\MaturityQuestion;
-use App\Models\Ea\MaturityResponse;
 use App\Models\Ea\Standard;
 use App\Models\Ea\TechComponent;
 use App\Models\Ea\ValueStream;
 use App\Models\Organization;
-use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 
@@ -493,62 +488,10 @@ class EaPhase1Seeder extends Seeder
         }
     }
 
-    private function seedMaturity(int $tenantId): void
-    {
-        // Seed CBN EA Framework domains (idempotent)
-        if (MaturityDomain::count() === 0) {
-            $d = [
-                ['EA-GOV', 'EA Governance', 'Executive sponsorship, ARB, principles & standards.'],
-                ['EA-STR', 'Strategy & Business Architecture', 'Business strategy linkage, capability model, value streams.'],
-                ['EA-APP', 'Application Architecture', 'Portfolio visibility, TIME scoring, rationalisation.'],
-                ['EA-TEC', 'Technology Architecture', 'Standards catalogue, radar, lifecycle management.'],
-                ['EA-DAT', 'Data Architecture & Privacy', 'Data classification, flows, NDPA alignment.'],
-                ['EA-SEC', 'Security Architecture', 'Zones, control mapping, privileged access.'],
-                ['EA-INT', 'Integration Architecture', 'Interface catalogue, APIs, event patterns.'],
-                ['EA-ROA', 'Roadmap & Transformation', 'Plateaux, initiatives, ADM phase tracking.'],
-                ['EA-CBN', 'CBN-Specific Obligations', 'RBCSF alignment, return automation, evidence trail.'],
-                ['EA-MAT', 'Continuous Improvement', 'Metrics, KRIs, feedback loop.'],
-            ];
-            foreach ($d as $i => [$code, $name, $desc]) {
-                $dom = MaturityDomain::create([
-                    'code' => $code, 'name' => $name, 'description' => $desc, 'weight' => 10,
-                ]);
-                // 4 questions per domain
-                for ($q = 1; $q <= 4; $q++) {
-                    MaturityQuestion::create([
-                        'domain_id' => $dom->id,
-                        'code' => $code.'-Q'.$q,
-                        'question' => "How mature is {$name} — Q{$q}?",
-                        'guidance' => 'Level 1: Ad-hoc · Level 2: Initial · Level 3: Defined · Level 4: Managed · Level 5: Optimised.',
-                    ]);
-                }
-            }
-        }
-
-        if (MaturityAssessment::where('organization_id', $tenantId)->count() > 0) {
-            return;
-        }
-        $creator = User::where('organization_id', $tenantId)->first();
-        $assessment = MaturityAssessment::create([
-            'organization_id' => $tenantId,
-            'title' => 'CBN EA Maturity Self-Assessment '.now()->format('Y'),
-            'year' => (int) now()->format('Y'),
-            'status' => 'in_progress',
-            'created_by' => $creator?->id,
-        ]);
-        $questions = MaturityQuestion::all();
-        $sum = 0;
-        foreach ($questions as $q) {
-            $level = rand(2, 4); // centre around "Defined"
-            $sum += $level;
-            MaturityResponse::create([
-                'assessment_id' => $assessment->id,
-                'question_id' => $q->id,
-                'selected_level' => $level,
-                'comment' => rand(0, 1) ? 'Evidence on file; verified with Internal Audit.' : null,
-                'answered_by' => $creator?->id,
-            ]);
-        }
-        $assessment->update(['overall_score' => round($sum / max($questions->count(), 1), 2)]);
-    }
+    /**
+     * The CBN EA maturity framework (five blueprint domains, CMMI practice areas) is reference data
+     * created by migration 2027_01_24_000001; assessments are seeded by EaMaturityDemoSeeder through
+     * the assessment service. This used to seed placeholder questions answered with rand(2, 4).
+     */
+    private function seedMaturity(int $tenantId): void {}
 }

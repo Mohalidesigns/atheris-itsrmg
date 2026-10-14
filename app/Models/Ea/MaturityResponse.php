@@ -2,6 +2,7 @@
 
 namespace App\Models\Ea;
 
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 class MaturityResponse extends Model
@@ -10,10 +11,15 @@ class MaturityResponse extends Model
 
     protected $guarded = [];
 
-    protected $casts = ['evidence_refs' => 'array'];
+    protected $casts = ['evidence_refs' => 'array', 'answered_at' => 'datetime'];
 
     public function question()
     {
         return $this->belongsTo(MaturityQuestion::class);
+    }
+
+    public function answerer()
+    {
+        return $this->belongsTo(User::class, 'answered_by');
     }
 }

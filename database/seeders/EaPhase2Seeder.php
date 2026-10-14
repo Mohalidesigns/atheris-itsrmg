@@ -160,7 +160,9 @@ class EaPhase2Seeder extends Seeder
 
         // Real controls only. Without a populated Compliance module there is
         // nothing honest to map to, so seed nothing rather than invent ids.
-        $controls = Control::withoutGlobalScopes()
+        // This bank's controls only (ATH-VAL-015: drawing from every bank linked First Bank's
+        // architecture to Kano's controls).
+        $controls = Control::withoutGlobalScopes()->where('organization_id', $tenantId)->orderBy('id')
             ->get(['id', 'control_code', 'domain', 'category'])
             ->all();
 

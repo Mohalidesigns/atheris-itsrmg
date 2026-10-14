@@ -23,7 +23,9 @@ use App\Http\Controllers\DataBreachController;
 use App\Http\Controllers\DrController;
 use App\Http\Controllers\Ea\DecisionRecordController;
 use App\Http\Controllers\Ea\DepthController;
+use App\Http\Controllers\Ea\MaturityController as EaMaturityController;
 use App\Http\Controllers\Ea\PortalController;
+use App\Http\Controllers\Ea\SecurityAssuranceController as EaSecurityAssuranceController;
 use App\Http\Controllers\Ea\StewardshipController;
 use App\Http\Controllers\Ea\SurveyController;
 use App\Http\Controllers\Ea\WedgeController;
@@ -793,7 +795,16 @@ Route::middleware('auth')->group(function () {
         Route::get('/information-domains', [EaController::class, 'infoDomains'])->name('information-domains');
         Route::get('/logical-entities', [EaController::class, 'logicalEntities'])->name('logical-entities');
         Route::get('/data-flows', [EaController::class, 'dataFlows'])->name('data-flows');
-        Route::get('/cbn-maturity', [EaController::class, 'cbnMaturity'])->name('cbn-maturity');
+        // CBN EA maturity: five blueprint domains on the CMMI scale (ATH-VAL-015)
+        Route::get('/cbn-maturity', [EaMaturityController::class, 'index'])->name('cbn-maturity');
+        Route::post('/maturity', [EaMaturityController::class, 'store'])->middleware('permission:create ea')->name('maturity.store');
+        Route::get('/maturity/{assessment}', [EaMaturityController::class, 'show'])->name('maturity.show');
+        Route::post('/maturity/{assessment}/practices/{question}', [EaMaturityController::class, 'answer'])->middleware('permission:edit ea')->name('maturity.answer');
+        Route::put('/maturity/{assessment}/targets', [EaMaturityController::class, 'targets'])->middleware('permission:edit ea')->name('maturity.targets');
+        Route::post('/maturity/{assessment}/submit', [EaMaturityController::class, 'submit'])->middleware('permission:edit ea')->name('maturity.submit');
+        Route::post('/maturity/{assessment}/approve', [EaMaturityController::class, 'approve'])->middleware('permission:approve ea')->name('maturity.approve');
+        Route::post('/maturity/{assessment}/return', [EaMaturityController::class, 'returnToDraft'])->middleware('permission:approve ea')->name('maturity.return');
+        Route::get('/security-assurance', [EaSecurityAssuranceController::class, 'index'])->name('security-assurance');
 
         // Phase 2 — reads + ARB workflow
         Route::get('/interfaces', [EaController::class, 'interfaces'])->name('interfaces');

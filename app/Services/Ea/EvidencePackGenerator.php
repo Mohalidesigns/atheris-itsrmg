@@ -12,6 +12,7 @@ use App\Models\Ea\TechComponent;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 /**
  * EvidencePackGenerator — produces the CBN EA evidence pack as specified in
@@ -33,32 +34,35 @@ class EvidencePackGenerator
 {
     public function generate(?int $assessmentId = null, ?string $signedBy = null): EvidencePack
     {
+        // An evidence pack attests an approved assessment (ATH-VAL-015). It used to invent one, with an
+        // overall score of 3.2, when none existed.
         $assessment = $assessmentId
-            ? MaturityAssessment::find($assessmentId)
-            : MaturityAssessment::orderByDesc('year')->first();
+            ? MaturityAssessment::where('status', 'approved')->find($assessmentId)
+            : MaturityAssessment::where('status', 'approved')->orderByDesc('approved_at')->first();
 
-        if (!$assessment) {
-            $assessment = MaturityAssessment::create([
-                'title' => 'CBN EA Maturity Assessment '.date('Y'),
-                'year' => (int) date('Y'),
-                'framework' => 'cbn-ea',
-                'overall_score' => 3.2,
-                'status' => 'completed',
-            ]);
+        if (! $assessment) {
+            throw ValidationException::withMessages(['assessment' => 'Approve a CBN EA maturity assessment before generating an evidence pack.']);
         }
 
         $framework = $assessment->framework ?? 'cbn-ea';
-        $domains = MaturityDomain::where('framework', $framework)->with('questions')->orderBy('code')->get();
+        $domains = MaturityDomain::where('framework', $framework)->with('questions')->orderBy('sort_order')->orderBy('code')->get();
         $responses = MaturityResponse::where('assessment_id', $assessment->id)->get()->keyBy('question_id');
 
         $byDomain = [];
-        $overallSum = 0; $overallCount = 0;
+        $overallSum = 0;
+        $overallCount = 0;
         foreach ($domains as $d) {
-            $answered = 0; $sum = 0;
+            $answered = 0;
+            $sum = 0;
             $rows = [];
             foreach ($d->questions as $q) {
                 $r = $responses->get($q->id);
-                if ($r) { $answered++; $sum += $r->selected_level; $overallSum += $r->selected_level; $overallCount++; }
+                if ($r) {
+                    $answered++;
+                    $sum += $r->selected_level;
+                    $overallSum += $r->selected_level;
+                    $overallCount++;
+                }
                 $rows[] = [$q->code, substr($q->question, 0, 40), $r?->selected_level ?? '-'];
             }
             $byDomain[] = [
@@ -69,21 +73,25 @@ class EvidencePackGenerator
                 'rows' => $rows,
             ];
         }
-        $overall = $overallCount ? round($overallSum / $overallCount, 2) : ($assessment->overall_score ?? 0);
+        // The approved CMMI staged rating (lowest practice per domain, averaged across domains).
+        $overall = $assessment->results['overall'] ?? ($overallCount ? round($overallSum / $overallCount, 2) : 0);
+        $org = $assessment->organization_id;
 
         // Architecture posture
+        $apps = fn () => EaApplication::withoutGlobalScopes()->where('organization_id', $org);
+        $tech = fn () => TechComponent::withoutGlobalScopes()->where('organization_id', $org);
         $posture = [
-            'capabilities' => Capability::count(),
-            'applications' => EaApplication::count(),
-            'tech_components' => TechComponent::count(),
-            'critical_apps' => EaApplication::where('criticality', 'critical')->count(),
-            'apps_no_owner' => EaApplication::whereNull('owner_role')->orWhere('owner_role', '')->count(),
-            'tech_eol_12m' => TechComponent::whereNotNull('eol_date')
+            'capabilities' => Capability::withoutGlobalScopes()->where('organization_id', $org)->count(),
+            'applications' => $apps()->count(),
+            'tech_components' => $tech()->count(),
+            'critical_apps' => $apps()->where('criticality', 'critical')->count(),
+            'apps_no_owner' => $apps()->where(fn ($q) => $q->whereNull('owner_role')->orWhere('owner_role', ''))->count(),
+            'tech_eol_12m' => $tech()->whereNotNull('eol_date')
                 ->whereBetween('eol_date', [now(), now()->addYear()])->count(),
         ];
 
         // Build PDF
-        $pdf = new PdfWriter();
+        $pdf = new PdfWriter;
         $pdf->newPage();
         $pdf->heading('CBN Enterprise Architecture Evidence Pack', 18);
         $pdf->space(6);
@@ -178,7 +186,7 @@ class EvidencePackGenerator
         // Build ZIP (PDF + manifest + any evidence stubs)
         $zipAbs = Storage::disk('local')->path($zipPath);
         @mkdir(dirname($zipAbs), 0775, true);
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
         if ($zip->open($zipAbs, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
             $zip->addFromString(basename($pdfPath), $pdfBytes);
             $manifest = json_encode([
@@ -197,6 +205,7 @@ class EvidencePackGenerator
         $zipHash = Storage::disk('local')->exists($zipPath) ? hash('sha256', Storage::disk('local')->get($zipPath)) : null;
 
         $pack = EvidencePack::create([
+            'organization_id' => $assessment->organization_id,
             'code' => $code,
             'name' => $assessment->title.' — Evidence Pack',
             'period' => $assessment->year,
@@ -214,6 +223,7 @@ class EvidencePackGenerator
         ]);
 
         AuditLogger::log('evidence_pack.generate', $pack, null, ['pdf_hash' => $pdfHash, 'zip_hash' => $zipHash]);
+
         return $pack;
     }
 }

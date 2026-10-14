@@ -4,19 +4,30 @@ namespace App\Services\Ea;
 
 use App\Models\Ea\BusinessService;
 use App\Models\Ea\Capability;
+use App\Models\Ea\ConsentPurpose;
 use App\Models\Ea\DataFlow;
+use App\Models\Ea\DpiaAssessment;
+use App\Models\Ea\Driver;
+use App\Models\Ea\EaApi;
 use App\Models\Ea\EaApplication;
 use App\Models\Ea\EaInterface;
+use App\Models\Ea\Goal;
 use App\Models\Ea\InfoDomain;
 use App\Models\Ea\Initiative;
 use App\Models\Ea\LogicalEntity;
+use App\Models\Ea\Pattern;
 use App\Models\Ea\Plateau;
 use App\Models\Ea\Principle;
 use App\Models\Ea\Process;
 use App\Models\Ea\QualitySeal;
+use App\Models\Ea\Solution;
+use App\Models\Ea\Stakeholder;
+use App\Models\Ea\Standard;
 use App\Models\Ea\TechComponent;
 use App\Models\Ea\ValueStream;
 use App\Models\Ea\Zone;
+use App\Models\Ea\ZoneAssignment;
+use App\Services\Ea\Maturity\Cmmi;
 
 /**
  * ScoreCardService — B5, the Architecture Completeness Score Card.
@@ -79,35 +90,35 @@ class ScoreCardService
     {
         return [
             // Business / Organization
-            'business.contextual' => ['model' => \App\Models\Ea\Goal::class, 'expected' => 3, 'hint' => 'Drivers and goals in the motivation layer'],
-            'business.environmental' => ['model' => \App\Models\Ea\Stakeholder::class, 'expected' => 3, 'hint' => 'Stakeholders and their concerns'],
+            'business.contextual' => ['model' => Goal::class, 'expected' => 3, 'hint' => 'Drivers and goals in the motivation layer'],
+            'business.environmental' => ['model' => Stakeholder::class, 'expected' => 3, 'hint' => 'Stakeholders and their concerns'],
             'business.conceptual' => ['model' => Capability::class, 'expected' => 10, 'hint' => 'Business capability map'],
             'business.logical' => ['model' => Process::class, 'expected' => 10, 'hint' => 'Process inventory'],
             'business.physical' => ['model' => BusinessService::class, 'expected' => 5, 'hint' => 'Business services in operation'],
             'business.transformational' => ['model' => ValueStream::class, 'expected' => 3, 'hint' => 'Value streams'],
 
             // Information
-            'information.contextual' => ['model' => \App\Models\Ea\Driver::class, 'expected' => 2, 'hint' => 'Information drivers and obligations'],
-            'information.environmental' => ['model' => \App\Models\Ea\ConsentPurpose::class, 'expected' => 2, 'hint' => 'Processing purposes and consent basis'],
+            'information.contextual' => ['model' => Driver::class, 'expected' => 2, 'hint' => 'Information drivers and obligations'],
+            'information.environmental' => ['model' => ConsentPurpose::class, 'expected' => 2, 'hint' => 'Processing purposes and consent basis'],
             'information.conceptual' => ['model' => InfoDomain::class, 'expected' => 4, 'hint' => 'Information domains'],
             'information.logical' => ['model' => LogicalEntity::class, 'expected' => 10, 'hint' => 'Logical data entities'],
             'information.physical' => ['model' => DataFlow::class, 'expected' => 5, 'hint' => 'Data flows between systems'],
-            'information.transformational' => ['model' => \App\Models\Ea\DpiaAssessment::class, 'expected' => 1, 'hint' => 'DPIAs on changing processing'],
+            'information.transformational' => ['model' => DpiaAssessment::class, 'expected' => 1, 'hint' => 'DPIAs on changing processing'],
 
             // Information Systems
             'systems.contextual' => ['model' => Principle::class, 'expected' => 5, 'hint' => 'Architecture principles'],
-            'systems.environmental' => ['model' => \App\Models\Ea\EaApi::class, 'expected' => 3, 'hint' => 'External APIs and partners'],
-            'systems.conceptual' => ['model' => \App\Models\Ea\Pattern::class, 'expected' => 3, 'hint' => 'Reference patterns'],
+            'systems.environmental' => ['model' => EaApi::class, 'expected' => 3, 'hint' => 'External APIs and partners'],
+            'systems.conceptual' => ['model' => Pattern::class, 'expected' => 3, 'hint' => 'Reference patterns'],
             'systems.logical' => ['model' => EaApplication::class, 'expected' => 15, 'hint' => 'Application portfolio'],
             'systems.physical' => ['model' => EaInterface::class, 'expected' => 10, 'hint' => 'Connection catalogue (CBN App. II §1.1(i)–(k))'],
             'systems.transformational' => ['model' => Initiative::class, 'expected' => 3, 'hint' => 'Initiatives changing the estate'],
 
             // Technology Infrastructure
-            'technology.contextual' => ['model' => \App\Models\Ea\Standard::class, 'expected' => 5, 'hint' => 'Technology standards'],
+            'technology.contextual' => ['model' => Standard::class, 'expected' => 5, 'hint' => 'Technology standards'],
             'technology.environmental' => ['model' => Zone::class, 'expected' => 3, 'hint' => 'Security zones and trust boundaries'],
-            'technology.conceptual' => ['model' => \App\Models\Ea\Solution::class, 'expected' => 2, 'hint' => 'Solution designs'],
+            'technology.conceptual' => ['model' => Solution::class, 'expected' => 2, 'hint' => 'Solution designs'],
             'technology.logical' => ['model' => TechComponent::class, 'expected' => 15, 'hint' => 'Technology components'],
-            'technology.physical' => ['model' => \App\Models\Ea\ZoneAssignment::class, 'expected' => 5, 'hint' => 'Deployment into zones'],
+            'technology.physical' => ['model' => ZoneAssignment::class, 'expected' => 5, 'hint' => 'Deployment into zones'],
             'technology.transformational' => ['model' => Plateau::class, 'expected' => 2, 'hint' => 'Baseline and target plateaux'],
         ];
     }
@@ -258,18 +269,13 @@ class ScoreCardService
      */
     public function indicativeMaturity(int $score): array
     {
-        [$level, $label] = match (true) {
-            $score >= 90 => [5, 'Optimised'],
-            $score >= 75 => [4, 'Managed'],
-            $score >= 55 => [3, 'Defined'],
-            $score >= 35 => [2, 'Repeatable'],
-            $score >= 15 => [1, 'Initial'],
-            default => [0, 'Non-existent'],
-        };
+        // One scale for the score card, the maturity assessment and the ITSB return (ATH-VAL-015):
+        // documentation alone supports at most level 4, never "optimising".
+        $level = Cmmi::indicativeLevel($score);
 
         return [
             'level' => $level,
-            'label' => $label,
+            'label' => Cmmi::name($level),
             'meets_category_one' => $level >= 3,
             'meets_category_two' => $level >= 2,
         ];

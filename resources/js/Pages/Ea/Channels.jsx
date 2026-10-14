@@ -25,7 +25,7 @@ export default function Channels({ channels = [], rails = [], summary = {} }) {
             <PageHeader
                 breadcrumbs={[
                     { label: 'Enterprise Architecture' },
-                    { label: 'Integration Architecture' },
+                    { label: 'Application Integration' },
                     { label: 'Channels & Rails' },
                 ]}
                 title="Channels & Payment Rails"

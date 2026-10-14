@@ -2,7 +2,7 @@
 
 namespace App\Models\Ea;
 
-use App\Models\Concerns\HasTenantIdAlias;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class ApplicationCapability extends Model
 {
-    use HasTenantIdAlias;
+    use BelongsToTenant;
 
     protected $table = 'ea_application_capabilities';
 

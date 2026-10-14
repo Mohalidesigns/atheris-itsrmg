@@ -87,7 +87,7 @@ export default function TechnologyRadar({ components = [], byStatus = {}, option
             <PageHeader
                 breadcrumbs={[
                     { label: 'Enterprise Architecture' },
-                    { label: 'Portfolio' },
+                    { label: 'Technology Architecture' },
                     { label: 'Technology Radar' },
                 ]}
                 title="Technology Radar"

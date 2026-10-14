@@ -155,6 +155,10 @@ class DatabaseSeeder extends Seeder
         // recorded through the service; board packs prepared and approved (ATH-VAL-014)
         $this->call(KriDashboardsDemoSeeder::class);
 
+        // Enterprise Architecture: CBN blueprint domains rated on the CMMI scale through the
+        // assessment service, and a real evidence pack from the approved assessment (ATH-VAL-015)
+        $this->call(EaMaturityDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);

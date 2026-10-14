@@ -2,12 +2,12 @@
 
 namespace App\Models\Ea;
 
-use App\Models\Concerns\HasTenantIdAlias;
+use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 
 class Outcome extends Model
 {
-    use HasTenantIdAlias;
+    use BelongsToTenant;
 
     protected $table = 'ea_outcomes';
 

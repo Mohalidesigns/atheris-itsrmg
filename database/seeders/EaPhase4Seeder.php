@@ -15,10 +15,13 @@ use App\Models\Ea\Outcome;
 use App\Models\Ea\Stakeholder;
 use App\Models\Ea\ThreatModel;
 use App\Models\Ea\ThreatTechnique;
+use App\Models\Organization;
 use App\Services\Ea\AnomalyEngine;
 use App\Services\Ea\KriCalculator;
 use App\Services\Ea\TechObsolescenceService;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class EaPhase4Seeder extends Seeder
 {
@@ -32,10 +35,31 @@ class EaPhase4Seeder extends Seeder
         $this->seedDiagrams();
         $this->seedDpia();
 
+        $this->assignToRepositoryBank();
+
         // Run the obsolescence + KRI + anomaly calculations so the dashboards have data.
         (new TechObsolescenceService)->recompute();
         (new KriCalculator)->compute();
         (new AnomalyEngine)->run();
+    }
+
+    /**
+     * The motivation layer, KRI definitions, consent purposes, threat models and DPIAs seeded here
+     * are First Bank's (it holds the EA repository), not platform reference data: written with no
+     * bank, every bank saw them (ATH-VAL-015). The glossary stays shared: it is EA vocabulary.
+     */
+    private function assignToRepositoryBank(): void
+    {
+        $bank = Organization::where('slug', 'first-bank-nigeria')->value('id');
+        if (! $bank) {
+            return;
+        }
+        foreach (['ea_kri_definitions', 'ea_goals', 'ea_outcomes', 'ea_drivers', 'ea_stakeholders', 'ea_courses_of_action',
+            'ea_consent_purposes', 'ea_threat_models', 'ea_dpia_assessments'] as $table) {
+            if (Schema::hasTable($table)) {
+                DB::table($table)->whereNull('organization_id')->update(['organization_id' => $bank]);
+            }
+        }
     }
 
     private function seedKris(): void

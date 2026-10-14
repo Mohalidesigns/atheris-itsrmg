@@ -108,7 +108,7 @@ export default function Threats({ models = [], byMethodology = {}, options = {} 
             <PageHeader
                 breadcrumbs={[
                     { label: 'Enterprise Architecture' },
-                    { label: 'Security Architecture' },
+                    { label: 'Security Architecture & Assurance' },
                     { label: 'Threat Models' },
                 ]}
                 title="STRIDE / LINDDUN Threat Models"

@@ -78,7 +78,7 @@ export default function Standards({ standards = [] }) {
             <PageHeader
                 breadcrumbs={[
                     { label: 'Enterprise Architecture' },
-                    { label: 'Architecture Governance' },
+                    { label: 'Technology Architecture' },
                     { label: 'Standards' },
                 ]}
                 title="Technology Standards"

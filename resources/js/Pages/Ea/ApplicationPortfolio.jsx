@@ -137,7 +137,7 @@ export default function ApplicationPortfolio({
         <AuthenticatedLayout header="Application Portfolio">
             <Head title="Application Portfolio" />
             <PageHeader
-                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Portfolio' }, { label: 'Applications' }]}
+                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Application Architecture' }, { label: 'Applications' }]}
                 title="Application Portfolio (APM)"
                 subtitle="TIME scoring · business fit × technical fit · lifecycle · per-app capability linkage."
                 actions={

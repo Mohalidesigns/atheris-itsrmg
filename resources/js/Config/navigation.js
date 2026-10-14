@@ -230,7 +230,39 @@ const navigation = [
             { name: 'Board Packs', href: 'board-packs.index', permission: 'view reports' },
             { name: 'Executive Dashboard', href: 'reports.executive', permission: 'view reports' },
         ],
+    },    {
+        // ATH-EAR-002 §5.5 / Appendix C — workspaces organised by job-to-be-done rather than by
+        // metamodel entity; peer surfaces render as tabs from Config/eaWorkspaces.js.
+        // ATH-VAL-015: moved up beside KRIs & Dashboards and arranged by the CBN IT blueprint's
+        // five EA domains, with the CMMI maturity assessment next to the Command Centre.
+        name: 'Enterprise Architecture',
+        icon: BuildingLibraryIcon,
+        badge: 'EA',
+        permission: 'view ea',
+        children: [
+            { name: 'Command Centre', href: 'ea.command-centre' },
+            { name: 'EA Maturity (CMMI)', href: 'ea.cbn-maturity' },
+            // Phase 1 (WS 1.1 / 1.6): the personal work list that makes maintaining the
+            // repository somebody's visible, bounded job.
+            { name: 'My Architecture', href: 'ea.stewardship.my-architecture' },
+            { name: 'My Tasks', href: 'ea.portal.my-tasks' },
+            { name: 'Business Architecture', href: 'ea.capabilities' },
+            { name: 'Application Architecture', href: 'ea.applications' },
+            { name: 'Application Integration', href: 'ea.interfaces' },
+            { name: 'Data Architecture', href: 'ea.logical-entities' },
+            { name: 'Technology Architecture', href: 'ea.technology-radar' },
+            { name: 'Security Architecture & Assurance', href: 'ea.security-zones' },
+            { name: 'Transformation', href: 'ea.plateaux' },
+            { name: 'Architecture Governance', href: 'ea.principles' },
+            // Utility surfaces (Phase 4 WS 4.4 / 4.5): visited to prove a claim, not daily.
+            { name: 'Diagrams & Viewpoints', href: 'ea.diagrams' },
+            { name: 'CBN Evidence Packs', href: 'ea.evidence-packs' },
+            { name: 'ArchiMate Round-Trip Gate', href: 'ea.round-trip' },
+            { name: 'Repository API', href: 'ea.api' },
+            { name: 'Data Sources', href: 'ea.data-sources' },
+        ],
     },
+
     {
         name: 'Workflow Studio',
         icon: PuzzlePieceIcon,
@@ -287,44 +319,7 @@ const navigation = [
         icon: PuzzlePieceIcon,
         permission: 'view platform',
     },
-    {
-        // ATH-EAR-002 §5.5 / Appendix C — 40 flat sibling links replaced by 8
-        // workspaces organised by job-to-be-done rather than by metamodel
-        // entity. Each entry lands on the workspace's primary surface; the peer
-        // surfaces are rendered as tabs on the page itself, from the shared
-        // definitions in Config/eaWorkspaces.js.
-        name: 'Enterprise Architecture',
-        icon: BuildingLibraryIcon,
-        badge: 'EA',
-        permission: 'view ea',
-        children: [
-            { name: 'Command Centre', href: 'ea.command-centre' },
-            // Phase 1 (ATH-EAR-002 WS 1.1 / 1.6). "My Architecture" is the
-            // personal work list that makes maintaining the repository
-            // somebody's visible, bounded job rather than a policy nobody owns.
-            { name: 'My Architecture', href: 'ea.stewardship.my-architecture' },
-            { name: 'Residency & Localisation', href: 'ea.residency' },
-            { name: 'FX Exposure', href: 'ea.fx-exposure' },
-            { name: 'My Tasks', href: 'ea.portal.my-tasks' },
-            { name: 'Business Architecture', href: 'ea.capabilities' },
-            { name: 'Portfolio', href: 'ea.applications' },
-            { name: 'Integration Architecture', href: 'ea.interfaces' },
-            { name: 'Data & Privacy Architecture', href: 'ea.logical-entities' },
-            { name: 'Security Architecture', href: 'ea.security-zones' },
-            { name: 'Transformation', href: 'ea.plateaux' },
-            { name: 'Architecture Governance', href: 'ea.principles' },
-            // Utility surfaces: a canvas, an artefact generator and the admin
-            // screen for inbound data. Not workspaces, but they need a way in.
-            { name: 'Diagrams & Viewpoints', href: 'ea.diagrams' },
-            { name: 'CBN Evidence Packs', href: 'ea.evidence-packs' },
-            // Phase 4 (WS 4.4 / 4.5): the interchange gate and the repository
-            // API. Both are utility surfaces — an architect visits them once to
-            // prove a claim, not daily.
-            { name: 'ArchiMate Round-Trip Gate', href: 'ea.round-trip' },
-            { name: 'Repository API', href: 'ea.api' },
-            { name: 'Data Sources', href: 'ea.data-sources' },
-        ],
-    },
+
     {
         name: 'Administration',
         icon: UserGroupIcon,

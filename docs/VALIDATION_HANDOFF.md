@@ -43,10 +43,11 @@ Validate each sidebar module end to end, in order. For every module:
 | 11 | PCI Management | `b09d047` | `docs/ATH-VAL-011_PCI_Management_Validation_Report.md` | `tests/Feature/Pci/PciModuleTest.php` (6) |
 | 12 | Business Continuity | `25a5ec5` | `docs/ATH-VAL-012_Business_Continuity_Validation_Report.md` | `tests/Feature/Continuity/BusinessContinuityModuleTest.php` (6) |
 | 13 | Continuous Monitoring | `0d238b2` | `docs/ATH-VAL-013_Continuous_Monitoring_Validation_Report.md` | `tests/Feature/Monitoring/ContinuousMonitoringModuleTest.php` (6) |
-| 14 | KRIs & Dashboards | see `git log` | `docs/ATH-VAL-014_KRIs_Dashboards_Validation_Report.md` | `tests/Feature/Kri/KriDashboardsModuleTest.php` (6) |
+| 14 | KRIs & Dashboards | `989abf4` | `docs/ATH-VAL-014_KRIs_Dashboards_Validation_Report.md` | `tests/Feature/Kri/KriDashboardsModuleTest.php` (6) |
+| 15 | Enterprise Architecture | see `git log` | `docs/ATH-VAL-015_Enterprise_Architecture_Validation_Report.md` | `tests/Feature/Ea/EaMaturityModuleTest.php` (6) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
 
-Last full suite: **312 tests, 311 passed, 1 skipped, 3,325 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
+Last full suite: **318 tests, 317 passed, 1 skipped, 3,454 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
 
 ### Regulatory Intelligence highlights (module 4)
 
@@ -191,15 +192,22 @@ Last full suite: **312 tests, 311 passed, 1 skipped, 3,325 assertions (14 Oct 20
 - **Gates:** KRIs under `risks` permissions, board packs under `reports` (Risk Manager gains `create reports`).
 - **Demo data:** `KriDashboardsDemoSeeder` gives both banks the pack with owners, risks and history through `KriService`, and three board packs (two approved, one draft).
 
-## Next phase: module 15, Enterprise Architecture
+### Enterprise Architecture highlights (module 15)
 
-Brought forward by the user (14 Oct 2026): EA is a key selling point. Scope:
-- **Navigation:** move the EA group up to sit directly under "KRIs & Dashboards".
-- **CBN IT blueprint domains:** organise EA around the five domains: Business, Application, Data, Technology, and Security Architecture & Assurance. Check that each has a clear workspace (Technology Architecture may need one).
-- **Maturity:** add a CMMI-style capability maturity model, so a bank sees its maturity level per domain (levels 1-5) with evidence behind each rating.
-- **Usual recon:** tenant scoping (EA models use `BelongsToTenant`; NULL-org rows are platform-shared by design), stub or random data, demo data for both banks (First Bank holds the EA repository).
+- **Navigation:** EA sits under KRIs & Dashboards, arranged by the CBN IT blueprint's five domains (Business, Application + Integration, Data, Technology, Security Architecture & Assurance); new Technology workspace (radar, standards, sites) and Security "Assurance" tab.
+- **CMMI maturity** (`app/Services/Ea/Maturity`): 25 practice areas, five per domain, rated 1-5; domain level = weakest practice; level 3+ needs an evidence note, 4+ cites measured repository indicators (`DomainEvidence`); overstated domains (2+ above documentation) need an approval note; draft → submitted → approved by someone else, or returned. Targets default to the ITSB category (Category One: 3).
+- **Regulatory outputs:** ITSB return covers all five domains (security added), reports the approved assessment's level or the documentation level (capped at 4); Score Card uses the same bands; evidence packs need an approved assessment (no more invented 3.2).
+- **Bank isolation:** 80 of First Bank's EA control mappings pointed at Kano's controls (repaired in the migration; seeder fixed; `ControlInheritanceService` resolves only in-bank); First Bank's motivation layer, KRI definitions, threat models, DPIAs now owned by First Bank; 14 EA models gained the tenant scope; anomaly findings carry their bank.
+- **Write routes and binding:** the authorisation test calls write routes with id 1, so new EA write routes must resolve their record inside the controller (after the permission middleware), not by implicit binding, or a Viewer gets 404 instead of 403.
+- **Demo data:** `EaMaturityDemoSeeder`: First Bank 2024 (1.6) and 2025 (2.6) approved, 2026 in progress, a real evidence pack; Kano 2026 approved (1.4) with an overstated Security rating and the approver's note.
 
-**Remaining order after that:** Workflow Studio, Core Banking, Reports, then the rest of the sidebar.
+## Next phase: module 16, Workflow Studio
+
+Sidebar items: Workflows (`workflows.index`, `workflows.show`), Marketplace (`workflows.marketplace`), Active Instances (`workflows.instances`), all `PlatformController` methods under `view platform`.
+
+Start with recon, as for the earlier modules: tenant scoping on the workflow models, whether instances actually run against platform records, how the marketplace installs templates, and demo data for both banks.
+
+**Remaining order after that:** Core Banking, Reports, then the rest of the sidebar.
 
 ### Patterns from modules 5-9 to reuse
 

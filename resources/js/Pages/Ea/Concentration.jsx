@@ -34,7 +34,7 @@ export default function Concentration({ summary = {}, byCapability = [], byRole 
         <AuthenticatedLayout header="Concentration">
             <Head title="Vendor & Integrator Concentration" />
             <PageHeader
-                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Portfolio' }, { label: 'Concentration' }]}
+                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Application Architecture' }, { label: 'Concentration' }]}
                 title="Vendor & Integrator Concentration"
                 subtitle="Where the estate depends on one supplier — measured across publishers, integrators, hosting and connectivity separately."
             />

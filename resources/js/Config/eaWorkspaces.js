@@ -7,7 +7,8 @@
  * three outcome suites, LeanIX three modules, Orbus four. Nobody exposes a
  * menu item called "Logical Entities".
  *
- * This is the single source of truth for the 8 workspaces. `navigation.js`
+ * This is the single source of truth for the 9 workspaces; `domain` is the CBN IT blueprint EA
+ * domain a workspace belongs to (BA, AA, DA, TA, SA — ATH-VAL-015). `navigation.js`
  * renders it in the sidebar and `EaWorkspaceTabs` renders the peer surfaces
  * inside a workspace, so the two cannot drift apart.
  */
@@ -27,7 +28,8 @@ export const EA_WORKSPACES = [
             { name: 'Score Card', href: 'ea.score-card' },
             { name: 'Ownership & Freshness', href: 'ea.stewardship.ownership' },
             { name: 'Surveys', href: 'ea.surveys' },
-            { name: 'CBN EA Maturity', href: 'ea.cbn-maturity' },
+            // ATH-VAL-015: the five CBN blueprint domains rated on the CMMI scale.
+            { name: 'EA Maturity (CMMI)', href: 'ea.cbn-maturity' },
             { name: 'EA KRIs', href: 'ea.kri' },
             { name: 'Anomaly Inbox', href: 'ea.anomalies' },
             { name: 'Audit Trail', href: 'ea.audit-trail' },
@@ -35,6 +37,7 @@ export const EA_WORKSPACES = [
     },
     {
         key: 'business',
+        domain: 'BA',
         name: 'Business Architecture',
         blurb: 'Capabilities, value streams and processes — the BIZBOK triad.',
         tabs: [
@@ -45,11 +48,11 @@ export const EA_WORKSPACES = [
     },
     {
         key: 'portfolio',
-        name: 'Portfolio',
-        blurb: 'The APM flagship plus its technology and vendor lenses.',
+        domain: 'AA',
+        name: 'Application Architecture',
+        blurb: 'The application portfolio and its cost, currency and vendor lenses.',
         tabs: [
             { name: 'Application Portfolio', href: 'ea.applications' },
-            { name: 'Technology Radar', href: 'ea.technology-radar' },
             // Phase 4 WS 4.7 (B17) — §11 makes the CFO the third buyer, and
             // this is the screen sold to them.
             { name: 'Cost & TCO', href: 'ea.cost-model' },
@@ -57,12 +60,12 @@ export const EA_WORKSPACES = [
             // score every global competitor at 0 or 1.
             { name: 'FX Exposure', href: 'ea.fx-exposure' },
             { name: 'Concentration', href: 'ea.concentration' },
-            { name: 'Sites & Resilience', href: 'ea.sites' },
         ],
     },
     {
         key: 'integration',
-        name: 'Integration Architecture',
+        domain: 'AA',
+        name: 'Application Integration',
         blurb: 'The CBN App. II §1.1(i)–(k) connection catalogue, and impact analysis over it.',
         tabs: [
             { name: 'Interfaces', href: 'ea.interfaces' },
@@ -76,8 +79,9 @@ export const EA_WORKSPACES = [
     },
     {
         key: 'data',
-        name: 'Data & Privacy Architecture',
-        blurb: 'Know your data — entities, flows, domains, glossary and DPIA.',
+        domain: 'DA',
+        name: 'Data Architecture',
+        blurb: 'Know your data — entities, flows, domains, glossary, privacy and residency.',
         tabs: [
             { name: 'Logical Entities', href: 'ea.logical-entities' },
             { name: 'Data Flows', href: 'ea.data-flows' },
@@ -88,13 +92,28 @@ export const EA_WORKSPACES = [
         ],
     },
     {
+        // ATH-VAL-015: the CBN blueprint's Technology Architecture domain had no workspace; its
+        // surfaces sat under Portfolio and Governance.
+        key: 'technology',
+        domain: 'TA',
+        name: 'Technology Architecture',
+        blurb: 'Technology standards and radar, the component lifecycle, hosting sites and resilience.',
+        tabs: [
+            { name: 'Technology Radar', href: 'ea.technology-radar' },
+            { name: 'Standards', href: 'ea.standards' },
+            { name: 'Sites & Resilience', href: 'ea.sites' },
+        ],
+    },
+    {
         key: 'security',
-        name: 'Security Architecture',
-        blurb: 'Zones, control mappings and threat models — the CISO’s three views of one graph.',
+        domain: 'SA',
+        name: 'Security Architecture & Assurance',
+        blurb: 'Zones, control mappings and threat models, and the evidence that the controls work.',
         tabs: [
             { name: 'Security Zones', href: 'ea.security-zones' },
             { name: 'Control Mappings', href: 'ea.control-mappings' },
             { name: 'Threat Models', href: 'ea.threats' },
+            { name: 'Assurance', href: 'ea.security-assurance' },
         ],
     },
     {
@@ -118,7 +137,6 @@ export const EA_WORKSPACES = [
         blurb: 'The governance loop: principle → standard → submission → decision → exception.',
         tabs: [
             { name: 'Principles', href: 'ea.principles' },
-            { name: 'Standards', href: 'ea.standards' },
             { name: 'ARB', href: 'ea.arb' },
             { name: 'Decision Records', href: 'ea.decisions' },
             // Phase 4 WS 4.5 — an agent's proposal is a governance artefact, so

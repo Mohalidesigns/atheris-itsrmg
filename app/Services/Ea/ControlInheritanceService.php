@@ -78,6 +78,7 @@ class ControlInheritanceService
                 $merged[$k] = $r;
             }
         }
+
         return array_values($merged);
     }
 
@@ -101,12 +102,13 @@ class ControlInheritanceService
                 'gap' => $resolved->where('coverage', 'gap')->count(),
             ];
         }
+
         return $rows;
     }
 
     private function row(ControlMapping $m, string $source, string $label): array
     {
-        $control = $this->control((int) $m->control_id);
+        $control = $this->control((int) $m->control_id, $m->organization_id);
 
         return [
             'control_id' => (int) $m->control_id,
@@ -137,16 +139,19 @@ class ControlInheritanceService
      * every id and reporting what did not resolve is what makes the number
      * citable.
      */
-    private function control(int $id): ?Control
+    private function control(int $id, $organizationId = null): ?Control
     {
         $this->controls ??= Control::withoutGlobalScopes()
-            ->get(['id', 'control_code', 'title', 'status', 'effectiveness', 'last_tested'])
+            ->get(['id', 'organization_id', 'control_code', 'title', 'status', 'effectiveness', 'last_tested'])
             ->keyBy('id');
+        $control = $this->controls->get($id);
 
-        return $this->controls->get($id);
+        // A mapping only resolves to a control in its own bank (ATH-VAL-015): First Bank's
+        // architecture was mapped to Kano's controls and borrowed their effectiveness.
+        return $control && ($organizationId === null || (int) $control->organization_id === (int) $organizationId) ? $control : null;
     }
 
-    /** @var \Illuminate\Support\Collection|null */
+    /** @var Collection|null */
     private $controls = null;
 
     /**

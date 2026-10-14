@@ -57,7 +57,7 @@ export default function Sites({
         <AuthenticatedLayout header="Sites & Resilience">
             <Head title="Sites & Power Resilience" />
             <PageHeader
-                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Portfolio' }, { label: 'Sites' }]}
+                breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Technology Architecture' }, { label: 'Sites & Resilience' }]}
                 title="Sites & Power Resilience"
                 subtitle="Where the estate physically runs, how long it survives a grid outage, and whether that meets the recovery objectives the business signed off."
             />

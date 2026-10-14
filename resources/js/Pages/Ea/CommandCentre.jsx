@@ -19,7 +19,7 @@ export default function CommandCentre({ kpis = {}, lifecycle = {}, time = {}, ra
                 breadcrumbs={[{ label: 'Enterprise Architecture' }, { label: 'Command Centre' }]}
                 title="EA Command Centre"
                 subtitle="Current-state enterprise view: capability map, application portfolio, technology radar, data/privacy posture, CBN EA maturity."
-                actions={<Link href={route('ea.cbn-maturity')} className="px-3 py-2 rounded-lg bg-[#0A1F44] text-white text-sm">CBN Maturity</Link>}
+                actions={<Link href={route('ea.cbn-maturity')} className="px-3 py-2 rounded-lg bg-[#0A1F44] text-white text-sm">EA Maturity</Link>}
             />
             <EaWorkspaceTabs tabs={tabsFor('ea.command-centre')} current="ea.command-centre" />
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
@@ -99,13 +99,16 @@ export default function CommandCentre({ kpis = {}, lifecycle = {}, time = {}, ra
                 </div>
 
                 <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                    <h3 className="text-sm font-semibold text-[#2D3748]">Latest CBN EA maturity assessment</h3>
+                    <h3 className="text-sm font-semibold text-[#2D3748]">EA maturity (CMMI, approved)</h3>
                     {assessment ? (
                         <div className="mt-3 space-y-2 text-sm">
                             <p className="text-[#2D3748]">{assessment.title}</p>
-                            <p className="text-xs text-[#718096]">Year {assessment.year} · Status: <StatusBadge status={assessment.status === 'completed' ? 'pass' : 'in_progress'} label={assessment.status} /></p>
-                            <p className="text-4xl font-bold text-[#0A1F44] mt-2">{Number(assessment.overall_score ?? 0).toFixed(2)}<span className="text-base font-normal text-[#718096]"> / 5.00</span></p>
-                            <p className="text-xs text-[#718096]">Target ≥ 3.0 · pilot-bank exit criterion</p>
+                            <p className="text-4xl font-bold text-[#0A1F44]">{assessment.results?.overall ?? '—'}<span className="text-base font-normal text-[#718096]"> / 5</span></p>
+                            <ul className="space-y-1 text-xs">
+                                {Object.values(assessment.results?.domains || {}).map((d) => (
+                                    <li key={d.code} className="flex justify-between"><span className="text-[#4A5568]">{d.name}</span><span className={`font-semibold ${d.gap ? 'text-[#C53030]' : 'text-[#2F855A]'}`}>{d.level ?? '—'} / {d.target}</span></li>
+                                ))}
+                            </ul>
                         </div>
                     ) : <p className="text-xs text-[#718096] mt-3">No assessment yet.</p>}
                 </div>

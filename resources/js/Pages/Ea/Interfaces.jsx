@@ -116,7 +116,7 @@ export default function Interfaces({ interfaces = [], cbn = {}, options = {}, se
             <PageHeader
                 breadcrumbs={[
                     { label: 'Enterprise Architecture' },
-                    { label: 'Integration Architecture' },
+                    { label: 'Application Integration' },
                     { label: 'Interfaces' },
                 ]}
                 title="Connection Catalogue"

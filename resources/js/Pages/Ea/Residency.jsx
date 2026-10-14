@@ -58,7 +58,7 @@ export default function Residency({ summary = {}, gapRegister = [], crossBorderF
             <PageHeader
                 breadcrumbs={[
                     { label: 'Enterprise Architecture' },
-                    { label: 'Data & Privacy Architecture' },
+                    { label: 'Data Architecture' },
                     { label: 'Residency' },
                 ]}
                 title="Data Residency & Localisation Control Tower"
