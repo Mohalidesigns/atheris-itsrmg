@@ -2,8 +2,15 @@
 
 namespace App\Policies\Finance;
 
+use App\Models\Finance\Budget;
+use App\Models\Finance\BudgetComment;
+use App\Models\Finance\BudgetLine;
+use App\Models\Finance\BudgetScenario;
+use App\Models\Finance\BudgetTransfer;
 use App\Models\Finance\CostCentre;
+use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\Period;
+use App\Models\Finance\SupplementaryRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
@@ -20,7 +27,45 @@ class FinancePolicy
 
     public function view(User $user, Model $model): bool
     {
-        return $this->viewAny($user) && $this->sameOrg($user, $model);
+        return $this->viewAny($user) && $this->sameOrg($user, $model) && $this->costCentreVisible($user, $model);
+    }
+
+    /* Planning records (P1): budgets, lines, scenarios, comments, cycles, targets, transfers, supplementary requests. */
+
+    public function createPlan(User $user): bool
+    {
+        return $user->can('create it-finance');
+    }
+
+    public function updatePlan(User $user, Model $model): bool
+    {
+        return $user->can('edit it-finance') && $this->sameOrg($user, $model) && $this->costCentreVisible($user, $model);
+    }
+
+    public function decidePlan(User $user, Model $model): bool
+    {
+        return $user->can('approve it-finance') && $this->sameOrg($user, $model);
+    }
+
+    public function baselinePlan(User $user, Budget $budget): bool
+    {
+        return $user->can('approve it-finance') && $this->sameOrg($user, $budget);
+    }
+
+    public function managePlanning(User $user, Model|string|null $model = null): bool
+    {
+        return $user->can('manage it-finance-settings') && (! $model instanceof Model || $this->sameOrg($user, $model));
+    }
+
+    public function proposeBands(User $user): bool
+    {
+        return $user->can('manage it-finance-settings');
+    }
+
+    public function checkBands(User $user, DoaBandVersion $version): bool
+    {
+        return ($user->can('approve it-finance') || $user->can('manage it-finance-settings'))
+            && $this->sameOrg($user, $version) && (int) $version->proposed_by_id !== (int) $user->id;
     }
 
     public function create(User $user): bool
@@ -72,6 +117,31 @@ class FinancePolicy
         }
 
         return $ids;
+    }
+
+    /** Cost-centre row restriction for planning records; null visibility means every cost centre. */
+    private function costCentreVisible(User $user, Model $model): bool
+    {
+        $planning = [Budget::class, BudgetLine::class, BudgetScenario::class, BudgetComment::class, BudgetTransfer::class, SupplementaryRequest::class];
+        if (! in_array($model::class, $planning, true)) {
+            return true;
+        }
+        $ids = self::visibleCostCentreIds($user);
+        if ($ids === null) {
+            return true;
+        }
+        $cc = match (true) {
+            $model instanceof Budget, $model instanceof BudgetLine, $model instanceof SupplementaryRequest => [$model->cost_centre_id],
+            $model instanceof BudgetScenario, $model instanceof BudgetComment => [Budget::withoutGlobalScopes()->whereKey($model->budget_id)->value('cost_centre_id')],
+            $model instanceof BudgetTransfer => [BudgetLine::withoutGlobalScopes()->whereKey($model->from_line_id)->value('cost_centre_id'), $model->to_cost_centre_id,
+                BudgetLine::withoutGlobalScopes()->whereKey($model->to_line_id)->value('cost_centre_id')],
+            default => [],
+        };
+        if (($model instanceof BudgetTransfer || $model instanceof SupplementaryRequest) && (int) $model->requested_by_id === (int) $user->id) {
+            return true;
+        }
+
+        return (bool) array_intersect(array_map('intval', array_filter($cc)), $ids);
     }
 
     private function sameOrg(User $user, Model $model): bool

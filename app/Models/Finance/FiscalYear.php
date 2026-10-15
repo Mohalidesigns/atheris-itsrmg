@@ -32,6 +32,16 @@ class FiscalYear extends Model
         return $this->hasMany(Period::class, 'fiscal_year_id')->orderBy('sequence');
     }
 
+    public function budgets(): HasMany
+    {
+        return $this->hasMany(Budget::class, 'fiscal_year_id');
+    }
+
+    public function cycles(): HasMany
+    {
+        return $this->hasMany(BudgetCycle::class, 'fiscal_year_id');
+    }
+
     public function scopeCurrent(Builder $q): Builder
     {
         return $q->where('is_current', true);

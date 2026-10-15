@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Finance\Category;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\Currency;
+use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\Driver;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\FxRate;
@@ -15,6 +16,8 @@ use App\Models\Finance\Setting;
 use App\Models\Finance\TaxType;
 use App\Models\LegalEntity;
 use App\Models\User;
+use App\Services\Finance\CurrencyService;
+use App\Services\Finance\DoaBandService;
 use App\Services\Finance\FinanceSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -26,7 +29,7 @@ class FinanceSettingsController extends Controller
 {
     public const TABS = ['general', 'calendar', 'cost-centres', 'categories', 'gl-accounts', 'currencies', 'taxes', 'drivers', 'doa', 'variance', 'renewal'];
 
-    public function __construct(private readonly FinanceSettings $settings) {}
+    public function __construct(private readonly FinanceSettings $settings, private readonly CurrencyService $currency, private readonly DoaBandService $doa) {}
 
     public function show(Request $request)
     {
@@ -57,8 +60,15 @@ class FinanceSettingsController extends Controller
         ])->values();
 
         $fxRates = FxRate::query()->orderByDesc('rate_date')->orderByDesc('id')->limit(200)->get()->map(fn (FxRate $r) => $this->fx($r))->values();
-        $latest = FxRate::query()->orderByDesc('rate_date')->orderByDesc('id')->get()->unique(fn ($r) => $r->from_currency.'>'.$r->to_currency)
-            ->map(fn (FxRate $r) => ['from_currency' => $r->from_currency, 'to_currency' => $r->to_currency, 'rate' => (string) $r->rate, 'rate_date' => $r->rate_date->toDateString()])->values();
+        $latest = FxRate::query()->orderByDesc('rate_date')->orderByDesc('id')->get()->unique(fn ($r) => $r->from_currency.'>'.$r->to_currency.'@'.$r->rate_type)
+            ->map(fn (FxRate $r) => ['from_currency' => $r->from_currency, 'to_currency' => $r->to_currency, 'rate' => (string) $r->rate, 'rate_date' => $r->rate_date->toDateString(), 'rate_type' => $r->rate_type])->values();
+        $this->doa->active($orgId); // make sure version 1 exists
+        $doaVersions = DoaBandVersion::query()->with(['proposedBy:id,name', 'decidedBy:id,name'])->orderByDesc('version_no')->get()->map(fn (DoaBandVersion $v) => [
+            'id' => $v->id, 'version_no' => $v->version_no, 'status' => $v->status, 'effective_from' => $v->effective_from->toDateString(), 'bands' => $v->bands, 'reason' => $v->reason,
+            'proposed_by' => $v->proposedBy ? ['id' => $v->proposedBy->id, 'name' => $v->proposedBy->name] : null, 'proposed_at' => $v->proposed_at?->toIso8601String(),
+            'decided_by' => $v->decidedBy ? ['id' => $v->decidedBy->id, 'name' => $v->decidedBy->name] : null, 'decided_at' => $v->decided_at?->toIso8601String(),
+            'decision_note' => $v->decision_note, 'activated_at' => $v->activated_at?->toIso8601String(),
+        ])->values();
 
         $drivers = Driver::query()->with('values')->orderBy('code')->get()->map(fn (Driver $d) => [
             'id' => $d->id, 'code' => $d->code, 'name' => $d->name, 'unit' => $d->unit, 'is_active' => $d->is_active,
@@ -82,6 +92,8 @@ class FinanceSettingsController extends Controller
             ])->values(),
             'fxRates' => $fxRates,
             'latestRates' => $latest,
+            'doaVersions' => $doaVersions,
+            'baseLockedReason' => $this->currency->baseLockedReason($orgId),
             'taxTypes' => TaxType::query()->orderBy('code')->get()->map(fn (TaxType $t) => [
                 'id' => $t->id, 'code' => $t->code, 'name' => $t->name, 'kind' => $t->kind, 'rate' => (string) $t->rate,
                 'is_inclusive' => $t->is_inclusive, 'applies_to' => $t->applies_to ?? [], 'is_active' => $t->is_active,
@@ -93,7 +105,7 @@ class FinanceSettingsController extends Controller
             'options' => [
                 'months' => collect(range(1, 12))->map(fn ($m) => ['value' => $m, 'label' => date('F', mktime(0, 0, 0, $m, 1))])->all(),
                 'periodSchemes' => FiscalYear::PERIOD_SCHEMES, 'fiscalYearStatuses' => FiscalYear::STATUSES, 'periodStatuses' => Period::STATUSES,
-                'categoryKinds' => Category::KINDS, 'glTypes' => GlAccount::TYPES, 'fxSources' => FxRate::SOURCES,
+                'categoryKinds' => Category::KINDS, 'glTypes' => GlAccount::TYPES, 'fxSources' => FxRate::SOURCES, 'fxRateTypes' => FxRate::RATE_TYPES,
                 'taxKinds' => TaxType::KINDS, 'taxAppliesTo' => TaxType::APPLIES_TO,
                 'overbudgetModes' => Setting::OVERBUDGET_MODES, 'eacMethods' => Setting::EAC_METHODS,
                 'currencyCatalogue' => collect(config('finance.currencies'))->map(fn ($v, $code) => ['code' => $code, 'name' => $v[0], 'symbol' => $v[1], 'decimals' => $v[2]])->values()->all(),
@@ -102,6 +114,8 @@ class FinanceSettingsController extends Controller
                 'manage' => $user->can('manage it-finance-settings'),
                 'closePeriods' => $user->can('close it-finance-periods'),
                 'import' => $user->can('import it-finance'),
+                'approveBands' => $user->can('approve it-finance') || $user->can('manage it-finance-settings'),
+                'changeBase' => $this->currency->baseLockedReason($orgId) === null,
             ],
         ]);
     }
@@ -112,6 +126,9 @@ class FinanceSettingsController extends Controller
         Gate::authorize('update', $setting);
 
         $section = $request->validate(['section' => ['required', Rule::in(Setting::SECTIONS)]])['section'];
+        if ($section === 'doa') {
+            $this->settings->update($setting, 'doa', []); // refuses: bands change through a proposal and a second approver
+        }
         $rules = match ($section) {
             'general' => [
                 'fiscal_year_start_month' => ['required', 'integer', 'between:1,12'],
@@ -162,6 +179,6 @@ class FinanceSettingsController extends Controller
 
     private function fx(FxRate $r): array
     {
-        return ['id' => $r->id, 'from_currency' => $r->from_currency, 'to_currency' => $r->to_currency, 'rate' => (string) $r->rate, 'rate_date' => $r->rate_date->toDateString(), 'source' => $r->source];
+        return ['id' => $r->id, 'from_currency' => $r->from_currency, 'to_currency' => $r->to_currency, 'rate' => (string) $r->rate, 'rate_date' => $r->rate_date->toDateString(), 'source' => $r->source, 'rate_type' => $r->rate_type];
     }
 }

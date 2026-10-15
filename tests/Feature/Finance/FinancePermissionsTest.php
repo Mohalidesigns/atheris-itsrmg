@@ -32,7 +32,7 @@ class FinancePermissionsTest extends TestCase
     ];
 
     private const GRANTS = [
-        'IT Budget Owner' => ['view it-finance', 'create it-finance', 'edit it-finance', 'export it-finance'],
+        'IT Budget Owner' => ['view it-finance', 'create it-finance', 'edit it-finance', 'export it-finance', 'view it-finance-amounts'],
         'Procurement Officer' => ['view it-finance', 'create it-finance', 'edit it-finance', 'import it-finance', 'view it-finance-amounts'],
         'Investment Sponsor' => ['view it-finance', 'approve it-finance-investments', 'view it-finance-amounts'],
         'IT Steering Committee' => ['view it-finance', 'approve it-finance-investments', 'view it-finance-amounts'],

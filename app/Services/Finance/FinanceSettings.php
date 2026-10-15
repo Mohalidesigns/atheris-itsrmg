@@ -21,7 +21,6 @@ class FinanceSettings
     /** Keys each settings section may write. */
     public const SECTION_KEYS = [
         'general' => ['fiscal_year_start_month', 'period_scheme', 'overbudget_mode', 'match_tolerance_pct', 'match_tolerance_abs', 'eac_method', 'showback_enabled', 'digest_hour'],
-        'doa' => ['doa_bands'],
         'variance' => ['variance_amber_pct', 'variance_red_pct', 'variance_abs_floor'],
         'renewal' => ['renewal_lead_days', 'renewal_notice_offsets', 'escalation_role'],
     ];
@@ -54,6 +53,9 @@ class FinanceSettings
 
     public function update(Setting $setting, string $section, array $validated): Setting
     {
+        if ($section === 'doa') {
+            throw ValidationException::withMessages(['workflow' => 'DoA bands change through a proposal and a second approver (maker-checker).']);
+        }
         $keys = self::SECTION_KEYS[$section] ?? throw ValidationException::withMessages(['section' => 'Unknown settings section.']);
         $data = array_intersect_key($validated, array_flip($keys));
 
@@ -61,11 +63,6 @@ class FinanceSettings
             $offsets = array_values(array_unique(array_map('intval', $data['renewal_notice_offsets'])));
             rsort($offsets);
             $data['renewal_notice_offsets'] = $offsets;
-        }
-        if ($section === 'doa') {
-            $bands = array_values($data['doa_bands'] ?? []);
-            $this->validateBands($bands);
-            $data['doa_bands'] = $this->withKeys($bands);
         }
 
         $setting->fill($data)->save();
@@ -77,18 +74,7 @@ class FinanceSettings
     /** Key of the DoA band an amount (in base currency) falls in: min <= amount < max. */
     public function bandFor(int $orgId, string|float $baseAmount): string
     {
-        $bands = $this->for($orgId)->doa_bands ?? config('finance.settings_defaults.doa_bands');
-        $amount = (string) $baseAmount;
-
-        foreach ($bands as $band) {
-            $aboveMin = bccomp($amount, (string) $band['min'], 2) >= 0;
-            $belowMax = $band['max'] === null || bccomp($amount, (string) $band['max'], 2) < 0;
-            if ($aboveMin && $belowMax) {
-                return $band['key'];
-            }
-        }
-
-        return end($bands)['key'];
+        return app(DoaBandService::class)->bandFor($orgId, $baseAmount)['key'];
     }
 
     public function baseCurrency(int $orgId): string
@@ -133,7 +119,7 @@ class FinanceSettings
     }
 
     /** @param array<int, array<string,mixed>> $bands */
-    private function withKeys(array $bands): array
+    public function bandsWithKeys(array $bands): array
     {
         $out = [];
         foreach ($bands as $i => $b) {
@@ -149,6 +135,9 @@ class FinanceSettings
     private function short(int|float|string $n): string
     {
         $n = (float) $n;
+        if ($n >= 1_000_000_000 && fmod($n, 100_000_000) == 0.0) {
+            return rtrim(rtrim(number_format($n / 1_000_000_000, 1, '.', ''), '0'), '.').'bn';
+        }
         if ($n >= 1_000_000 && fmod($n, 1_000_000) == 0.0) {
             return ((int) ($n / 1_000_000)).'m';
         }

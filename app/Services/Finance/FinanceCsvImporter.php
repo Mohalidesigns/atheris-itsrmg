@@ -25,6 +25,9 @@ class FinanceCsvImporter
 
     private const FX_HEADERS = ['from_currency', 'to_currency', 'rate', 'rate_date'];
 
+    /** Optional columns: absent from the file is fine, empty value takes the default. */
+    private const FX_OPTIONAL = ['rate_type'];
+
     private const CC_HEADERS = ['code', 'name', 'parent_code', 'owner_email', 'legal_entity_code', 'business_unit', 'is_active'];
 
     public function fxRates(int $orgId, UploadedFile $file): array
@@ -51,13 +54,18 @@ class FinanceCsvImporter
                 return 'rate_date cannot be in the future.';
             }
 
+            $type = strtolower($r['rate_type'] ?? '') ?: 'spot';
+            if (! in_array($type, FxRate::RATE_TYPES, true)) {
+                return 'rate_type must be one of: '.implode(', ', FxRate::RATE_TYPES).'.';
+            }
+
             $row = FxRate::withoutGlobalScopes()->firstOrNew([
-                'organization_id' => $orgId, 'from_currency' => $from, 'to_currency' => $to, 'rate_date' => $date->toDateString(),
+                'organization_id' => $orgId, 'from_currency' => $from, 'to_currency' => $to, 'rate_date' => $date->toDateString(), 'rate_type' => $type,
             ]);
             $row->fill(['rate' => $r['rate'], 'source' => 'import'])->save();
 
             return null;
-        });
+        }, self::FX_OPTIONAL);
     }
 
     public function costCentres(int $orgId, UploadedFile $file): array
@@ -131,7 +139,7 @@ class FinanceCsvImporter
     /**
      * @param  callable(array<string,string>): ?string  $handler  returns an error message, or null when the row was applied
      */
-    private function run(string $type, UploadedFile $file, array $headers, callable $handler): array
+    private function run(string $type, UploadedFile $file, array $headers, callable $handler, array $optional = []): array
     {
         $handle = fopen($file->getRealPath(), 'r');
         if (! $handle) {
@@ -158,9 +166,9 @@ class FinanceCsvImporter
                 throw ValidationException::withMessages(['file' => "The file has more than {$max} rows."]);
             }
             $row = [];
-            foreach ($headers as $h) {
+            foreach (array_merge($headers, $optional) as $h) {
                 $i = array_search($h, $head, true);
-                $row[$h] = trim((string) ($cells[$i] ?? ''));
+                $row[$h] = $i === false ? '' : trim((string) ($cells[$i] ?? ''));
             }
             $rows[] = [$line, $row];
         }

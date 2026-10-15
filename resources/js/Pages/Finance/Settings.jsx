@@ -68,10 +68,10 @@ export default function Settings(props) {
             {tab === 'cost-centres' && <CostCentresTab costCentres={props.costCentres} users={props.users} legalEntities={props.legalEntities} can={can} />}
             {tab === 'categories' && <CategoriesTab categories={props.categories} glAccounts={props.glAccounts} can={can} />}
             {tab === 'gl-accounts' && <GlAccountsTab glAccounts={props.glAccounts} options={props.options} can={can} />}
-            {tab === 'currencies' && <CurrenciesTab currencies={props.currencies} fxRates={props.fxRates} latestRates={props.latestRates} options={props.options} can={can} />}
+            {tab === 'currencies' && <CurrenciesTab currencies={props.currencies} fxRates={props.fxRates} latestRates={props.latestRates} options={props.options} baseLockedReason={props.baseLockedReason} can={can} />}
             {tab === 'taxes' && <TaxesTab taxTypes={props.taxTypes} options={props.options} can={can} />}
             {tab === 'drivers' && <DriversTab drivers={props.drivers} fiscalYears={props.fiscalYears} can={can} />}
-            {tab === 'doa' && <DoaBandsTab settings={props.settings} baseCurrency={props.baseCurrency} can={can} />}
+            {tab === 'doa' && <DoaBandsTab settings={props.settings} doaVersions={props.doaVersions} baseCurrency={props.baseCurrency} can={can} />}
             {tab === 'variance' && <VarianceTab settings={props.settings} baseCurrency={props.baseCurrency} can={can} />}
             {tab === 'renewal' && <RenewalPolicyTab settings={props.settings} jobTitles={props.jobTitles} can={can} />}
         </AuthenticatedLayout>

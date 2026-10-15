@@ -106,6 +106,9 @@ class FiscalCalendarService
         if ($fy->periods()->whereIn('status', ['closed', 'locked'])->exists()) {
             $this->fail('A fiscal year with closed periods cannot be deleted.');
         }
+        if ($fy->cycles()->withTrashed()->exists() || $fy->budgets()->withTrashed()->exists()) {
+            $this->fail('A fiscal year with budget cycles or budgets cannot be deleted.');
+        }
         DB::transaction(function () use ($fy) {
             $fy->periods()->delete();
             $fy->delete();

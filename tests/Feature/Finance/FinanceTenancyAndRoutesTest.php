@@ -77,13 +77,29 @@ class FinanceTenancyAndRoutesTest extends TestCase
             ->mapWithKeys(fn (RouteDefinition $r) => [$r->getName() => route($r->getName())])->sortKeys()->all();
     }
 
+    /** @return array<string, string> parameterless GET routes only */
+    private function pageRoutes(): array
+    {
+        return array_filter($this->getRoutes(), fn ($url, $name) => ! str_contains($url, '{'), ARRAY_FILTER_USE_BOTH);
+    }
+
     public function test_every_finance_page_renders_for_an_organization_admin(): void
     {
-        $routes = $this->getRoutes();
-        $this->assertSame(['finance.settings'], array_keys($routes));
+        $names = collect(Route::getRoutes()->getRoutes())
+            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && in_array('GET', $r->methods(), true))
+            ->map(fn (RouteDefinition $r) => $r->getName())->sort()->values()->all();
+        $this->assertSame([
+            'finance.budgets.create', 'finance.budgets.diff', 'finance.budgets.edit', 'finance.budgets.index', 'finance.budgets.show', 'finance.budgets.workbook',
+            'finance.cycles.index', 'finance.settings', 'finance.supplementary.index', 'finance.targets.index', 'finance.transfers.index',
+        ], $names);
 
-        foreach ($routes as $name => $url) {
-            $this->actingAs($this->admin)->get($url)->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Settings')->has('auth.user')->where('tab', 'general'));
+        $components = [
+            'finance.settings' => 'Finance/Settings', 'finance.budgets.index' => 'Finance/Budgets/Index', 'finance.budgets.create' => 'Finance/Budgets/Create',
+            'finance.cycles.index' => 'Finance/Budgets/Cycles', 'finance.targets.index' => 'Finance/Budgets/Targets',
+            'finance.transfers.index' => 'Finance/Budgets/Transfers', 'finance.supplementary.index' => 'Finance/Budgets/Supplementary',
+        ];
+        foreach ($components as $name => $component) {
+            $this->actingAs($this->admin)->get(route($name))->assertOk()->assertInertia(fn (Assert $p) => $p->component($component, false)->has('auth.user'));
         }
         $this->actingAs($this->admin)->get(route('finance.settings', ['tab' => 'categories']))->assertInertia(fn (Assert $p) => $p->where('tab', 'categories'));
         $this->actingAs($this->admin)->get(route('finance.settings', ['tab' => 'nope']))->assertInertia(fn (Assert $p) => $p->where('tab', 'general'));

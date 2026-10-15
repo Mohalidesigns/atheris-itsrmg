@@ -12,6 +12,9 @@ class FxRate extends Model
 
     public const SOURCES = ['manual', 'import', 'provider'];
 
+    /** Mirrors config('finance.fx.rate_types'); a constant so it is usable in static contexts. */
+    public const RATE_TYPES = ['spot', 'average', 'closing', 'budget'];
+
     protected $table = 'fin_fx_rates';
 
     protected $guarded = [];

@@ -5,6 +5,7 @@ namespace Tests\Feature\Finance;
 use App\Models\Finance\Category;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\Currency;
+use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\Driver;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\FxRate;
@@ -263,6 +264,8 @@ class FinanceConfigurationTest extends TestCase
 
         $c = $svc->convert($this->org->id, '100.00', 'USD', $d);
         $this->assertSame('1550.00000000', $c['fx_rate']);
+        $this->assertSame('spot', $c['rate_type']);
+        $this->assertSame('2027-03-14', $c['rate_date']);
         $this->assertSame('155000.00', $c['base_amount']);
         $this->assertSame('100.00', $c['amount']);
         $this->assertSame('USD', $c['currency']);
@@ -337,21 +340,30 @@ class FinanceConfigurationTest extends TestCase
         $this->assertSame('1m-10m', $settings->bandFor($this->org->id, 1000000));
         $this->assertSame('250m+', $settings->bandFor($this->org->id, 300000000));
 
+        // P1: bands change through propose -> a different user approves -> active (S7/D5).
         $this->actingAs($this->admin);
-        $put = fn (array $bands) => $this->put(route('finance.settings.update'), ['section' => 'doa', 'doa_bands' => $bands]);
-
-        $put([
+        $bands = [
             ['label' => 'Small', 'min' => 0, 'max' => 5000000],
             ['label' => 'Medium', 'min' => 5000000, 'max' => 20000000],
             ['label' => 'Large', 'min' => 20000000, 'max' => null],
-        ])->assertRedirect(route('finance.settings', ['tab' => 'doa']))->assertSessionHasNoErrors();
-        $this->assertSame(['0-5m', '5m-20m', '20m+'], collect($setting->refresh()->doa_bands)->pluck('key')->all());
-        $this->assertSame('5m-20m', $settings->bandFor($this->org->id, 5000000));
+        ];
+        $this->put(route('finance.settings.update'), ['section' => 'doa', 'doa_bands' => $bands])->assertSessionHasErrors('workflow');
+        $this->assertSame(['0-1m', '1m-10m', '10m-50m', '50m-250m', '250m+'], collect($setting->refresh()->doa_bands)->pluck('key')->all());
 
-        $put([['label' => 'A', 'min' => 0, 'max' => 5000000], ['label' => 'B', 'min' => 6000000, 'max' => null]])->assertSessionHasErrors('doa_bands');
-        $put([['label' => 'A', 'min' => 0, 'max' => 5000000], ['label' => 'B', 'min' => 5000000, 'max' => 2000000], ['label' => 'C', 'min' => 2000000, 'max' => null]])->assertSessionHasErrors('doa_bands');
-        $put([['label' => 'A', 'min' => 1000, 'max' => 5000000], ['label' => 'B', 'min' => 5000000, 'max' => null]])->assertSessionHasErrors('doa_bands');
+        $this->post(route('finance.doa-bands.store'), ['bands' => $bands, 'effective_from' => today()->toDateString()])->assertSessionHasNoErrors();
+        $version = DoaBandVersion::latest('id')->first();
+        $this->assertSame('pending', $version->status);
+        $this->post(route('finance.doa-bands.approve', $version))->assertForbidden(); // maker cannot approve
+
+        $checker = User::factory()->create(['organization_id' => $this->org->id]);
+        $checker->assignRole('Organization Admin');
+        $this->actingAs($checker)->post(route('finance.doa-bands.approve', $version))->assertSessionHasNoErrors();
         $this->assertSame(['0-5m', '5m-20m', '20m+'], collect($setting->refresh()->doa_bands)->pluck('key')->all());
+        $this->assertSame('5m-20m', app(FinanceSettings::class)->bandFor($this->org->id, 5000000));
+
+        $settings->validateBands([['label' => 'A', 'min' => 0, 'max' => 5000000], ['label' => 'B', 'min' => 5000000, 'max' => null]]);
+        $this->refused(fn () => $settings->validateBands([['label' => 'A', 'min' => 0, 'max' => 5000000], ['label' => 'B', 'min' => 6000000, 'max' => null]]), 'doa_bands');
+        $this->refused(fn () => $settings->validateBands([['label' => 'A', 'min' => 1000, 'max' => 5000000], ['label' => 'B', 'min' => 5000000, 'max' => null]]), 'doa_bands');
     }
 
     /** FIN-01.08 */

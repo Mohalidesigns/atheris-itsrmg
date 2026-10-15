@@ -7,8 +7,8 @@ export const SEVERITIES = ['critical', 'high', 'moderate', 'low'];
 /** "moderate" is stored, "Medium" is shown. */
 export const severityLabel = (s, config) => (config?.severityLabels || SEVERITY_LABELS)[s] || s;
 
-export function SeverityBadge({ severity, config }) {
-    return <StatusBadge status={severity === 'moderate' ? 'medium' : severity} label={severityLabel(severity, config)} />;
+export function SeverityBadge({ severity, config, size }) {
+    return <StatusBadge status={severity === 'moderate' ? 'medium' : severity} label={severityLabel(severity, config)} size={size} />;
 }
 
 export const inputCls = 'mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm disabled:bg-gray-50 disabled:text-[#718096]';

@@ -90,7 +90,7 @@ class WorkflowStudioModuleTest extends TestCase
     public function test_the_studio_lists_every_process_and_edits_stages_within_the_bank(): void
     {
         $this->actingAs($this->admin)->get(route('workflows.index'))->assertOk()->assertInertia(fn (Assert $p) => $p
-            ->component('Workflows/Index')->where('summary.processes', 11)->has('processes.Policy Management', 2));
+            ->component('Workflows/Index')->where('summary.processes', 14)->has('processes.Policy Management', 2));
 
         $theirUser = $this->user('Organization Admin', [], $this->other);
         $this->post(route('workflows.stages.store', 'policy.approval'), ['name' => 'X', 'approver_type' => 'user', 'approver_ref' => (string) $theirUser->id, 'min_approvals' => 1, 'sla_hours' => 24])

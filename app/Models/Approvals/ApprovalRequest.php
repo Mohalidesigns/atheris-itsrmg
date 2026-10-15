@@ -13,7 +13,7 @@ class ApprovalRequest extends Model
 
     protected $guarded = [];
 
-    protected $casts = ['completed_at' => 'datetime'];
+    protected $casts = ['completed_at' => 'datetime', 'context' => 'array'];
 
     public const STATUSES = ['pending', 'approved', 'rejected', 'withdrawn'];
 

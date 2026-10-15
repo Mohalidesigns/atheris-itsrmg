@@ -72,10 +72,13 @@ class FinanceCurrencyController extends Controller
             'to_currency' => ['required', 'string', 'different:from_currency', $active],
             'rate' => ['required', 'regex:'.FinanceCsvImporter::FX_RATE, 'gt:0', 'max:9999999999'],
             'rate_date' => ['required', 'date', 'before_or_equal:today'],
+            'rate_type' => ['sometimes', Rule::in(FxRate::RATE_TYPES)],
         ]);
+        $data['rate_type'] ??= 'spot';
         $this->assertDateUnlocked($orgId, $data['rate_date']);
         $row = FxRate::firstOrNew([
             'organization_id' => $orgId, 'from_currency' => $data['from_currency'], 'to_currency' => $data['to_currency'], 'rate_date' => $data['rate_date'],
+            'rate_type' => $data['rate_type'],
         ]);
         $row->fill(['rate' => $data['rate'], 'source' => 'manual'])->save();
 

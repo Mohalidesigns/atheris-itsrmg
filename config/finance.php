@@ -50,4 +50,22 @@ return [
     ],
 
     'import_max_rows' => 5000,
+
+    // P1 budgeting (ATH-FIN-001 §3.2, §5.1)
+    'fx' => [
+        'rate_types' => ['spot', 'average', 'closing', 'budget'],
+        // When no rate of the requested type exists on or before the date, try these in order.
+        'fallback' => ['budget' => ['spot'], 'average' => ['spot'], 'closing' => ['spot'], 'spot' => []],
+        'planning_rate_type' => 'budget', // budget lines convert at this type on the fiscal-year start date
+    ],
+    'phasing' => ['seasonal' => [6, 7, 8, 8, 8, 8, 8, 8, 9, 9, 10, 11]], // weights by period sequence 1..12
+    'transfers' => ['allow_capex_opex' => false],
+    // Tables that hold money; the base currency is frozen once any has a row (P3+ append).
+    'money_tables' => ['fin_budget_lines', 'fin_budget_transfers', 'fin_supplementary_requests'],
+    'workbook' => ['max_rows' => 2000, 'max_kb' => 4096],
+    'approval_defaults' => [ // base-currency thresholds that FinancePolicySeeder maps onto each bank's bands
+        'budget_md_ceo_from' => 250000000,
+        'supplementary_cio_from' => 50000000,
+        'transfer_cio_from' => 50000000,
+    ],
 ];

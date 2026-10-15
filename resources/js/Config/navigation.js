@@ -147,6 +147,7 @@ const navigation = [
         icon: CurrencyDollarIcon,
         permission: 'view it-finance',
         children: [
+            { name: 'Budgets', href: 'finance.budgets.index', permission: 'view it-finance' },
             { name: 'Settings', href: 'finance.settings', permission: 'view it-finance' },
         ],
     },

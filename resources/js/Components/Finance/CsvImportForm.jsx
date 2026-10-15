@@ -4,13 +4,13 @@ import { useForm } from '@inertiajs/react';
 import { useRef } from 'react';
 
 /** Upload a CSV to a Ziggy route; the server reports back through flash.import_report. */
-export default function CsvImportForm({ routeName, hint, label = 'Import CSV' }) {
+export default function CsvImportForm({ routeName, params, hint, label = 'Import CSV' }) {
     const form = useForm({ file: null });
     const input = useRef(null);
     const submit = (e) => {
         e.preventDefault();
         if (!form.data.file) return;
-        form.post(route(routeName), {
+        form.post(route(routeName, params), {
             forceFormData: true,
             preserveScroll: true,
             onSuccess: () => { form.reset(); if (input.current) input.current.value = ''; },

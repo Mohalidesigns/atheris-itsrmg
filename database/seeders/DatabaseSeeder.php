@@ -124,6 +124,10 @@ class DatabaseSeeder extends Seeder
         // fiscal calendar, cost centres, drivers and finance users per bank (ATH-FIN-001 §3.1, §13)
         $this->call(FinanceFoundationSeeder::class);
 
+        // IT Financial Management P1 (budgeting): DoA band versions, budget FX rates, cycles, FY baselines, a mid-year
+        // revision, Workflow Studio default stages, transfers, supplementary requests, ceilings and next-year budgets
+        $this->call(FinanceDemoSeeder::class);
+
         // Asset Management: coherent owners and departments, provenance from real sandbox connector
         // runs and a CSV import, business services and dependency chains per bank, asset → service
         // links, inherited criticality, and First Bank's EA applications tied to their assets

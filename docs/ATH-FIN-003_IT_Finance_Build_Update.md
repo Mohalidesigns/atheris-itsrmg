@@ -91,3 +91,109 @@ Security review: no Critical findings. Domain review: conditional go. Fixed in P
 ### Review verdicts
 - Security (fin-security-reviewer): GO after H1, S2 and S3. All three are fixed.
 - Domain (fin-domain-reviewer): CONDITIONAL GO. D1, D2 and D4 are fixed. D3 and D5 are P1 design items.
+
+---
+
+## Phase P1 — Budget planning & allocation (2026-10-15, branch `feature/it-finance-p1`)
+
+Plan: [docs/build/ATH-FIN-PLAN-p1.md](build/ATH-FIN-PLAN-p1.md). Spec §3.2, §4.2, §5.1, §6 (three budget processes), §7 (approval notifications), §10 (Budgets pages). It also covers the five items P0 deferred to P1.
+
+### Shipped
+- **Schema:** 4 migrations, all safe on both Postgres and SQLite.
+  - Budgeting: cycles, targets, budgets/versions, lines, line periods, scenarios, comments, the adjustments ledger, transfers, supplementary requests.
+  - Allocation tables. Execution is P6.
+  - DoA band versions, `fin_notification_logs` and `approval_requests.context`.
+  - `rate_type` on `fin_fx_rates`.
+- **Models:** 14 new in `app/Models/Finance`.
+- **Services:** BudgetService (lifecycle, versions, diff, incremental), BudgetPhasing, BudgetLedger, BudgetWorkbook (CSV), BudgetCycleService, BudgetTransferService, SupplementaryBudgetService, DoaBandService, FinanceApprovals (a wrapper around `ApprovalEngine` that stores a band snapshot and enforces SoD), FinancePolicySeeder, FinanceApprovalNotifier and FinanceApprovalSweeper.
+- **P0-deferred items, all delivered:**
+  - Versioned DoA bands with `effective_from`, maker-checker, a dedicated audit event and a band snapshot on every approval request. Stage conditions are re-mapped when a version activates.
+  - TBM `cost_pool_id` and `tower_id` required on every budget line.
+  - FX `rate_type` (spot/average/closing/budget) and `rate_date` returned from conversion.
+  - A base-currency change guard once money rows exist.
+  - Per-bank DoA bands.
+- **Workflow Studio:** 3 processes: `finance.budget_approval`, `finance.budget_transfer`, `finance.supplementary_budget`. `ApprovalProcesses::conditions($process, $orgId)` gives each bank its own `amount_band` values. Default stages are seeded on first open (`ensureDefaults`). The transfer default escalates to the CIO from the high-value band.
+- **Notifications:** 3 FinanceApproval* notifications, delivered through an auto-discovered listener.
+- **Scheduled commands:** `fin:approvals-sweep` (hourly, deduplicated via `fin_notification_logs`) and `fin:doa-activate` (daily at 00:05).
+- **Routes:** 72 new `finance.*` routes (83 with P0). Each has `view it-finance` plus the right write permission.
+- **UI:**
+  - 8 pages under `Finance/Budgets`: Index, Create, Show, Workbook, Cycles, Targets, Transfers, Supplementary.
+  - About 20 components: the workbook grid (keyboard navigation, TSV paste), the version diff, the ceiling bar and the band snapshot.
+  - A "Budgets" nav entry with a tab bar.
+  - Settings: DoA versions editor and FX rate types.
+- **Amount masking:** server-side, through `renderMasked`. Users without `view it-finance-amounts` get null amounts, bands and deltas in props, in the diff JSON and in the CSV export, and CSV import is refused to them.
+- **Demo data (`FinanceDemoSeeder`), both banks:**
+  - FY baselines: Kano 8 budgets with 59 lines; First Bank 10 with 74 lines across its legal entities, in NGN, GBP and GHS. Plus a mid-year v2 revision.
+  - FY+1 drafts in every state, including a returned draft with line comments and an unowned draft.
+  - Transfers in every state. Applied ones net to zero, and one crosses cost centres.
+  - Supplementary requests, scenarios and a breached ceiling.
+  - Per-bank DoA bands: v1 superseded, v2 active, and a pending v3 at Kano.
+  - New users md@ and headofit@.
+
+### Tests
+- New:
+  - `BudgetLifecycleTest`, `BudgetWorkbookTest`, `BudgetTransferTest`, `FinanceDoaFxAndCurrencyGuardTest`
+  - `BudgetBackendSmokeTest`, plus `FinanceWorkflowStudioTest` (extended to 15 tests)
+  - a seeded-estate check in `RouteSmokeTest`
+  - `--filter Finance`: 96 tests, all pass.
+- Every FIN-02 M item maps to a test; the table is in plan §8 and the QA report.
+- `RouteSmokeTest` (SMOKE=1, scratch): 3 tests, 1,087 assertions, all pass.
+- `migrate:fresh --seed`: clean.
+- `npm run build`: passes.
+- Pint: clean.
+- Full suite on PostgreSQL after the review fixes: 452 tests, 5,790 assertions, OK. 3 skipped are opt-in tests: the smoke tests, which run separately. The first gate run collided with a reviewer running tests on the same DB and gave 42 false errors (missing tables, deadlocks).
+
+### Review fixes applied
+Both reviews were run on Opus. The first verdict from each was no-go.
+- **SoD bypass on zero-step requests (security H1, domain H2).** A configured workflow with no applicable stage was auto-approved, so the owner could approve their own budget, transfer or supplementary request. `FinanceApprovals::assertZeroStepSoD` now applies the default-approver rule and also excludes `created_by_id`. The shared `ApprovalEngine` is untouched.
+- **DoA re-map (domain H1).** A band version that adds bands now extends "from X upward" stages to the new top bands.
+- **Adjustments across re-baselines (domain H3, security M4).** Transfer and supplementary `apply` now re-resolve their lines to the current baseline through lineage, under a lock. Transfers also re-check that their periods are still open. `baseline()` carries forward adjustments posted during a revision.
+- **Incremental mode (domain H4).** The increment now scales the current amount (original + adjustments), not the original.
+- **Virement DoA escalation (domain H5).** A default transfer stage goes to the CIO from `transfer_cio_from` (₦50m), conditioned on `amount_band`.
+- **Masking leaks (security M1, M2).** Diff deltas, amount band and label, band min/max and `driver_rate` are now masked.
+- **Orchestrator fixes:**
+  - IT Budget Owner granted `view it-finance-amounts`; owners can't plan blind.
+  - The seeder's transfer approvals now include the CIO.
+
+### Deferred / logged (Medium/Low, not fixed)
+- **Before P3** (P3 builds on the current-budget figure):
+  - Supplementary FX re-quote and the ledger rate for line top-ups (domain M1).
+  - The diff only follows lineage one version back; the diff, Index KPI and by-period totals use original rather than current amounts (domain M3).
+  - `Budget::LOCKED_WRITABLE` allows any status change on a locked baseline (domain M4).
+- **Fold into P7 hardening:**
+  - Bank policy in app config rather than per-tenant settings: thresholds, `allow_capex_opex`, seasonal weights (domain M5).
+  - Postgres-only `ilike` in `FinanceDemoSeeder` (domain M5).
+  - Cross-legal-entity virements not refused or escalated (domain M6).
+  - No FX staleness limit; mixed planning rates within one version (domain M7).
+  - `FinanceNotificationsTest` missing (domain M8).
+  - The targets list and transfer/supplementary summaries are not filtered by cost-centre visibility (security M3).
+  - SoD keyed only on submitter and owner: a preparer can reassign the owner (security M5).
+- **Low (domain L1–L8, security L1–L6):**
+  - The base-currency guard ignores targets and DoA bands.
+  - Remainder-to-last-period phasing can go negative.
+  - The CSV formula guard misses tab/CR and code columns.
+  - Notifications mail amounts to users without amount rights.
+  - The DoA activation and sweep loops have no per-tenant try/catch.
+  - A return is stored as an engine rejection.
+  - No SoD on baseline or apply.
+  - Some N+1 queries on the index pages.
+  - Banks already seeded keep the two-stage transfer workflow, because `ensureDefaults` skips existing workflows.
+- **Spec scope moved:**
+  - Allocation execution (FIN-02.12) goes to P6 (C27).
+  - From-actuals mode and the prior-year actual column go to P3 (C26).
+  - XLSX is not supported (C25); the workbook is CSV only.
+- **Platform defect, logged:** EA/Core listeners are registered twice, once by auto-discovery and once in `AppServiceProvider` (C35).
+
+### Decisions
+| # | decision | reason |
+|---|---|---|
+| P1-1 | Accept architect conflicts C22–C48 as recommended in the P1 plan. Key ones: baseline + signed adjustments ledger (C22), per-bank condition values via `ApprovalProcesses::conditions` (C28), band snapshot in `approval_requests.context` (C31) | Keep baselines immutable while allowing virements; per-bank DoA without engine changes |
+| P1-2 | Workbook is CSV only; XLSX returns 422 (no `openspout` dependency) | No new composer dependency without the owner's sign-off; revisit at P7 |
+| P1-3 | Accept the C33 demo workaround: a dedicated headofit@ approver with no cost centres. Delegate approvers are still open | The engine has no delegate/skip rule yet |
+| P1-4 | CapEx↔OpEx virements are refused by default | Accounting-treatment control; needs an explicit setting to allow |
+| P1-5 | IT Budget Owner gets `view it-finance-amounts` | Owners prepare the amounts; masking is for read-only viewers |
+| P1-6 | The SoD fix lives in the finance wrapper, not in `ApprovalEngine` | Avoids changing behaviour in the other modules on the shared engine. The engine-level zero-step auto-approve is logged for a platform fix |
+
+### Review verdicts
+- Security (Opus): NO-GO on H1. H1 is fixed, plus M1, M2 and M4, so the branch is GO.
+- Domain (Opus): NO-GO on H1–H5. All five are fixed with regression tests, which clears the no-go. M1–M4 must land before P3.
