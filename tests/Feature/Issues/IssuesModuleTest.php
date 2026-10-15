@@ -15,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -47,7 +48,7 @@ class IssuesModuleTest extends TestCase
         $this->admin = $this->user('Organization Admin', ['job_title' => 'CISO']);
         $this->riskManager = $this->user('Risk Manager', ['job_title' => 'Chief Risk Officer']);
 
-        foreach (['critical' => 72, 'high' => 336, 'medium' => 720, 'low' => 2160] as $severity => $hours) {
+        foreach (['critical' => 48, 'high' => 336, 'medium' => 720, 'low' => 2160] as $severity => $hours) {
             DB::table('vulnerability_sla_policies')->insert([
                 'organization_id' => $this->org->id, 'severity' => $severity, 'hours_to_remediate' => $hours,
                 'escalation_rules' => json_encode(['chain' => ['owner', 'CISO', 'CRO']]), 'created_at' => now(), 'updated_at' => now(),
@@ -103,7 +104,7 @@ class IssuesModuleTest extends TestCase
         $this->actingAs($this->admin)->post(route('issues.transition', $theirs), ['action' => 'start'])->assertNotFound();
 
         $this->actingAs($this->admin)->get(route('issues.sla-policies'))->assertOk()
-            ->assertInertia(fn (Assert $p) => $p->has('policies', 4)->where('policies.0.hours_to_remediate', 72));
+            ->assertInertia(fn (Assert $p) => $p->has('policies', 4)->where('policies.0.hours_to_remediate', 48));
         $this->actingAs($this->admin)->get(route('itsm.index'))->assertOk()
             ->assertInertia(fn (Assert $p) => $p->has('connections', 1)->where('connections.0.name', 'Our desk'));
     }
@@ -132,8 +133,8 @@ class IssuesModuleTest extends TestCase
         $issue = Issue::withoutGlobalScopes()->where('title', 'Treat AD compromise risk')->firstOrFail();
         $this->assertSame($this->org->id, $issue->organization_id);
         $this->assertSame('ISS-0001', $issue->issue_code);
-        $this->assertSame(72 * 60, $issue->sla_minutes);
-        $this->assertEqualsWithDelta(now()->addHours(72)->timestamp, $issue->sla_due_at->timestamp, 5);
+        $this->assertSame(48 * 60, $issue->sla_minutes);
+        $this->assertEqualsWithDelta(now()->addHours(48)->timestamp, $issue->sla_due_at->timestamp, 5);
         $this->assertSame($risk->id, $issue->source_id);
         $this->assertSame($risk->risk_id_code, $issue->sourceSummary()['code']);
         $this->assertEqualsCanonicalizing(['created', 'assigned'], $issue->events()->pluck('event_type')->all());
@@ -203,7 +204,7 @@ class IssuesModuleTest extends TestCase
         ])->assertSessionHasNoErrors();
         $issue->refresh();
         $this->assertSame('critical', $issue->severity);
-        $this->assertEqualsWithDelta(now()->subDay()->addHours(72)->timestamp, $issue->sla_due_at->timestamp, 5);
+        $this->assertEqualsWithDelta(now()->subDay()->addHours(48)->timestamp, $issue->sla_due_at->timestamp, 5);
         $this->assertTrue($issue->events()->where('event_type', 'severity_changed')->exists());
     }
 
@@ -328,5 +329,41 @@ class IssuesModuleTest extends TestCase
             ->assertInertia(fn (Assert $p) => $p->where('issues.stats.open', 1)->where('issues.stats.overdue', 1)
                 ->where('issues.stats.open_critical', 1)->where('issues.stats.sla_compliance_pct', 50)
                 ->has('issues.overdue', 1));
+    }
+
+    /**
+     * Regression: the "raise issue" picker selected id/code/title from every source table, but
+     * ccm_tenant_tests, kris, core_banking_integrations and access_review_campaigns have no such
+     * columns (Postgres 42703). Every listed column must exist, and the picker must load.
+     */
+    public function test_every_issue_source_lists_records_from_real_columns(): void
+    {
+        foreach (Issue::SOURCES as $type => $meta) {
+            if (! $meta['model']) {
+                continue;
+            }
+            $model = new $meta['model'];
+            foreach (array_merge(Issue::sourceColumns($meta), [$meta['order'] ?? $meta['code']]) as $column) {
+                $this->assertTrue(Schema::hasColumn($model->getTable(), $column), "{$type}: {$model->getTable()}.{$column} does not exist");
+            }
+            foreach ($meta['with'] ?? [] as $with) {
+                [$relation, $cols] = array_pad(explode(':', $with, 2), 2, null);
+                $related = $model->{$relation}()->getRelated()->getTable();
+                foreach (array_filter(explode(',', (string) $cols)) as $column) {
+                    $this->assertTrue(Schema::hasColumn($related, $column), "{$type}: {$related}.{$column} does not exist");
+                }
+            }
+        }
+
+        // Each source with one record in the bank, so labels resolve through the accessors too.
+        $ccmTestId = DB::table('ccm_tests')->insertGetId(['code' => 'CCM-T-01', 'title' => 'MFA enforced for admins', 'adapter_key' => 'sandbox', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('ccm_tenant_tests')->insert(['organization_id' => $this->org->id, 'ccm_test_id' => $ccmTestId, 'status' => 'enabled', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('kris')->insert(['organization_id' => $this->org->id, 'code' => 'KRI-01', 'name' => 'Patch latency', 'category' => 'technology', 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($this->admin)->get(route('issues.index'))->assertOk()
+            ->assertInertia(fn (Assert $p) => $p->reloadOnly('sourceRecords', fn (Assert $r) => $r
+                ->where('sourceRecords.ccm_test.0.label', 'CCM-T-01 · MFA enforced for admins')
+                ->where('sourceRecords.kri.0.label', 'KRI-01 · Patch latency')
+                ->has('sourceRecords.core_banking')->has('sourceRecords.access_review')));
     }
 }

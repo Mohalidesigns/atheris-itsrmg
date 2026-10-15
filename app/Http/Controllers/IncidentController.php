@@ -299,6 +299,8 @@ class IncidentController extends Controller
             'detected_at' => 'nullable|date',
             'affected_systems' => 'nullable|array',
             'tags' => 'nullable|array',
+            // CBN CPR §6.0: customer-impacting failures open a CAPA automatically (IT-GOV-CAPA-001 §3.3).
+            'customer_impact' => 'sometimes|boolean',
         ];
     }
 }

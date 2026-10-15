@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Change\ChangeRequest;
 use App\Models\Issue;
 use App\Models\ItsmConnection;
 use App\Models\User;
+use App\Services\Issues\CapaMetrics;
+use App\Services\Issues\CapaPresenter;
+use App\Services\Issues\CapaWorkflow;
 use App\Services\Issues\IssueMetrics;
 use App\Services\Issues\IssueWorkflow;
 use App\Services\Issues\ItsmConnector;
@@ -24,13 +28,13 @@ class IssueController extends Controller
 {
     private const SORTS = ['sla_due_at', 'severity', 'created_at', 'issue_code', 'status'];
 
-    public function __construct(private IssueWorkflow $workflow) {}
+    public function __construct(private IssueWorkflow $workflow, private CapaWorkflow $capa, private CapaPresenter $capaPresenter) {}
 
     /* ================================ Console ================================ */
 
-    public function index(Request $r, IssueMetrics $metrics)
+    public function index(Request $r, IssueMetrics $metrics, CapaMetrics $capaMetrics)
     {
-        $filters = $r->only(['status', 'severity', 'source', 'owner', 'q', 'view', 'sort', 'dir']);
+        $filters = $r->only(['status', 'severity', 'source', 'owner', 'q', 'view', 'sort', 'dir', 'framework', 'stage']);
         $sort = in_array($filters['sort'] ?? null, self::SORTS, true) ? $filters['sort'] : 'sla_due_at';
         $dir = ($filters['dir'] ?? 'asc') === 'desc' ? 'desc' : 'asc';
 
@@ -45,6 +49,13 @@ class IssueController extends Controller
             })
             ->when($filters['severity'] ?? null, fn ($q, $s) => $q->where('severity', $s))
             ->when($filters['source'] ?? null, fn ($q, $s) => $q->where('source_type', $s))
+            // CAPA filters: framework=any|iso27001|cobit2019|itilv4|none, stage=<capa stage>.
+            ->when($filters['framework'] ?? null, fn ($q, $f) => match ($f) {
+                'any' => $q->whereNotNull('capa_framework'),
+                'none' => $q->whereNull('capa_framework'),
+                default => $q->where('capa_framework', $f),
+            })
+            ->when($filters['stage'] ?? null, fn ($q, $s) => $q->whereNotNull('capa_framework')->where('capa_stage', $s))
             ->when(($filters['owner'] ?? null) === 'me', fn ($q) => $q->where('owner_id', $r->user()->id))
             ->when(($filters['owner'] ?? null) === 'none', fn ($q) => $q->whereNull('owner_id'))
             ->when($filters['q'] ?? null, fn ($q, $term) => $q->where(fn ($w) => $w
@@ -68,6 +79,9 @@ class IssueController extends Controller
             'sla_state' => $i->slaState(),
             'escalation_level' => $i->escalation_level,
             'external_ticket_id' => $i->external_ticket_id,
+            'capa_framework' => $i->capa_framework,
+            'capa_stage' => $i->capa_framework ? $i->capa_stage : null,
+            'verification_due_at' => $i->verification_due_at?->toIso8601String(),
         ]);
 
         return Inertia::render('Issues/Index', [
@@ -78,6 +92,8 @@ class IssueController extends Controller
             'sources' => collect(Issue::SOURCES)->map(fn ($s) => $s['label']),
             'owners' => $this->owners(),
             'sourceRecords' => Inertia::optional(fn () => $this->sourceRecords()),
+            'capaKpis' => $capaMetrics->summary(),
+            'capaConfig' => $this->capaPresenter->config(),
         ]);
     }
 
@@ -100,13 +116,34 @@ class IssueController extends Controller
             'owners' => $this->owners(),
             'connections' => ItsmConnection::where('status', '!=', 'disabled')->orderBy('name')->get(['id', 'name', 'system', 'mode']),
             'sources' => collect(Issue::SOURCES)->map(fn ($s) => $s['label']),
-        ]);
+            'capaConfig' => $this->capaPresenter->config(),
+            // Change requests a corrective action can be routed through (loaded on demand).
+            'changeRequests' => Inertia::optional(fn () => ChangeRequest::whereNotIn('status', ['closed', 'cancelled', 'rejected'])
+                ->orderByDesc('id')->limit(200)->get(['id', 'change_code', 'title', 'status'])),
+        ] + $this->capaPresenter->forIssue($issue, $user));
     }
 
     public function store(Request $r, ItsmConnector $itsm)
     {
         $data = $this->validated($r, true);
-        $issue = $this->workflow->open($data, $r->user());
+        $capa = $r->validate([
+            'capa_framework' => ['nullable', Rule::in(array_keys(config('capa.frameworks')))],
+            'capa_classification' => 'nullable|string|max:32',
+            'framework_reference' => 'nullable|string|max:64',
+            'cbn_provisions' => 'nullable|array',
+            'cbn_provisions.*' => ['string', Rule::in(array_keys(config('capa.cbn_provisions')))],
+            'settling_days' => 'nullable|integer',
+            // A recurrence of an earlier CAPA in this bank (IT-GOV-CAPA-001 §6 recurrence rate).
+            'recurrence_of_id' => ['nullable', Rule::exists('issues', 'id')->where('organization_id', $r->user()->organization_id)],
+        ]);
+        $issue = DB::transaction(function () use ($data, $capa, $r) {
+            $issue = $this->workflow->open($data + array_filter(['recurrence_of_id' => $capa['recurrence_of_id'] ?? null]), $r->user());
+            if (! empty($capa['capa_framework'])) {
+                $this->capa->classify($issue, array_diff_key($capa, ['recurrence_of_id' => 1]), $r->user());
+            }
+
+            return $issue;
+        });
 
         $auto = ItsmConnection::whereNotNull('auto_push_severity')->where('status', 'active')->get()
             ->first(fn ($c) => $this->severityRank($issue->severity) <= $this->severityRank($c->auto_push_severity));
@@ -140,6 +177,7 @@ class IssueController extends Controller
         }
         $issue->update($data);
         $this->workflow->changeSeverity($issue, $severity, $r->user());
+        $this->capa->notifyCritical($issue->fresh());
         $fields = $changed->reject(fn ($k) => $k === 'owner_id');
         if ($fields->isNotEmpty()) {
             $this->workflow->log($issue, 'updated', 'Updated '.$fields->map(fn ($k) => str_replace('_', ' ', $k))->implode(', ').'.', $r->user());
@@ -402,8 +440,9 @@ class IssueController extends Controller
     private function sourceRecords(): array
     {
         return collect(Issue::SOURCES)->filter(fn ($s) => $s['model'])
-            ->map(fn ($s) => $s['model']::query()->orderBy($s['code'])->limit(400)->get(['id', $s['code'], 'title'])
-                ->map(fn ($m) => ['id' => $m->id, 'label' => $m->{$s['code']}.' · '.Str::limit((string) $m->title, 70)]))
+            ->map(fn ($s) => $s['model']::query()->with($s['with'] ?? [])->orderBy($s['order'] ?? $s['code'])->limit(400)
+                ->get(Issue::sourceColumns($s))
+                ->map(fn ($m) => ['id' => $m->id, 'label' => $m->{$s['code']}.' · '.Str::limit((string) $m->{$s['title'] ?? 'title'}, 70)]))
             ->all();
     }
 

@@ -37,6 +37,7 @@ use App\Http\Controllers\GapController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\IsmsController;
+use App\Http\Controllers\CapaController;
 use App\Http\Controllers\IssueController;
 use App\Http\Controllers\Kri\KriController;
 use App\Http\Controllers\Monitoring\AccessReviewController;
@@ -590,6 +591,21 @@ Route::middleware('auth')->group(function () {
         Route::post('/issues/{issue}/escalate', [IssueController::class, 'escalate'])->name('issues.escalate');
         Route::post('/issues/{issue}/comment', [IssueController::class, 'comment'])->name('issues.comment');
         Route::post('/issues/{issue}/push', [IssueController::class, 'push'])->name('issues.push');
+        // Integrated CAPA stages (IT-GOV-CAPA-001). Owners or edit issues work a CAPA; sign-off and
+        // verification are gated on the RACI Accountable role inside CapaWorkflow.
+        Route::get('/issues/capa/export', [CapaController::class, 'export'])->middleware('permission:export issues')->name('issues.capa.export');
+        Route::prefix('/issues/{issue}/capa')->whereNumber('issue')->name('issues.capa.')->group(function () {
+            Route::put('/', [CapaController::class, 'update'])->name('update');
+            Route::post('/stage', [CapaController::class, 'advance'])->name('stage');
+            Route::post('/signoff', [CapaController::class, 'signoff'])->name('signoff');
+            Route::post('/containment', [CapaController::class, 'containmentStore'])->name('containment.store');
+            Route::delete('/containment/{action}', [CapaController::class, 'containmentDestroy'])->whereNumber('action')->name('containment.destroy');
+            Route::put('/root-cause', [CapaController::class, 'rootCause'])->name('root-cause');
+            Route::post('/actions', [CapaController::class, 'actionStore'])->name('actions.store');
+            Route::put('/actions/{action}', [CapaController::class, 'actionUpdate'])->whereNumber('action')->name('actions.update');
+            Route::delete('/actions/{action}', [CapaController::class, 'actionDestroy'])->whereNumber('action')->name('actions.destroy');
+            Route::post('/verify', [CapaController::class, 'verify'])->name('verify');
+        });
         Route::middleware('permission:approve issues')->group(function () {
             Route::put('/issues/sla-policies/{severity}', [IssueController::class, 'slaPolicyUpdate'])->name('issues.sla-policies.update');
             Route::post('/itsm', [IssueController::class, 'itsmStore'])->name('itsm.store');

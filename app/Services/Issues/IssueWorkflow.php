@@ -24,7 +24,8 @@ use Illuminate\Validation\ValidationException;
  */
 class IssueWorkflow
 {
-    public const DEFAULT_SLA_HOURS = ['critical' => 72, 'high' => 336, 'medium' => 720, 'low' => 2160];
+    /** IT-GOV-CAPA-001 §6 windows: critical 48 h, high 14 d, medium 30 d, low 90 d. A bank's SLA policy wins. */
+    public const DEFAULT_SLA_HOURS = ['critical' => 48, 'high' => 336, 'medium' => 720, 'low' => 2160];
 
     public const DEFAULT_CHAIN = ['owner', 'CISO', 'CRO'];
 
@@ -48,8 +49,12 @@ class IssueWorkflow
         'reopen' => ['closed'],
     ];
 
-    public function slaHours(int $orgId, string $severity): int
+    /** A CAPA runs on the IT-GOV-CAPA-001 §6 windows (config/capa.php); other issues on the bank's SLA policy. */
+    public function slaHours(int $orgId, string $severity, bool $capa = false): int
     {
+        if ($capa) {
+            return (int) (config("capa.sla_hours.{$severity}") ?? 720);
+        }
         $policySeverity = Issue::POLICY_SEVERITY[$severity] ?? $severity;
 
         return (int) (DB::table('vulnerability_sla_policies')->where('organization_id', $orgId)
@@ -100,7 +105,7 @@ class IssueWorkflow
             return;
         }
         $from = $issue->severity;
-        $hours = $this->slaHours($issue->organization_id, $severity);
+        $hours = $this->slaHours($issue->organization_id, $severity, $issue->isCapa());
         $issue->update([
             'severity' => $severity,
             'sla_minutes' => $hours * 60,
@@ -109,11 +114,32 @@ class IssueWorkflow
         $this->log($issue, 'severity_changed', "Severity changed from {$from} to {$severity}; SLA re-based to ".$this->formatHours($hours).'.', $actor);
     }
 
+    /** Moving an issue onto the CAPA workflow re-bases its SLA on the CAPA window, counted from when it was raised. */
+    public function applyCapaSla(Issue $issue, ?User $actor): void
+    {
+        $hours = $this->slaHours($issue->organization_id, $issue->severity, true);
+        if ($issue->sla_minutes === $hours * 60) {
+            return;
+        }
+        $due = $issue->created_at->copy()->addHours($hours)->addMinutes($issue->sla_paused_minutes);
+        $issue->update(array_filter([
+            'sla_minutes' => $hours * 60,
+            'sla_due_at' => $due,
+            // A target date that only mirrored the old SLA follows the new one.
+            'due_date' => $issue->due_date?->isSameDay($issue->sla_due_at) ? $due->toDateString() : null,
+        ]));
+        $this->log($issue, 'sla_rebased', 'SLA set to the CAPA '.$this->formatHours($hours).' window (IT-GOV-CAPA-001 §6).', $actor);
+    }
+
     /**
      * @throws ValidationException when the step is not allowed or required fields are missing
      */
     public function transition(Issue $issue, string $action, User $actor, array $input = []): string
     {
+        // A CAPA moves through its stage gates (CapaWorkflow); only blocking stays available here.
+        if ($issue->isCapa() && ! in_array($action, ['block', 'unblock'], true)) {
+            $this->fail('action', 'This issue is a CAPA: move it through its stages instead.');
+        }
         $allowed = self::TRANSITIONS[$action] ?? null;
         if (! $allowed || ! in_array($issue->status, $allowed, true)) {
             $this->fail('action', 'That step is not available from '.str_replace('_', ' ', $issue->status).'.');
@@ -139,7 +165,8 @@ class IssueWorkflow
             case 'unblock':
                 $paused = $issue->sla_paused_at ? (int) $issue->sla_paused_at->diffInMinutes(now()) : 0;
                 $issue->update([
-                    'status' => 'in_progress',
+                    // A CAPA returns to the status its stage implies (identification/containment = open).
+                    'status' => $issue->isCapa() ? (config('capa.stage_status.'.$issue->capa_stage) ?? 'in_progress') : 'in_progress',
                     'blocked_reason' => null,
                     'sla_paused_at' => null,
                     'sla_paused_minutes' => $issue->sla_paused_minutes + $paused,
@@ -246,7 +273,8 @@ class IssueWorkflow
                 }
             });
 
-        return $count;
+        // Critical CAPAs: CIO / CISO / Risk Committee within 2 h of being raised (IT-GOV-CAPA-001 §6).
+        return $count + app(CapaWorkflow::class)->escalateCritical();
     }
 
     /** Users a chain step points at, within the issue's bank. */

@@ -180,5 +180,10 @@ class DatabaseSeeder extends Seeder
         $this->call(ReportsIntegrationsSettingsDemoSeeder::class);
 
         $this->call(RoleDemoUsersSeeder::class);
+
+        // Integrated CAPA (IT-GOV-CAPA-001): last, because CCM, KRI, drift and core banking findings are
+        // raised by the seeders above. Moves Kano's register onto the six-stage workflow across all three
+        // framework paths, routes actions through the change register, and fires the CPR §6.0 trigger
+        $this->call(CapaDemoSeeder::class);
     }
 }

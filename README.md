@@ -32,6 +32,8 @@ Each sidebar module is validated end to end, in order: its features, forms, tabl
 | 21 | Administration (users, roles) | Done | [ATH-VAL-019](docs/ATH-VAL-019_Identity_Administration_Copilot_Validation_Report.md) |
 | 22 | Settings | Done | [ATH-VAL-018](docs/ATH-VAL-018_Reports_Integrations_Settings_Validation_Report.md) |
 | 23 | Copilot | Done | [ATH-VAL-019](docs/ATH-VAL-019_Identity_Administration_Copilot_Validation_Report.md) |
+| 24 | Integrated CAPA (ISO 27001 / COBIT 2019 / ITIL v4 + CBN mapping; extends Issues & Remediation, spec [IT-GOV-CAPA-001](docs/it_governance_multi_framework_capa_module.md)) | Done | [ATH-VAL-020](docs/ATH-VAL-020_Integrated_CAPA_Validation_Report.md) |
+| — | IT Financial Management — IT expense & budget management (new module, to be built to [ATH-FIN-001](docs/ATH-FIN-001_IT_Expense_and_Budget_Management_Module_Specification_v1.0.md); build plan [ATH-FIN-002](docs/ATH-FIN-002_IT_Finance_Build_Orchestration_Plan.md)) | Specified | — |
 
 Last full PHP suite: 342 tests, 341 passed, 1 skipped (the route smoke test, run separately: 203 GET routes OK), on PostgreSQL 17 (15 Oct 2026, local, PHP 8.4). The suite, `migrate:fresh --seed` and the smoke test now run on Postgres (`it_security_risk_test` / `it_security_risk_scratch`), not SQLite.
 

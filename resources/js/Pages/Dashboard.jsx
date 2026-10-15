@@ -412,7 +412,7 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                 <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
                     <div className="mb-3 flex items-start justify-between">
                         <h3 className="text-sm font-semibold text-[#2D3748]">Issues &amp; Remediation</h3>
-                        <Link href={route('issues.index')} className="text-xs text-[#0A1F44] underline">Issues Console →</Link>
+                        <Link href={route('issues.index')} className="text-xs text-[#0A1F44] underline">CAPA Register →</Link>
                     </div>
                     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                         <div className="lg:col-span-2">

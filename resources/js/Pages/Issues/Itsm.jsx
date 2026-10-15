@@ -30,7 +30,7 @@ export default function ItsmIndex({ connections = [], tickets = [], systems = {}
         <AuthenticatedLayout header="ITSM Integrations">
             <Head title="ITSM Integrations" />
             <PageHeader
-                breadcrumbs={[{ label: 'Issues & Remediation', href: route('issues.index') }, { label: 'ITSM Integrations' }]}
+                breadcrumbs={[{ label: 'CAPA & Remediation', href: route('issues.index') }, { label: 'ITSM Integrations' }]}
                 title="ITSM Integrations"
                 subtitle="Push issues to Jira, ServiceNow or Freshservice as tickets. The tool reports ticket status back through a signed webhook, and a resolved ticket marks the issue remediated, ready for verification."
                 actions={canManage && <button type="button" onClick={() => open(null)} className="rounded-lg bg-[#0A1F44] px-4 py-2 text-sm text-white">Add connector</button>}

@@ -2,6 +2,22 @@
 
 namespace App\Providers;
 
+use App\Events\Core\BiaRecordSaved;
+use App\Events\Core\IncidentDeclared;
+use App\Events\Core\IncidentSaved;
+use App\Events\Ea\ArbDecisionRecorded;
+use App\Events\Ea\ArchitectureEntityChanged;
+use App\Events\Ea\CveMatchedToComponent;
+use App\Events\Ea\EvidencePackGenerated;
+use App\Events\Ea\TechComponentBecameObsolete;
+use App\Listeners\Core\AttachBlastRadius;
+use App\Listeners\Core\OpenCustomerImpactCapa;
+use App\Listeners\Ea\BreakQualitySeal;
+use App\Listeners\Ea\OpenConditionIssues;
+use App\Listeners\Ea\OpenObsolescenceRisk;
+use App\Listeners\Ea\OpenVulnerability;
+use App\Listeners\Ea\RegisterEvidencePack;
+use App\Listeners\Ea\UpdateProcessCriticality;
 use App\Policies\Ea\EaPolicy;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -47,20 +63,22 @@ class AppServiceProvider extends ServiceProvider
     {
         $contracts = [
             // B3 — the freshness state machine (Phase 1).
-            \App\Events\Ea\ArchitectureEntityChanged::class => \App\Listeners\Ea\BreakQualitySeal::class,
+            ArchitectureEntityChanged::class => BreakQualitySeal::class,
 
             // I-1  Obsolescence  → Risk
-            \App\Events\Ea\TechComponentBecameObsolete::class => \App\Listeners\Ea\OpenObsolescenceRisk::class,
+            TechComponentBecameObsolete::class => OpenObsolescenceRisk::class,
             // I-2  CVE           → Vulnerability
-            \App\Events\Ea\CveMatchedToComponent::class => \App\Listeners\Ea\OpenVulnerability::class,
+            CveMatchedToComponent::class => OpenVulnerability::class,
             // I-6  BIA           → EA process criticality / RTO / RPO
-            \App\Events\Core\BiaRecordSaved::class => \App\Listeners\Ea\UpdateProcessCriticality::class,
+            BiaRecordSaved::class => UpdateProcessCriticality::class,
             // I-9  ARB decision  → Issues
-            \App\Events\Ea\ArbDecisionRecorded::class => \App\Listeners\Ea\OpenConditionIssues::class,
+            ArbDecisionRecorded::class => OpenConditionIssues::class,
             // I-10 Evidence pack → Evidence Vault
-            \App\Events\Ea\EvidencePackGenerated::class => \App\Listeners\Ea\RegisterEvidencePack::class,
+            EvidencePackGenerated::class => RegisterEvidencePack::class,
             // I-13 Incident      → EA blast radius
-            \App\Events\Core\IncidentDeclared::class => \App\Listeners\Core\AttachBlastRadius::class,
+            IncidentDeclared::class => AttachBlastRadius::class,
+            // IT-GOV-CAPA-001 §3.3  Customer-impacting incident → CAPA (toggle: capa.auto_trigger)
+            IncidentSaved::class => OpenCustomerImpactCapa::class,
         ];
 
         foreach ($contracts as $event => $listener) {

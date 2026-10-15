@@ -372,7 +372,7 @@ export default function ShowRisk({ risk, threats = [], vulnerabilities = [], aud
                     )}
 
                     {tab === 'issues' && (
-                        issues.length === 0 ? <Empty>No remediation issues raised against this risk. <Link href={route('issues.index', { source: 'risk' })} className="text-[#1A365D] underline">Open the Issues Console</Link>.</Empty> : (
+                        issues.length === 0 ? <Empty>No remediation issues raised against this risk. <Link href={route('issues.index', { source: 'risk' })} className="text-[#1A365D] underline">Open the CAPA Register</Link>.</Empty> : (
                             <ul className="divide-y divide-gray-100">
                                 {issues.map((i) => (
                                     <li key={i.id} className="py-3 flex items-center justify-between">
