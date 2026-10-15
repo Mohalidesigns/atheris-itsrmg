@@ -42,7 +42,11 @@ CAPA is built on the existing Issues register (which already raised corrective a
 
 `tests/Feature/Issues/CapaWorkflowTest.php` (16 tests): each stage gate, RACI sign-off, independent verifier, settling-period refusal, failed-verification loop-back, ITIL recurrence refusal, auto-trigger idempotency, tenant isolation, KPI maths, CSV export, CAPA SLA windows vs bank policy, critical notification, and the Show props contract. `IssuesModuleTest` gains the source-columns regression test.
 
-RESULTS_PLACEHOLDER
+Definition of done (2026-10-15, PostgreSQL):
+- Full PHP suite on an isolated test database: **364 tests, 4,303 assertions, OK** (1 skipped: the opt-in route smoke test). An earlier run on the shared `it_security_risk_test` failed five Workflow Studio tests because another session's suite was migrating the same database concurrently; they pass in isolation.
+- `migrate:fresh --seed` on `it_security_risk_scratch`: clean; all 13 demo CAPAs present (12 seeded + 1 from the CPR §6.0 trigger).
+- `npm run build`: passes.
+- Seeded estate checked in the browser (scratch server): Register KPIs and stage counts match the seeded data; all 13 CAPA pages render without console errors.
 
 Browser check (Kano admin, dev server): one CAPA raised and walked from identification through containment, RCA, action plan (with change link and sign-off) and implementation into verification; each gate showed its blocker until met; the verifier block correctly refused the implementer.
 
