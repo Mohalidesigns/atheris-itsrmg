@@ -7,10 +7,10 @@ use App\Http\Controllers\Assets\AssetDiscoveryController;
 use App\Http\Controllers\Assets\BusinessServiceMapController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\Auth\SamlController;
-use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\Auth\ScimController;
 use App\Http\Controllers\BcpController;
 use App\Http\Controllers\BusinessAssetController;
+use App\Http\Controllers\CapaController;
 use App\Http\Controllers\Change\ChangeCabController;
 use App\Http\Controllers\Change\ChangePolicyController;
 use App\Http\Controllers\Change\ChangeRequestController as ChangeManagementController;
@@ -33,11 +33,15 @@ use App\Http\Controllers\Ea\SurveyController;
 use App\Http\Controllers\Ea\WedgeController;
 use App\Http\Controllers\EaController;
 use App\Http\Controllers\EvidenceController;
+use App\Http\Controllers\Finance\FinanceCurrencyController;
+use App\Http\Controllers\Finance\FinanceDimensionsController;
+use App\Http\Controllers\Finance\FinanceSettingsController;
+use App\Http\Controllers\Finance\FiscalCalendarController;
 use App\Http\Controllers\GapController;
+use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\IsmsController;
-use App\Http\Controllers\CapaController;
 use App\Http\Controllers\IssueController;
 use App\Http\Controllers\Kri\KriController;
 use App\Http\Controllers\Monitoring\AccessReviewController;
@@ -670,6 +674,53 @@ Route::middleware('auth')->group(function () {
         Route::post('/{change}/tasks', [ChangeTaskController::class, 'store'])->whereNumber('change')->name('tasks.store');
         Route::put('/{change}/tasks/{task}', [ChangeTaskController::class, 'update'])->whereNumber('change')->whereNumber('task')->name('tasks.update');
         Route::post('/{change}/comment', [ChangeManagementController::class, 'comment'])->whereNumber('change')->name('comment');
+    });
+
+    // IT Financial Management: foundation & configuration (ATH-FIN-001 §3.1, §9)
+    Route::middleware('permission:view it-finance')->prefix('it-finance')->name('finance.')->group(function () {
+        Route::get('/settings', [FinanceSettingsController::class, 'show'])->name('settings');
+
+        Route::middleware('permission:manage it-finance-settings')->group(function () {
+            Route::put('/settings', [FinanceSettingsController::class, 'update'])->name('settings.update');
+
+            Route::post('/fiscal-years', [FiscalCalendarController::class, 'store'])->name('fiscal-years.store');
+            Route::put('/fiscal-years/{fiscalYear}', [FiscalCalendarController::class, 'update'])->whereNumber('fiscalYear')->name('fiscal-years.update');
+            Route::delete('/fiscal-years/{fiscalYear}', [FiscalCalendarController::class, 'destroy'])->whereNumber('fiscalYear')->name('fiscal-years.destroy');
+
+            Route::middleware('permission:import it-finance')->group(function () {
+                Route::post('/cost-centres/import', [FinanceDimensionsController::class, 'costCentreImport'])->name('cost-centres.import');
+                Route::post('/fx-rates/import', [FinanceCurrencyController::class, 'fxRateImport'])->name('fx-rates.import');
+            });
+            Route::post('/cost-centres', [FinanceDimensionsController::class, 'costCentreStore'])->name('cost-centres.store');
+            Route::put('/cost-centres/{costCentre}', [FinanceDimensionsController::class, 'costCentreUpdate'])->whereNumber('costCentre')->name('cost-centres.update');
+            Route::delete('/cost-centres/{costCentre}', [FinanceDimensionsController::class, 'costCentreDestroy'])->whereNumber('costCentre')->name('cost-centres.destroy');
+
+            Route::post('/categories', [FinanceDimensionsController::class, 'categoryStore'])->name('categories.store');
+            Route::put('/categories/{category}', [FinanceDimensionsController::class, 'categoryUpdate'])->whereNumber('category')->name('categories.update');
+            Route::delete('/categories/{category}', [FinanceDimensionsController::class, 'categoryDestroy'])->whereNumber('category')->name('categories.destroy');
+
+            Route::post('/gl-accounts', [FinanceDimensionsController::class, 'glAccountStore'])->name('gl-accounts.store');
+            Route::put('/gl-accounts/{glAccount}', [FinanceDimensionsController::class, 'glAccountUpdate'])->whereNumber('glAccount')->name('gl-accounts.update');
+            Route::delete('/gl-accounts/{glAccount}', [FinanceDimensionsController::class, 'glAccountDestroy'])->whereNumber('glAccount')->name('gl-accounts.destroy');
+
+            Route::post('/currencies', [FinanceCurrencyController::class, 'currencyStore'])->name('currencies.store');
+            Route::put('/currencies/{currency}', [FinanceCurrencyController::class, 'currencyUpdate'])->whereNumber('currency')->name('currencies.update');
+            Route::post('/fx-rates', [FinanceCurrencyController::class, 'fxRateStore'])->name('fx-rates.store');
+            Route::delete('/fx-rates/{fxRate}', [FinanceCurrencyController::class, 'fxRateDestroy'])->whereNumber('fxRate')->name('fx-rates.destroy');
+
+            Route::post('/tax-types', [FinanceCurrencyController::class, 'taxTypeStore'])->name('tax-types.store');
+            Route::put('/tax-types/{taxType}', [FinanceCurrencyController::class, 'taxTypeUpdate'])->whereNumber('taxType')->name('tax-types.update');
+
+            Route::post('/drivers', [FinanceDimensionsController::class, 'driverStore'])->name('drivers.store');
+            Route::put('/drivers/{driver}', [FinanceDimensionsController::class, 'driverUpdate'])->whereNumber('driver')->name('drivers.update');
+            Route::delete('/drivers/{driver}', [FinanceDimensionsController::class, 'driverDestroy'])->whereNumber('driver')->name('drivers.destroy');
+            Route::put('/drivers/{driver}/values', [FinanceDimensionsController::class, 'driverValuesUpdate'])->whereNumber('driver')->name('drivers.values.update');
+        });
+
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/periods/{period}/close', [FiscalCalendarController::class, 'closePeriod'])->whereNumber('period')->name('periods.close');
+            Route::post('/periods/{period}/lock', [FiscalCalendarController::class, 'lockPeriod'])->whereNumber('period')->name('periods.lock');
+        });
     });
 
     /* ========================================================

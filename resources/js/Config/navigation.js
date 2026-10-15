@@ -27,6 +27,7 @@ import {
     ScaleIcon,
     BuildingLibraryIcon,
     UserGroupIcon,
+    CurrencyDollarIcon,
 } from '@/Components/Material/Symbols';
 
 /**
@@ -139,6 +140,14 @@ const navigation = [
             { name: 'Standard Changes', href: 'changes.templates', permission: 'view changes' },
             { name: 'Approval Policy', href: 'changes.policy', permission: 'view changes' },
             { name: 'Freeze Windows', href: 'changes.freeze.index', permission: 'view changes' },
+        ],
+    },
+    {
+        name: 'IT Financial Management',
+        icon: CurrencyDollarIcon,
+        permission: 'view it-finance',
+        children: [
+            { name: 'Settings', href: 'finance.settings', permission: 'view it-finance' },
         ],
     },
     {

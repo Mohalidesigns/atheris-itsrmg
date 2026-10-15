@@ -3,7 +3,9 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\Route;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /**
@@ -56,5 +58,53 @@ class RouteSmokeTest extends TestCase
 
         fwrite(STDERR, "\nTested {$tested} GET routes\n");
         $this->assertSame([], $failures, 'Routes returning 5xx: '.implode('; ', $failures));
+    }
+
+    /**
+     * IT Financial Management (plan §5): every parameterless finance.* GET route, and each Settings
+     * tab, must render 200 for every demo tenant, with the seeded estate the spec promises.
+     */
+    public function test_finance_pages_render_for_every_demo_tenant(): void
+    {
+        if (env('SMOKE') !== '1') {
+            $this->markTestSkipped('Set SMOKE=1 and use a seeded database to run the route smoke test.');
+        }
+
+        $urls = collect(Route::getRoutes()->getRoutes())
+            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && in_array('GET', $r->methods(), true) && ! str_contains($r->uri(), '{'))
+            ->map(fn (RouteDefinition $r) => route($r->getName()))->values()->all();
+        $this->assertNotEmpty($urls);
+
+        $tabs = ['general', 'calendar', 'cost-centres', 'categories', 'gl-accounts', 'currencies', 'taxes', 'drivers', 'doa', 'variance', 'renewal'];
+        $expect = [
+            'admin@kanoheritage.ng' => fn (Assert $p) => $p->has('costCentres', 10)->where('fiscalYears', fn ($y) => count($y) >= 2)
+                ->where('costCentres', fn ($c) => collect($c)->contains(fn ($x) => $x['owner_id'] === null)),
+            'admin@firstbanknigeria.ng' => fn (Assert $p) => $p->has('costCentres', 12)
+                ->where('costCentres', fn ($c) => collect($c)->contains(fn ($x) => $x['legal_entity'] !== null) && collect($c)->contains(fn ($x) => $x['owner_id'] === null)),
+            'admin@acme.ng' => fn (Assert $p) => $p->has('costCentres', 0)->has('fiscalYears', 0)->has('categories', 49),
+        ];
+
+        foreach ($expect as $email => $assertSeeded) {
+            $user = User::where('email', $email)->first();
+            $this->assertNotNull($user, "{$email} missing: seed the database first.");
+
+            foreach ($urls as $url) {
+                $this->actingAs($user)->get($url)->assertOk();
+            }
+            foreach ($tabs as $tab) {
+                $this->actingAs($user)->get(route('finance.settings', ['tab' => $tab]))->assertOk()
+                    ->assertInertia(fn (Assert $p) => $p->component('Finance/Settings')->where('tab', $tab));
+            }
+            $this->actingAs($user)->get(route('finance.settings'))->assertOk()->assertInertia($assertSeeded);
+        }
+
+        $finance = User::where('email', 'finance@kanoheritage.ng')->first();
+        $this->assertNotNull($finance);
+        $this->assertTrue($finance->hasRole('IT Finance Controller'));
+
+        // Segregation of duties in the demo estate: no budget owner also approves (ATH-FIN-001 §6).
+        $conflicts = User::withoutGlobalScopes()->role('Finance Approver')->get()
+            ->filter(fn (User $u) => $u->hasRole('IT Budget Owner'))->pluck('email')->all();
+        $this->assertSame([], $conflicts);
     }
 }

@@ -120,6 +120,10 @@ class DatabaseSeeder extends Seeder
         // change register per bank linked to the records above (ATH-CHG-001 §10)
         $this->call(ChangeManagementDemoSeeder::class);
 
+        // IT Financial Management foundation: settings, TBM taxonomy, chart of accounts, currencies & FX, taxes,
+        // fiscal calendar, cost centres, drivers and finance users per bank (ATH-FIN-001 §3.1, §13)
+        $this->call(FinanceFoundationSeeder::class);
+
         // Asset Management: coherent owners and departments, provenance from real sandbox connector
         // runs and a CSV import, business services and dependency chains per bank, asset → service
         // links, inherited criticality, and First Bank's EA applications tied to their assets
