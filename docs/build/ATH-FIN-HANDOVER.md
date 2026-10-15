@@ -2,14 +2,17 @@
 
 Living note: overwrite the "Next session" block at every milestone. Spec: `docs/ATH-FIN-001_…v1.0.md`; orchestration: `docs/ATH-FIN-002_IT_Finance_Build_Orchestration_Plan.md`.
 
-## State (2026-10-15, P0 done)
+## State (2026-10-15, P1 done)
 
-- P0 Foundation is committed on `feature/it-finance-p0`. See ATH-FIN-003 §P0 for what shipped, the review fixes and what's deferred.
-- `.claude/agents/` holds the fin-* agents. If they don't show up as agent types in a session, run them as general-purpose agents told to "act as `.claude/agents/fin-X.md`" with that file's model. This works fine.
-- **Suite speed:** the RolesAndPermissionsSeeder fix cut a seeded test from ~13 s to ~2 s. The full suite is ~11 min on Postgres, so run it in the background.
-- **Disk:** the data volume is ~94 % full. A suite run once hit "No space left on device" (17 false EA errors), so free space before P1.
-- **DBs:** the orchestrator uses `it_security_risk_test` for the suite and `it_security_risk_scratch` for seed and smoke. Agents use `it_security_risk_fin_test` with `--filter` only, so parallel runs never collide.
-- **Verify seeded behaviour yourself.** A builder's "source-text" test missed a real SoD conflict.
+- P0 is on `feature/it-finance-p0` (f2a5dfa). P1 Budgeting is committed on `feature/it-finance-p1` (f30deaa), which was branched from P0.
+- What shipped, the review fixes, decisions P1-1 to P1-6 and what's deferred are in ATH-FIN-003 §P1. Gate: 452 tests OK on Postgres, plus the smoke test, seed and build.
+- **Before P3 (must land):** the domain review's Medium items M1–M4, listed in ATH-FIN-003 §P1. They cover the supplementary FX re-quote, the diff and totals using current amounts, and status transitions on a locked baseline. P3 availability builds on the current-budget figure.
+- `.claude/agents/` holds the fin-* agents. In this session they were registered as agent types. If they aren't, run general-purpose agents told to "act as `.claude/agents/fin-X.md`".
+- **DB collisions are the main time sink.** In P1, a reviewer ran tests on `it_security_risk_test` while the gate suite was running, which caused 42 false errors and a second 13-minute run. Tell **every** agent, reviewers included, which DB to use: `it_security_risk_fin_test` for builders, `it_security_risk_fin_qa` for QA, a throwaway `it_security_risk_<agent>_test` for reviewers. The orchestrator alone uses `it_security_risk_test` (suite) and `it_security_risk_scratch` (seed + SMOKE).
+- `it_security_risk_fin_qa` was left behind by P1 QA. Reuse it, or drop it if disk is tight.
+- **Suite:** about 13 min on Postgres, run in the background.
+- **Disk:** the data volume is about 94 % full, with 14 GB free.
+- **Verify seeded behaviour yourself.** In P1, a new approval stage, the CIO stage on transfers, left a demo transfer stuck, and only the SMOKE seeded-estate check caught it.
 
 ## Token-economy rules for every phase
 
@@ -23,11 +26,11 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 ## Next session — paste this
 
 ```
-P1 (Budgeting) of IT Financial Management. P0 is committed on feature/it-finance-p0; branch feature/it-finance-p1 from it.
-Read docs/build/ATH-FIN-HANDOVER.md (state + token rules) and run the P1 kick-off prompt in docs/ATH-FIN-002 §4, with these overrides:
-- Gate = Postgres: full suite in background on it_security_risk_test; seed + SMOKE on it_security_risk_scratch; agents use it_security_risk_fin_test with --filter only; npm run build; pint on touched files.
-- P1 reviewers run on opus.
-- The P1 plan must also cover the P1-deferred items in ATH-FIN-003 §P0: versioned DoA bands with effective_from + maker-checker + band snapshot on approval requests (C8); TBM cost_pool_id + tower_id on budget lines; FX rate_type + rate_date; base-currency change guard; per-bank DoA bands.
-- Don't read the spec yourself; fin-architect plans to docs/build/ATH-FIN-PLAN-p1.md.
-At the end: append Phase P1 to docs/ATH-FIN-003, commit on feature/it-finance-p1, update memory and this handover for P2.
+P2 (Contracts, renewals & calendar) of IT Financial Management. P1 is committed on feature/it-finance-p1; branch feature/it-finance-p2 from it.
+Read docs/build/ATH-FIN-HANDOVER.md (state + token rules) and run the P2 kick-off prompt in docs/ATH-FIN-002 §4, with these overrides:
+- Gate = Postgres: full suite in background on it_security_risk_test; seed + SMOKE on it_security_risk_scratch. Agents get their own DBs (builders it_security_risk_fin_test, QA it_security_risk_fin_qa, reviewers a throwaway one) and run --filter only. npm run build; pint on touched files.
+- P2 reviewers run on opus. Playwright runs this phase (contract-renewal + calendar specs) on the seeded scratch DB.
+- Fold in the P1 domain-review M1–M4 fixes listed in ATH-FIN-003 §P1, as a small backend task before QA.
+- Don't read the spec yourself; fin-architect plans to docs/build/ATH-FIN-PLAN-p2.md.
+At the end: append Phase P2 to docs/ATH-FIN-003, commit on feature/it-finance-p2, update memory and this handover for P3.
 ```
