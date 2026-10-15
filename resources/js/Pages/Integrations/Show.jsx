@@ -14,20 +14,20 @@ import {
     BeakerIcon,
 } from '@/Components/Material/Symbols';
 
-const statusTone = (s) => ({ connected: 'pass', available: 'draft', not_connected: 'draft', error: 'critical' })[s] || 'draft';
-const statusLabel = (s) => ({ connected: 'Connected', available: 'Available', not_connected: 'Not Connected', error: 'Error' })[s] || s;
+const statusTone = (s) => ({ connected: 'pass', configured: 'draft', not_configured: 'draft', failed: 'critical' })[s] || 'draft';
+const statusLabel = (s) => ({ connected: 'Connected (sandbox)', configured: 'Configured', not_configured: 'Not configured', failed: 'Test failed' })[s] || s;
 
-export default function IntegrationShow({ connector }) {
+export default function IntegrationShow({ connector, config = {}, webhookBase, canEdit = false }) {
     const [form, setForm] = useState({
-        base_url: connector.key === 'tenable' ? 'https://cloud.tenable.com' : '',
+        base_url: config.base_url ?? '',
         access_key: '',
         secret_key: '',
-        scope: 'read-only',
-        sync_frequency: 'hourly',
+        scope: config.scope ?? 'read-only',
+        sync_frequency: config.sync_frequency ?? 'hourly',
     });
     const [validations, setValidations] = useState({});
 
-    const webhookUrl = `https://api.atheris.ng/api/v1/webhooks/${connector.key}/khb-tenant/<signed-token>`;
+    const webhookUrl = `${webhookBase}/<signed-token>`;
 
     const copy = (text) => navigator.clipboard?.writeText(text);
 
@@ -35,14 +35,18 @@ export default function IntegrationShow({ connector }) {
         e.preventDefault();
         const v = {};
         if (!form.base_url) v.base_url = 'Required';
-        if ((connector.credentials_required || []).some((c) => /api key|token|secret/i.test(c)) && !form.access_key) v.access_key = 'Required';
+        if (!form.access_key && !config.access_key_set) v.access_key = 'Required';
         setValidations(v);
         if (Object.keys(v).length) return;
-        router.post(route('integrations.test', connector.key), {}, { preserveScroll: true });
+        router.post(route('integrations.save', connector.key), form, {
+            preserveScroll: true,
+            onSuccess: () => setForm((f) => ({ ...f, access_key: '', secret_key: '' })),
+        });
     };
+    const runTest = () => router.post(route('integrations.test', connector.key), {}, { preserveScroll: true });
 
     const sampleJson = {
-        tenant: 'khb-kano-heritage',
+        tenant: webhookBase.split('/').pop(),
         ingested_at: new Date().toISOString(),
         records: Array.from({ length: 3 }).map((_, i) => {
             const row = {};
@@ -64,21 +68,16 @@ export default function IntegrationShow({ connector }) {
                 subtitle={`${connector.vendor} · ${connector.category} · ${connector.description}`}
                 actions={<>
                     <StatusBadge status={statusTone(connector.status)} label={statusLabel(connector.status)} />
-                    <button onClick={submit}
+                    {canEdit && <button onClick={runTest}
                         className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-[#0A1F44] text-white text-sm hover:bg-[#1A2F54]">
                         <BeakerIcon className="w-4 h-4" /> Test Connection
-                    </button>
+                    </button>}
                 </>}
             />
 
-            {connector.error && (
-                <div className="mb-4 p-3 rounded-lg bg-[#B3261E]/10 border border-[#B3261E]/30 text-xs text-[#B3261E]">
-                    <strong>Error:</strong> {connector.error}
-                </div>
-            )}
-            {connector.last_sync && connector.status === 'connected' && (
-                <div className="mb-4 p-3 rounded-lg bg-[#2D7D46]/10 border border-[#2D7D46]/30 text-xs text-[#2D7D46]">
-                    <strong>Connected.</strong> Last sync: {connector.last_sync}
+            {connector.last_test_message && (
+                <div className={`mb-4 p-3 rounded-lg border text-xs ${connector.last_test_result === 'pass' ? 'bg-[#2D7D46]/10 border-[#2D7D46]/30 text-[#2D7D46]' : 'bg-[#B3261E]/10 border-[#B3261E]/30 text-[#B3261E]'}`}>
+                    <strong>Last test ({connector.last_sync}):</strong> {connector.last_test_message}
                 </div>
             )}
 
@@ -102,7 +101,7 @@ export default function IntegrationShow({ connector }) {
                             <label className="block text-xs text-[#718096] mb-1">API Key / Token</label>
                             <input type="password" value={form.access_key}
                                 onChange={(e) => setForm({ ...form, access_key: e.target.value })}
-                                placeholder="••••••••••"
+                                placeholder={config.access_key_set ? 'Saved — leave blank to keep' : '••••••••••'}
                                 className="w-full text-sm rounded-lg border border-gray-200 px-3 py-2" />
                             {validations.access_key && <p className="text-xs text-[#B3261E] mt-1">{validations.access_key}</p>}
                         </div>
@@ -110,6 +109,7 @@ export default function IntegrationShow({ connector }) {
                             <label className="block text-xs text-[#718096] mb-1">Secret (if applicable)</label>
                             <input type="password" value={form.secret_key}
                                 onChange={(e) => setForm({ ...form, secret_key: e.target.value })}
+                                placeholder={config.secret_key_set ? 'Saved — leave blank to keep' : ''}
                                 className="w-full text-sm rounded-lg border border-gray-200 px-3 py-2" />
                         </div>
                         <div>
@@ -148,14 +148,14 @@ export default function IntegrationShow({ connector }) {
                     </div>
 
                     <div className="mt-4 flex items-center justify-between">
-                        <button type="button" onClick={() => router.post(route('integrations.test', connector.key))}
+                        {canEdit && <button type="button" onClick={runTest}
                             className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-[#0A1F44]/20 text-sm text-[#0A1F44] hover:bg-[#0A1F44]/5">
                             <BeakerIcon className="w-4 h-4" /> Test
-                        </button>
-                        <button type="submit"
+                        </button>}
+                        {canEdit && <button type="submit"
                             className="inline-flex items-center gap-1 px-4 py-2 rounded-lg bg-[#0A1F44] text-white text-sm">
                             Save configuration
-                        </button>
+                        </button>}
                     </div>
                 </form>
 
@@ -250,30 +250,21 @@ export default function IntegrationShow({ connector }) {
                 </div>
             </div>
 
-            {/* Stubbed live preview */}
             <div className="mt-4 bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-                <h3 className="text-sm font-semibold text-[#2D3748] mb-3">Stubbed live preview</h3>
-                <p className="text-xs text-[#718096] mb-3">Canned preview of how ingested data will render in Atheris once this connector is fully wired. Numbers are illustrative.</p>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+                <h3 className="text-sm font-semibold text-[#2D3748] mb-3">Connection status</h3>
+                <p className="text-xs text-[#718096] mb-3">Tests run in sandbox mode: they validate the saved configuration and make no live call to the vendor. Data sync is not yet wired for this connector.</p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                     <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-[#718096] uppercase">Records ingested (7d)</p>
-                        <p className="text-2xl font-bold text-[#0A1F44] mt-1">{Math.floor(Math.random() * 5000 + 200)}</p>
+                        <p className="text-[#718096] uppercase">Status</p>
+                        <p className="text-lg font-bold text-[#0A1F44] mt-1">{statusLabel(connector.status)}</p>
                     </div>
                     <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-[#718096] uppercase">Records updated (7d)</p>
-                        <p className="text-2xl font-bold text-[#0A1F44] mt-1">{Math.floor(Math.random() * 1500 + 50)}</p>
+                        <p className="text-[#718096] uppercase">Last tested</p>
+                        <p className="text-lg font-bold text-[#0A1F44] mt-1">{connector.last_tested_at ? connector.last_sync : 'Never'}</p>
                     </div>
                     <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-[#718096] uppercase">Duplicates resolved</p>
-                        <p className="text-2xl font-bold text-[#0A1F44] mt-1">{Math.floor(Math.random() * 200 + 10)}</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-[#718096] uppercase">Avg sync latency</p>
-                        <p className="text-2xl font-bold text-[#0A1F44] mt-1">{Math.floor(Math.random() * 800 + 120)}ms</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                        <p className="text-[#718096] uppercase">Error rate (7d)</p>
-                        <p className="text-2xl font-bold text-[#2D7D46] mt-1">0.{Math.floor(Math.random() * 20)}%</p>
+                        <p className="text-[#718096] uppercase">Last result</p>
+                        <p className="text-lg font-bold text-[#0A1F44] mt-1">{connector.last_test_result ? connector.last_test_result.toUpperCase() : 'None'}</p>
                     </div>
                 </div>
             </div>

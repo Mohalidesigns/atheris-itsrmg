@@ -82,7 +82,7 @@ export default function RiskReport({
 
     // Treatment data for display
     const treatmentItems = [
-        { label: 'Not Started', value: treatmentStats.not_started, color: TREATMENT_COLORS.not_started },
+        { label: 'Not started (draft / submitted / approved)', value: treatmentStats.not_started, color: TREATMENT_COLORS.not_started },
         { label: 'In Progress', value: treatmentStats.in_progress, color: TREATMENT_COLORS.in_progress },
         { label: 'Completed', value: treatmentStats.completed, color: TREATMENT_COLORS.completed },
         { label: 'Overdue', value: treatmentStats.overdue, color: TREATMENT_COLORS.overdue },

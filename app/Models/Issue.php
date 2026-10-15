@@ -59,6 +59,7 @@ class Issue extends Model
         'ccm_test' => ['label' => 'CCM test', 'model' => CcmTenantTest::class, 'code' => 'code', 'route' => 'ccm.show'],
         'config_drift' => ['label' => 'Configuration drift', 'model' => ConfigDriftEvent::class, 'code' => 'drift_code', 'route' => 'drift.show'],
         'kri' => ['label' => 'KRI breach', 'model' => Kri::class, 'code' => 'code', 'route' => 'kri.show'],
+        'core_banking' => ['label' => 'Core banking', 'model' => CoreBankingIntegration::class, 'code' => 'name', 'route' => 'core-banking.show'],
         'access_review' => ['label' => 'Access review', 'model' => AccessReviewCampaign::class, 'code' => 'campaign_code', 'route' => 'access-reviews.show'],
     ];
 

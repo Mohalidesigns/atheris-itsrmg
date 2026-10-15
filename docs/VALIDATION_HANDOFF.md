@@ -21,7 +21,7 @@ Validate each sidebar module end to end, in order. For every module:
 6. The Definition of Done is in CLAUDE.md. Run:
    - Pint on the touched files only
    - the full PHP suite: `php vendor/bin/phpunit` (about 26 minutes)
-   - `migrate:fresh --seed` against a **scratch SQLite DB**, never the user's MySQL
+   - `migrate:fresh --seed` against the **scratch Postgres DB** `it_security_risk_scratch` (suite on `it_security_risk_test`), never the dev DB
    - the `RouteSmokeTest` with `SMOKE=1`
    - `npm run build`
 7. Commit and push **only after the full suite passes**, then **pause and wait for the user's go-ahead** before starting the next module.
@@ -211,13 +211,24 @@ Last full suite: **324 tests, 323 passed, 1 skipped, 3,565 assertions (14 Oct 20
 - **Removed:** the marketplace (content, installs, workflow templates) and Pricing — routes, pages, models, tables, nav, seed data, feature flags, Playwright specs.
 - **Adding a new approval point:** register it in `ApprovalProcesses::PROCESSES`, call `assertCanInitiate()` / `start()` where it begins and `gate()` (and `reject()` / `cancel()`) in the approve / return paths.
 
-## Next phase: module 17, Core Banking
+### Modules 17-23 (15 Oct 2026, done with subagents, lean scope)
 
-Sidebar items: Integrations (`core-banking.index`) and Snapshots (`core-banking.snapshots`), both `PlatformController` stubs under `view platform`.
+- **17 Core Banking** (ATH-VAL-017): stub replaced by `CoreBankingController` + `app/Services/CoreBanking` (sandbox connector with an artefact allowlist / customer-data embargo, findings, diff vs previous capture, unapproved platform change → issue source `core_banking`), strict tenancy, daily `core-banking:sync`, dashboard panel, `CoreBankingDemoSeeder` for both banks.
+- **18 Reports / 20 Integrations / 22 Settings** (ATH-VAL-018): `ReportFigures` shared by report pages and scheduled reports (real statuses); scheduled reports with `reports:run-due` (no e-mail delivery); per-bank `integration_connections` (encrypted config, masked secrets, sandbox probe, `edit platform`); theme and custom fields bank-scoped and editable; feature flags get per-bank overrides (`FeatureFlag::enabledFor`), global defaults Super Admin only; per-user notification preferences.
+- **19 Identity / 21 Administration / 23 Copilot** (ATH-VAL-019): SCIM `demo-` bearer bypass removed (critical) — tokens hashed and bank-bound; SAML ACS refuses (no library to verify assertions); SSO/SCIM bank-scoped with issue/revoke and SP metadata; API portal lists real routes only; user admin can't cross banks; role mutations Super Admin only (roles are global, teams=false); Copilot conversations bank- and user-scoped, offline grounded reply labelled as such.
 
-Start with recon, as for the earlier modules: tenant scoping on `CoreBankingIntegration` / `CoreBankingSnapshot`, whether snapshots come from a real (or sandboxed) adapter run, and demo data for both banks.
+## Validation programme complete
 
-**Remaining order after that:** Reports, then the rest of the sidebar.
+All sidebar modules are validated. Next: the outstanding follow-ups below and housekeeping.
+
+## Open follow-ups from modules 17-23
+
+- Real SAML validation (needs a library such as onelogin/php-saml) and OIDC sign-in; SCIM Groups endpoints advertised but not implemented.
+- Scheduled reports and notifications have no e-mail delivery; integration connectors and core-banking adapters are sandbox only.
+- Tenant theme is stored but the app shell does not read it.
+- Copilot has no language model attached.
+- `CoreBankingDemoSeeder` duplicates issues if re-run without `migrate:fresh`.
+- Playwright `phase7-workflows-corebanking-dr.spec.js` may need updating for the new Core Banking pages.
 
 ### Patterns from modules 5-9 to reuse
 

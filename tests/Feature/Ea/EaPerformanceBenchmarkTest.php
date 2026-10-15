@@ -13,6 +13,7 @@ use App\Services\Ea\ImpactAnalyser;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 /**
@@ -74,6 +75,7 @@ class EaPerformanceBenchmarkTest extends TestCase
      */
     private function buildEstate(): array
     {
+        $this->restartEmptySequences();
         $now = now()->toDateTimeString();
         $organizationId = $this->organization->id;
 
@@ -367,17 +369,10 @@ class EaPerformanceBenchmarkTest extends TestCase
         // rather than by timing, because on 5,000 SQLite rows a missing index
         // is fast enough to pass a stopwatch and disastrous on MySQL at
         // production volume.
-        $indexed = collect(DB::select("SELECT name, sql FROM sqlite_master WHERE type = 'index'"))
-            ->pluck('sql')->filter()->implode(' ');
-
-        $this->assertStringContainsString('ea_applications_ext', $indexed);
-        $this->assertStringContainsString('ea_relationships', $indexed);
-
-        foreach (['ea_closure', 'ea_application_capabilities'] as $table) {
-            $this->assertTrue(
-                str_contains($indexed, $table),
-                "{$table} must carry indexes — it exists only to be read by index"
-            );
+        // Driver-neutral: every table must carry at least one index beyond its primary key.
+        foreach (['ea_applications_ext', 'ea_relationships', 'ea_closure', 'ea_application_capabilities'] as $table) {
+            $secondary = collect(Schema::getIndexes($table))->reject(fn ($index) => $index['primary']);
+            $this->assertNotEmpty($secondary, "{$table} must carry indexes — it exists only to be read by index");
         }
     }
 }

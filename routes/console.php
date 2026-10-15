@@ -10,15 +10,22 @@ use App\Jobs\Ea\RunSurveyCampaigns;
 use App\Jobs\Ea\SyncAssetCatalogue;
 use App\Jobs\Ea\SyncCveFeed;
 use App\Jobs\Ea\SyncEolFeed;
+use App\Models\CoreBankingIntegration;
 use App\Models\PolicyException;
+use App\Models\ScheduledReport;
+use App\Models\ScheduledReportRun;
+use App\Models\User;
 use App\Services\Change\ChangeWorkflow;
+use App\Services\CoreBanking\CoreBankingConnector;
 use App\Services\Ea\ArchiMateExchange;
 use App\Services\Issues\IssueWorkflow;
 use App\Services\Kri\KriService;
 use App\Services\Monitoring\CcmRunner;
+use App\Services\Reports\ReportFigures;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
+use Illuminate\Validation\ValidationException;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -93,9 +100,53 @@ Artisan::command('ccm:run-due', function (CcmRunner $runner) {
 })->purpose('Run CCM tests that are due');
 Schedule::command('ccm:run-due')->everyFifteenMinutes()->name('ccm.run-due')->withoutOverlapping();
 
+/* =====================  Core Banking ===================== */
+// Daily technical-metadata sync of every connected adapter, per bank (ATH-VAL-017).
+Artisan::command('core-banking:sync', function (CoreBankingConnector $connector) {
+    $n = 0;
+    foreach (CoreBankingIntegration::withoutGlobalScopes()->where('status', 'connected')->orderBy('id')->get() as $i) {
+        try {
+            $connector->sync($i);
+            $n++;
+        } catch (ValidationException) {
+            // recorded on the integration as a failed sync
+        }
+    }
+    $this->info("{$n} integration(s) synced.");
+})->purpose('Sync connected core banking and switch adapters');
+Schedule::command('core-banking:sync')->dailyAt('01:30')->name('core-banking.sync')->withoutOverlapping();
+
 /* =====================  KRIs ===================== */
 // Measure every platform-sourced KRI from the bank's records each Monday (ATH-VAL-014).
 Artisan::command('kri:measure', function (KriService $kris) {
     $this->info($kris->measureAll().' KRI(s) measured.');
 })->purpose('Measure KRIs sourced from platform data');
 Schedule::command('kri:measure')->weeklyOn(1, '06:00')->name('kri.measure')->withoutOverlapping();
+
+/* =====================  Scheduled reports (ATH-VAL-018) ===================== */
+// Records a run (key figures snapshot) for every due schedule. No delivery is configured.
+Artisan::command('reports:run-due', function () {
+    $n = 0;
+    $due = ScheduledReport::withoutGlobalScopes()->where('active', true)
+        ->where('next_run_at', '<=', now())->orderBy('id')->get();
+    foreach ($due as $schedule) {
+        $user = User::withoutGlobalScopes()->where('organization_id', $schedule->organization_id)->orderBy('id')->first();
+        if (! $user) {
+            continue;
+        }
+        auth()->setUser($user); // report figures are tenant-scoped through the signed-in user
+        try {
+            $summary = ReportFigures::summary($schedule->report_type, (int) $schedule->organization_id);
+            ScheduledReportRun::create([
+                'organization_id' => $schedule->organization_id, 'scheduled_report_id' => $schedule->id,
+                'ran_at' => now(), 'status' => 'recorded', 'summary' => $summary,
+            ]);
+            $schedule->update(['last_run_at' => now(), 'next_run_at' => ScheduledReport::advance($schedule->frequency)]);
+            $n++;
+        } finally {
+            auth()->forgetUser();
+        }
+    }
+    $this->info("{$n} scheduled report(s) recorded.");
+})->purpose('Record due scheduled report runs');
+Schedule::command('reports:run-due')->daily()->name('reports.run-due')->withoutOverlapping();

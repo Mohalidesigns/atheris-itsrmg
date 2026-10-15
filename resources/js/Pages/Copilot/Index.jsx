@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PageHeader from '@/Components/PageHeader';
 import { Head, useForm, router } from '@inertiajs/react';
 import { SparklesIcon, PaperAirplaneIcon, ChatBubbleLeftIcon } from '@/Components/Material/Symbols';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function CopilotIndex({ conversations = [], active, messages = [] }) {
     const [input, setInput] = useState('');
@@ -10,6 +10,8 @@ export default function CopilotIndex({ conversations = [], active, messages = []
         conversation_id: active?.id || null,
         content: '',
     });
+
+    useEffect(() => { setData('conversation_id', active?.id || null); }, [active?.id]);
 
     const send = (e) => {
         e.preventDefault();
@@ -32,8 +34,8 @@ export default function CopilotIndex({ conversations = [], active, messages = []
             <PageHeader
                 breadcrumbs={[{ label: 'Atheris Copilot' }]}
                 title="Atheris Copilot"
-                subtitle="Natural-language assistant grounded in your risks, controls, policies, incidents, obligations and KRIs."
-                actions={<span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#C9A86A]/15 text-[#0A1F44] text-xs font-medium whitespace-nowrap"><SparklesIcon className="w-4 h-4" /> Claude Sonnet 4.6 / Ollama qwen2.5:14b</span>}
+                subtitle="Keyword assistant grounded in your bank's own risks, controls and the AUCS catalogue. Replies are looked up from your records, not generated."
+                actions={<span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-[#C9A86A]/15 text-[#0A1F44] text-xs font-medium whitespace-nowrap"><SparklesIcon className="w-4 h-4" /> Offline assistant — no language model connected</span>}
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">

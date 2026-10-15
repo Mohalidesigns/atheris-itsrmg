@@ -4,10 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\AucsControl;
 use App\Models\AucsFrameworkMapping;
+use App\Models\Control;
 use App\Models\CopilotConversation;
 use App\Models\CopilotMessage;
-use App\Models\CoreBankingIntegration;
-use App\Models\CoreBankingSnapshot;
 use App\Models\CustomField;
 use App\Models\EvidenceVaultItem;
 use App\Models\FairRun;
@@ -17,8 +16,6 @@ use App\Models\FrameworkClause;
 use App\Models\Obligation;
 use App\Models\Risk;
 use App\Models\RiskCategory;
-use App\Models\ScimToken;
-use App\Models\SsoConnection;
 use App\Models\Tenant;
 use App\Models\TenantTheme;
 use App\Models\Vulnerability;
@@ -31,12 +28,15 @@ use Inertia\Inertia;
 class PlatformController extends Controller
 {
     /* ------------------------------ Copilot ------------------------------ */
-    public function copilotIndex()
+    public function copilotIndex(Request $request)
     {
-        $conversations = CopilotConversation::orderBy('created_at', 'desc')->take(20)->get();
-        $active = $conversations->first();
+        $conversations = CopilotConversation::where('user_id', $request->user()->id)
+            ->orderByDesc('created_at')->orderByDesc('id')->take(20)->get();
+        $active = $request->filled('c')
+            ? CopilotConversation::where('user_id', $request->user()->id)->findOrFail($request->integer('c'))
+            : $conversations->first();
         $messages = $active
-            ? CopilotMessage::where('conversation_id', $active->id)->orderBy('created_at')->get()
+            ? CopilotMessage::where('conversation_id', $active->id)->orderBy('created_at')->orderBy('id')->get()
             : collect();
 
         return Inertia::render('Copilot/Index', compact('conversations', 'active', 'messages'));
@@ -46,13 +46,14 @@ class PlatformController extends Controller
     {
         $data = $request->validate([
             'conversation_id' => 'nullable|integer',
-            'content' => 'required|string',
+            'content' => 'required|string|max:2000',
         ]);
-        $conv = $data['conversation_id']
-            ? CopilotConversation::find($data['conversation_id'])
+        $user = $request->user();
+        $conv = ! empty($data['conversation_id'])
+            ? CopilotConversation::where('user_id', $user->id)->findOrFail($data['conversation_id'])
             : CopilotConversation::create([
-                'organization_id' => 1,
-                'user_id' => $request->user()->id,
+                'organization_id' => $user->organization_id,
+                'user_id' => $user->id,
                 'title' => Str::limit($data['content'], 40),
                 'mode' => 'general',
             ]);
@@ -60,24 +61,66 @@ class PlatformController extends Controller
             'conversation_id' => $conv->id,
             'role' => 'user',
             'content' => $data['content'],
-            'tokens_in' => strlen($data['content']) / 4,
-            'model' => 'claude-sonnet-4-6',
+            'tokens_in' => 0,
+            'model' => 'atheris-offline',
         ]);
-        $reply = 'Based on Atheris AUCS, CBN RBCSF and your current tenant data: '.
-            "I can help you explore risks, controls, obligations, incidents, and KRIs. Try asking: \n".
-            "• *Show me overdue critical risks*\n".
-            "• *Which controls are failing CCM tests?*\n".
-            "• *Summarise last week's CBN circulars*\n".
-            '• *Draft an NDPC 72-hour breach notification for Incident #INC-001*';
         CopilotMessage::create([
             'conversation_id' => $conv->id,
             'role' => 'assistant',
-            'content' => $reply,
-            'tokens_out' => 120,
-            'model' => 'claude-sonnet-4-6',
+            'content' => $this->offlineReply($data['content']),
+            'tokens_out' => 0,
+            'model' => 'atheris-offline',
         ]);
 
-        return redirect()->back()->with('success', 'Copilot response received');
+        return redirect()->route('copilot.index', ['c' => $conv->id])->with('success', 'Copilot response received');
+    }
+
+    /** Deterministic reply from the bank's own risks, controls and the AUCS catalogue. No language model is involved. */
+    private function offlineReply(string $question): string
+    {
+        $terms = collect(preg_split('/[^a-z0-9]+/i', Str::lower($question)))
+            ->filter(fn ($w) => strlen($w) >= 4 && ! in_array($w, ['show', 'which', 'what', 'list', 'about', 'with', 'have', 'from', 'that', 'this', 'there', 'tell', 'summarise', 'latest'], true))
+            ->unique()->take(6)->values();
+
+        $match = function ($query, array $cols) use ($terms) {
+            $query->where(function ($q) use ($terms, $cols) {
+                foreach ($terms as $t) {
+                    foreach ($cols as $c) {
+                        $q->orWhere($c, 'like', "%{$t}%");
+                    }
+                }
+            });
+
+            return $query;
+        };
+
+        $riskTotal = Risk::count();
+        $controlTotal = Control::count();
+        $lines = ["Offline assistant (no language model connected). Your register holds {$riskTotal} risks and {$controlTotal} controls."];
+
+        if ($terms->isEmpty()) {
+            return $lines[0]."\nAsk with a keyword (for example \"MFA\", \"vendor\" or \"backup\") and I will list matching records.";
+        }
+
+        $risks = $match(Risk::query(), ['title', 'description', 'risk_id_code'])->orderByDesc('inherent_score')->limit(5)->get();
+        $controls = $match(Control::query(), ['title', 'description', 'control_code'])->limit(5)->get();
+        $aucs = $match(AucsControl::query(), ['title', 'objective_text', 'code'])->limit(5)->get();
+
+        $lines[] = 'Matches for "'.$terms->implode(' ').'": '.$risks->count().' risks, '.$controls->count().' controls, '.$aucs->count().' AUCS controls (top 5 each).';
+        foreach ($risks as $r) {
+            $lines[] = "• Risk {$r->risk_id_code}: {$r->title} (inherent {$r->inherent_rating}, status {$r->status})";
+        }
+        foreach ($controls as $c) {
+            $lines[] = "• Control {$c->control_code}: {$c->title} (effectiveness ".($c->effectiveness ?? 'not rated').')';
+        }
+        foreach ($aucs as $a) {
+            $lines[] = "• AUCS {$a->code}: {$a->title}";
+        }
+        if ($risks->isEmpty() && $controls->isEmpty() && $aucs->isEmpty()) {
+            $lines[] = 'No records match those keywords.';
+        }
+
+        return implode("\n", $lines);
     }
 
     public function obligationsIndex(Request $r)
@@ -218,87 +261,116 @@ class PlatformController extends Controller
             : 'Scenario unlinked.');
     }
 
-    /* ------------------------------ Core Banking ------------------------------ */
-    public function coreBankingIndex()
-    {
-        $integrations = CoreBankingIntegration::get();
-
-        return Inertia::render('CoreBanking/Index', compact('integrations'));
-    }
-
-    public function coreBankingSnapshots()
-    {
-        $snapshots = CoreBankingSnapshot::orderByDesc('captured_at')->take(50)->get();
-
-        return Inertia::render('CoreBanking/Snapshots', compact('snapshots'));
-    }
-
     /* --------------------------------- DR --------------------------------- */
-    /* --------------------------- Identity & Access --------------------------- */
-    public function identitySso()
-    {
-        $connections = SsoConnection::get();
-
-        return Inertia::render('Identity/Sso', compact('connections'));
-    }
-
-    public function identityScim()
-    {
-        $tokens = ScimToken::get();
-
-        return Inertia::render('Identity/Scim', compact('tokens'));
-    }
-
-    public function identityApi()
-    {
-        $endpoints = collect([
-            ['method' => 'GET', 'path' => '/api/v1/risks', 'description' => 'List risks (paginated)'],
-            ['method' => 'POST', 'path' => '/api/v1/risks', 'description' => 'Create a risk'],
-            ['method' => 'GET', 'path' => '/api/v1/controls', 'description' => 'List controls'],
-            ['method' => 'GET', 'path' => '/api/v1/incidents', 'description' => 'List incidents'],
-            ['method' => 'POST', 'path' => '/api/v1/incidents', 'description' => 'Create an incident'],
-            ['method' => 'GET', 'path' => '/api/v1/vulnerabilities', 'description' => 'List vulnerabilities'],
-            ['method' => 'GET', 'path' => '/api/v1/aucs/controls', 'description' => 'AUCS control catalogue'],
-            ['method' => 'POST', 'path' => '/api/v1/copilot/conversations', 'description' => 'Start a Copilot conversation'],
-            ['method' => 'POST', 'path' => '/api/v1/ccm/run/{id}', 'description' => 'Run a CCM test'],
-            ['method' => 'GET', 'path' => '/api/v1/kris', 'description' => 'List KRIs with latest readings'],
-            ['method' => 'POST', 'path' => '/api/v1/board-packs/generate', 'description' => 'Generate a board pack'],
-            ['method' => 'POST', 'path' => '/api/v1/fair/scenarios/{id}/runs', 'description' => 'Run FAIR Monte Carlo'],
-            ['method' => 'GET', 'path' => '/api/v1/regulatory/circulars', 'description' => 'Regulatory circulars feed'],
-            ['method' => 'GET', 'path' => '/api/v1/obligations', 'description' => 'Obligations library'],
-        ]);
-
-        return Inertia::render('Identity/Api', compact('endpoints'));
-    }
-
     /* -------------------------------- Settings -------------------------------- */
+    public const CUSTOM_FIELD_ENTITIES = ['Risk', 'Control', 'Incident', 'Vendor', 'Policy', 'Asset', 'Issue'];
+
+    public static function defaultTheme(): array
+    {
+        return ['navy' => '#0A1F44', 'gold' => '#C9A86A', 'green' => '#2D7D46', 'charcoal' => '#2D3748'];
+    }
+
     public function settingsTheme()
     {
-        $theme = TenantTheme::first() ?? (object) [
-            'tokens' => ['navy' => '#0A1F44', 'gold' => '#C9A86A', 'green' => '#2D7D46'],
-            'logo_path' => null,
+        // Strictly the bank's own theme; platform defaults when it has none.
+        $row = TenantTheme::first();
+        $theme = [
+            'tokens' => array_merge(self::defaultTheme(), $row?->tokens ?? []),
+            'logo_path' => $row?->logo_path,
+            'is_default' => $row === null,
         ];
 
         return Inertia::render('Settings/Theme', compact('theme'));
     }
 
+    public function settingsThemeUpdate(Request $request)
+    {
+        $hex = ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'];
+        $data = $request->validate([
+            'tokens' => ['required', 'array'],
+            'tokens.navy' => $hex, 'tokens.gold' => $hex, 'tokens.green' => $hex, 'tokens.charcoal' => $hex,
+            'logo_path' => ['nullable', 'url', 'max:500'],
+        ]);
+        $theme = TenantTheme::first() ?? new TenantTheme(['status' => 'active']);
+        $theme->fill([
+            'organization_id' => $request->user()->organization_id,
+            'tokens' => $data['tokens'], 'logo_path' => $data['logo_path'] ?? null,
+        ])->save();
+
+        return back()->with('success', 'Theme saved for your bank. Note: the application shell does not yet read these tokens, so they are stored but not applied.');
+    }
+
     public function settingsCustomFields()
     {
         $fields = CustomField::orderBy('subject_type')->orderBy('order_index')->get();
+        $entities = self::CUSTOM_FIELD_ENTITIES;
 
-        return Inertia::render('Settings/CustomFields', compact('fields'));
+        return Inertia::render('Settings/CustomFields', compact('fields', 'entities'));
     }
 
-    public function settingsFeatureFlags()
+    public function settingsCustomFieldStore(Request $request)
     {
-        $flags = FeatureFlag::orderBy('key')->get();
+        $orgId = $request->user()->organization_id;
+        $data = $request->validate([
+            'subject_type' => ['required', Rule::in(self::CUSTOM_FIELD_ENTITIES)],
+            'key' => ['required', 'regex:/^[a-z][a-z0-9_]{1,62}$/', Rule::unique('custom_fields', 'key')
+                ->where('organization_id', $orgId)->where('subject_type', $request->input('subject_type'))],
+            'label' => ['required', 'string', 'max:255'],
+            'data_type' => ['required', Rule::in(['text', 'number', 'date', 'select'])],
+            'required' => ['sometimes', 'boolean'],
+            'options' => ['required_if:data_type,select', 'nullable', 'array', 'max:50'],
+            'options.*' => ['string', 'max:100'],
+        ]);
+        $data['options'] = $data['data_type'] === 'select' ? array_values($data['options'] ?? []) : null;
+        $data['order_index'] = (int) CustomField::where('subject_type', $data['subject_type'])->max('order_index') + 10;
+        CustomField::create($data + ['organization_id' => $orgId]);
 
-        return Inertia::render('Settings/FeatureFlags', compact('flags'));
+        return back()->with('success', 'Custom field added.');
     }
 
-    public function settingsFeatureFlagToggle(FeatureFlag $flag)
+    public function settingsCustomFieldDestroy(int $id)
     {
-        $flag->update(['enabled' => ! $flag->enabled]);
+        CustomField::findOrFail($id)->delete();
+
+        return back()->with('success', 'Custom field removed.');
+    }
+
+    public function settingsFeatureFlags(Request $request)
+    {
+        $orgId = $request->user()->organization_id;
+        $overrides = FeatureFlag::where('organization_id', $orgId)->get()->keyBy('key');
+        $flags = FeatureFlag::whereNull('organization_id')->orderBy('key')->get()->map(fn ($f) => [
+            'id' => $f->id, 'key' => $f->key, 'rollout_percent' => $f->rollout_percent,
+            'default_enabled' => (bool) $f->enabled,
+            'override' => $overrides->has($f->key) ? (bool) $overrides[$f->key]->enabled : null,
+            'enabled' => $overrides->has($f->key) ? (bool) $overrides[$f->key]->enabled : (bool) $f->enabled,
+        ]);
+
+        return Inertia::render('Settings/FeatureFlags', [
+            'flags' => $flags, 'isSuperAdmin' => $request->user()->hasRole('Super Admin'),
+        ]);
+    }
+
+    /** Bank-level toggle: writes this bank's override row only. */
+    public function settingsFeatureFlagToggle(Request $request, int $flag)
+    {
+        $global = FeatureFlag::whereNull('organization_id')->findOrFail($flag);
+        $orgId = $request->user()->organization_id;
+        $effective = FeatureFlag::enabledFor($global->key, $orgId) ?? false;
+        FeatureFlag::updateOrCreate(
+            ['organization_id' => $orgId, 'key' => $global->key],
+            ['enabled' => ! $effective, 'rollout_percent' => $global->rollout_percent],
+        );
+
+        return redirect()->back();
+    }
+
+    /** Platform-wide default: Super Admin only. */
+    public function settingsFeatureFlagToggleGlobal(Request $request, int $flag)
+    {
+        abort_unless($request->user()->hasRole('Super Admin'), 403);
+        $global = FeatureFlag::whereNull('organization_id')->findOrFail($flag);
+        $global->update(['enabled' => ! $global->enabled]);
 
         return redirect()->back();
     }

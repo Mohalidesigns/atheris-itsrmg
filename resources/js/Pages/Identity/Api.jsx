@@ -17,7 +17,7 @@ export default function ApiPortal({ endpoints = [] }) {
             <PageHeader
                 breadcrumbs={[{ label: 'Identity & Access' }, { label: 'API Portal' }]}
                 title="Atheris Public API (v1)"
-                subtitle="OAuth2 via Passport · OpenAPI 3.0 at api.atheris.ng/docs · 600 rpm default · per-tenant scoping."
+                subtitle="Endpoints registered on this server, authenticated with a Sanctum bearer token and scoped to your bank."
             />
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">

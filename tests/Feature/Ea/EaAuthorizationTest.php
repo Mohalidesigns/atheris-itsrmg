@@ -57,6 +57,7 @@ class EaAuthorizationTest extends TestCase
     {
         parent::setUp();
         $this->seed(RolesAndPermissionsSeeder::class);
+        $this->restartEmptySequences();
         $this->seedBoundRecords();
     }
 

@@ -11,12 +11,15 @@ use App\Models\Incident;
 use App\Models\Policy;
 use App\Models\Risk;
 use App\Models\RiskCategory;
-use App\Models\RiskTreatment;
+use App\Models\ScheduledReport;
 use App\Models\Vendor;
 use App\Models\Vulnerability;
 use App\Services\ComplianceScoreService;
 use App\Services\Kri\KriMetrics;
+use App\Services\Reports\ReportFigures;
 use App\Services\RiskScoringService;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 
 class ReportController extends Controller
@@ -30,15 +33,8 @@ class ReportController extends Controller
     {
         $orgId = auth()->user()->organization_id;
 
-        // Risk stats: active risks only (ATH-VAL-014; closed risks were counted)
-        $riskStats = [
-            'total' => Risk::active()->count(),
-            'critical' => Risk::active()->where('inherent_rating', 'critical')->count(),
-            'high' => Risk::active()->where('inherent_rating', 'high')->count(),
-            'medium' => Risk::active()->where('inherent_rating', 'medium')->count(),
-            'low' => Risk::active()->where('inherent_rating', 'low')->count(),
-            'open' => Risk::active()->count(),
-        ];
+        // Risk stats: active risks only; 'open' = risks still needing work (ATH-VAL-018)
+        $riskStats = ReportFigures::riskStats();
 
         // Compliance stats
         $complianceStats = $this->complianceScoreService->getComplianceStats($orgId);
@@ -145,24 +141,11 @@ class ReportController extends Controller
             ->limit(10)
             ->get(['id', 'risk_id_code', 'title', 'inherent_score', 'inherent_rating', 'status', 'category_id', 'risk_owner_id']);
 
-        // Treatment progress
-        $treatmentStats = [
-            'not_started' => RiskTreatment::where('status', 'not_started')->count(),
-            'in_progress' => RiskTreatment::where('status', 'in_progress')->count(),
-            'completed' => RiskTreatment::where('status', 'completed')->count(),
-            'overdue' => RiskTreatment::where('status', '!=', 'completed')
-                ->where('due_date', '<', now())->count(),
-        ];
+        // Treatment progress ('not_started' = draft/submitted/approved)
+        $treatmentStats = ReportFigures::treatmentStats();
 
-        // Stats summary
-        $stats = [
-            'total' => Risk::count(),
-            'critical' => Risk::where('inherent_rating', 'critical')->count(),
-            'high' => Risk::where('inherent_rating', 'high')->count(),
-            'medium' => Risk::where('inherent_rating', 'medium')->count(),
-            'low' => Risk::where('inherent_rating', 'low')->count(),
-            'treating' => Risk::where('status', 'treating')->count(),
-        ];
+        // Same active-risk basis as the executive page
+        $stats = ReportFigures::riskStats();
 
         return Inertia::render('Reports/RiskReport', [
             'stats' => $stats,
@@ -177,7 +160,65 @@ class ReportController extends Controller
 
     public function scheduled()
     {
-        return Inertia::render('Reports/Scheduled/Index');
+        return Inertia::render('Reports/Scheduled/Index', [
+            'schedules' => ScheduledReport::with(['runs' => fn ($q) => $q->limit(3)])->orderBy('name')->get(),
+            'types' => ScheduledReport::TYPES,
+            'frequencies' => ScheduledReport::FREQUENCIES,
+        ]);
+    }
+
+    private function validateSchedule(Request $request): array
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'report_type' => ['required', Rule::in(array_keys(ScheduledReport::TYPES))],
+            'frequency' => ['required', Rule::in(ScheduledReport::FREQUENCIES)],
+            'recipients' => ['nullable', 'array', 'max:20'],
+            'recipients.*' => ['email:rfc', 'max:255'],
+            'active' => ['sometimes', 'boolean'],
+        ]);
+        $data['recipients'] = array_values(array_unique($data['recipients'] ?? []));
+
+        return $data;
+    }
+
+    public function scheduledStore(Request $request)
+    {
+        $data = $this->validateSchedule($request);
+        ScheduledReport::create($data + [
+            'active' => $data['active'] ?? true,
+            'created_by' => $request->user()->id,
+            'next_run_at' => ScheduledReport::advance($data['frequency']),
+        ]);
+
+        return back()->with('success', 'Scheduled report created.');
+    }
+
+    public function scheduledUpdate(Request $request, int $id)
+    {
+        $schedule = ScheduledReport::findOrFail($id);
+        $data = $this->validateSchedule($request);
+        if ($data['frequency'] !== $schedule->frequency) {
+            $data['next_run_at'] = ScheduledReport::advance($data['frequency']);
+        }
+        $schedule->update($data);
+
+        return back()->with('success', 'Scheduled report updated.');
+    }
+
+    public function scheduledToggle(int $id)
+    {
+        $schedule = ScheduledReport::findOrFail($id);
+        $schedule->update(['active' => ! $schedule->active]);
+
+        return back()->with('success', $schedule->active ? 'Schedule resumed.' : 'Schedule paused.');
+    }
+
+    public function scheduledDestroy(int $id)
+    {
+        ScheduledReport::findOrFail($id)->delete();
+
+        return back()->with('success', 'Scheduled report deleted.');
     }
 
     public function complianceReport()

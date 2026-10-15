@@ -7,16 +7,16 @@ import { PuzzlePieceIcon, CheckCircleIcon, ExclamationCircleIcon, PlusCircleIcon
 
 const statusTone = (s) => ({
     connected: 'pass',
-    available: 'draft',
-    not_connected: 'draft',
-    error: 'critical',
+    configured: 'draft',
+    not_configured: 'draft',
+    failed: 'critical',
 })[s] || 'draft';
 
 const statusLabel = (s) => ({
-    connected: 'Connected',
-    available: 'Available',
-    not_connected: 'Not Connected',
-    error: 'Error',
+    connected: 'Connected (sandbox)',
+    configured: 'Configured',
+    not_configured: 'Not configured',
+    failed: 'Test failed',
 })[s] || s;
 
 export default function IntegrationsIndex({ byCategory = {}, summary = {} }) {
@@ -31,16 +31,16 @@ export default function IntegrationsIndex({ byCategory = {}, summary = {} }) {
             <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
                 <KpiCard label="Connectors" value={summary.total} tone="navy" icon={PuzzlePieceIcon} />
                 <KpiCard label="Connected" value={summary.connected} tone="green" icon={CheckCircleIcon} />
-                <KpiCard label="Available" value={summary.available} tone="gold" icon={PlusCircleIcon} />
-                <KpiCard label="Not Connected" value={summary.not_connected} tone="white" />
-                <KpiCard label="Errors" value={summary.error} tone="red" icon={ExclamationCircleIcon} />
+                <KpiCard label="Configured" value={summary.configured} tone="gold" icon={PlusCircleIcon} />
+                <KpiCard label="Not Configured" value={summary.not_configured} tone="white" />
+                <KpiCard label="Test failed" value={summary.failed} tone="red" icon={ExclamationCircleIcon} />
             </div>
 
             {Object.entries(byCategory).map(([cat, items]) => (
                 <div key={cat} className="mb-6">
                     <h3 className="text-sm font-semibold text-[#0A1F44] uppercase tracking-wide mb-2">{cat} <span className="text-xs font-normal text-[#718096]">· {items.length} connector{items.length > 1 ? 's' : ''}</span></h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                        {Object.entries(items).map(([key, i]) => (
+                        {Object.values(items).map((i) => { const key = i.key; return (
                             <Link key={key} href={route('integrations.show', key)}
                                 className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 hover:border-[#0A1F44]/30 hover:shadow-md transition block">
                                 <div className="flex items-start justify-between">
@@ -53,10 +53,10 @@ export default function IntegrationsIndex({ byCategory = {}, summary = {} }) {
                                 <p className="text-xs text-[#718096] mt-2 line-clamp-3">{i.description}</p>
                                 <div className="flex items-center justify-between mt-3 text-[10px] text-[#718096]">
                                     <span>{i.capabilities?.length || 0} capabilities</span>
-                                    {i.last_sync && <span>Last sync: {i.last_sync}</span>}
+                                    {i.last_tested_at && <span>Last tested: {i.last_sync}</span>}
                                 </div>
                             </Link>
-                        ))}
+                        ); })}
                     </div>
                 </div>
             ))}

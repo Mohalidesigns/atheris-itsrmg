@@ -25,10 +25,15 @@ Each sidebar module is validated end to end, in order: its features, forms, tabl
 | 14 | KRIs & Dashboards | Done | [ATH-VAL-014](docs/ATH-VAL-014_KRIs_Dashboards_Validation_Report.md) |
 | 15 | Enterprise Architecture (CBN blueprint domains + CMMI maturity) | Done | [ATH-VAL-015](docs/ATH-VAL-015_Enterprise_Architecture_Validation_Report.md) |
 | 16 | Workflow Studio (redesigned: approval workflows for every process; marketplace and pricing removed) | Done | [ATH-VAL-016](docs/ATH-VAL-016_Workflow_Studio_Validation_Report.md) |
-| 17 | Core Banking | **Next** | — |
-| 18+ | Reports → rest of sidebar | To do | — |
+| 17 | Core Banking | Done | [ATH-VAL-017](docs/ATH-VAL-017_Core_Banking_Validation_Report.md) |
+| 18 | Reports | Done | [ATH-VAL-018](docs/ATH-VAL-018_Reports_Integrations_Settings_Validation_Report.md) |
+| 19 | Identity & Access (SSO, SCIM, API) | Done | [ATH-VAL-019](docs/ATH-VAL-019_Identity_Administration_Copilot_Validation_Report.md) |
+| 20 | Integrations hub | Done | [ATH-VAL-018](docs/ATH-VAL-018_Reports_Integrations_Settings_Validation_Report.md) |
+| 21 | Administration (users, roles) | Done | [ATH-VAL-019](docs/ATH-VAL-019_Identity_Administration_Copilot_Validation_Report.md) |
+| 22 | Settings | Done | [ATH-VAL-018](docs/ATH-VAL-018_Reports_Integrations_Settings_Validation_Report.md) |
+| 23 | Copilot | Done | [ATH-VAL-019](docs/ATH-VAL-019_Identity_Administration_Copilot_Validation_Report.md) |
 
-Last full PHP suite: 324 tests, 323 passed, 1 skipped (the route smoke test, run separately), 3,565 assertions (14 Oct 2026, local, PHP 8.4).
+Last full PHP suite: 342 tests, 341 passed, 1 skipped (the route smoke test, run separately: 203 GET routes OK), on PostgreSQL 17 (15 Oct 2026, local, PHP 8.4). The suite, `migrate:fresh --seed` and the smoke test now run on Postgres (`it_security_risk_test` / `it_security_risk_scratch`), not SQLite.
 
 ## Quick start
 

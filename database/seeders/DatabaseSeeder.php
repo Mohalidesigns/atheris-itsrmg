@@ -162,15 +162,23 @@ class DatabaseSeeder extends Seeder
         // Workflow Studio: approval flows per bank and live approvals for the inbox (ATH-VAL-016)
         $this->call(WorkflowStudioDemoSeeder::class);
 
+        // Core Banking: read-only adapters synced through the connector (ATH-VAL-017)
+        $this->call(CoreBankingDemoSeeder::class);
+
         // Regulatory Intelligence: circular triage, Document Intelligence, Returns Centre runs and
         // First Bank's compiled architecture returns (after stewardship so seal states are real)
         $this->call(RegulatoryIntelligenceDemoSeeder::class);
+
+        // SSO connections, hashed SCIM tokens and offline Copilot conversations per bank (ATH-VAL-019)
+        $this->call(IdentityAdminCopilotDemoSeeder::class);
 
         // Reusable assessment questions (IT Risk → Question Library)
         $this->call(QuestionLibrarySeeder::class);
 
         // One test login per role (password: Password@123) — attached to
         // Kano Heritage Bank so every role sees populated modules
+        $this->call(ReportsIntegrationsSettingsDemoSeeder::class);
+
         $this->call(RoleDemoUsersSeeder::class);
     }
 }

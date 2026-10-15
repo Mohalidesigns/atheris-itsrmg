@@ -287,7 +287,10 @@ class ChangeManagementDemoSeeder extends Seeder
             }
             $out[$type] = $meta['model']::withoutGlobalScopes()->where('organization_id', $this->orgId)
                 ->when(in_array(SoftDeletes::class, class_uses_recursive($meta['model'])), fn ($q) => $q->whereNull('deleted_at'))
-                ->orderBy('id')->get(['id', $meta['code'].' as code', 'title'])->values();
+                // Read through the model: some sources have no code/title column (accessors, or `name`).
+                ->orderBy('id')->get()
+                ->map(fn ($r) => (object) ['id' => $r->id, 'code' => $r->{$meta['code']}, 'title' => $r->title ?? $r->name ?? $r->{$meta['code']}])
+                ->values();
         }
 
         return $out;

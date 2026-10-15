@@ -123,7 +123,7 @@ function CsatRadar({ csat }) {
     );
 }
 
-export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null, policyPulse = null, continuity = null, monitoring = null }) {
+export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts = {}, heatmapRisks = [], top10Risks = [], kris = [], ctrlEff = {}, ccmByStatus = {}, incidents = [], vulnsBySeverity = {}, obligations = [], vendorScoreboard = [], attestationByDept = [], csat = null, regulatory = null, secops = null, issues = null, changes = null, assets = null, vendors = null, policyPulse = null, continuity = null, monitoring = null, coreBanking = null }) {
     const { auth } = usePage().props;
     const exportBoardPack = () => router.post(route('dashboard.board-pack-export'));
     const canBoardPack = (usePage().props.auth?.user?.permissions || []).includes('create reports');
@@ -543,6 +543,28 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                             ['Open high/critical drift', monitoring.drift_critical, route('monitoring.drift', { status: 'unresolved' }), monitoring.drift_critical > 0],
                             ['Access reviews overdue', monitoring.reviews_overdue, route('monitoring.access-reviews', { status: 'overdue' }), monitoring.reviews_overdue > 0],
                             ['Revocations to confirm', monitoring.revocations_pending, route('monitoring.access-reviews'), monitoring.revocations_pending > 0],
+                        ].map(([label, n, href, alert]) => (
+                            <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
+                                <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>
+                                <p className="text-[11px] text-[#718096]">{label}</p>
+                            </Link>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {coreBanking && coreBanking.integrations > 0 && (
+                <div className="mb-6 rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <div className="mb-3 flex items-start justify-between">
+                        <h3 className="text-sm font-semibold text-[#2D3748]">Core Banking</h3>
+                        <Link href={route('core-banking.index')} className="text-xs text-[#0A1F44] underline">Integrations →</Link>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        {[
+                            ['Integrations connected', `${coreBanking.connected}/${coreBanking.integrations}`, route('core-banking.index'), false],
+                            ['Failing syncs', coreBanking.failing, route('core-banking.index'), coreBanking.failing > 0],
+                            ['Open high/critical findings', coreBanking.findings_open, route('core-banking.index'), coreBanking.findings_open > 0],
+                            ['Last sync', coreBanking.last_sync ? String(coreBanking.last_sync).slice(0, 10) : '—', route('core-banking.snapshots'), false],
                         ].map(([label, n, href, alert]) => (
                             <Link key={label} href={href} className="rounded-lg border border-gray-100 px-3 py-2 hover:bg-gray-50">
                                 <p className={`text-xl font-bold ${alert ? 'text-[#B3261E]' : 'text-[#0A1F44]'}`}>{n ?? 0}</p>

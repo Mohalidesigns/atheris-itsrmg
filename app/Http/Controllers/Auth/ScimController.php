@@ -88,11 +88,12 @@ class ScimController extends Controller
     {
         $this->authenticate($request);
         $filter = $request->query('filter', '');
-        $query = User::query();
+        $query = $this->users($request);
         if (preg_match('/userName\s+eq\s+"([^"]+)"/i', $filter, $m)) {
             $query->where('email', $m[1]);
         }
         $users = $query->limit(200)->get();
+
         return response()->json([
             'schemas' => ['urn:ietf:params:scim:api:messages:2.0:ListResponse'],
             'totalResults' => $users->count(),
@@ -107,29 +108,37 @@ class ScimController extends Controller
         $email = $data['userName'] ?? null;
         abort_unless($email, 400, 'userName required');
 
-        $user = User::updateOrCreate(
+        $email = strtolower((string) $email);
+        $orgId = $this->orgId($request);
+        $existing = User::withoutGlobalScopes()->where('email', $email)->first();
+        abort_if($existing && (int) $existing->organization_id !== $orgId, 409, 'userName already in use');
+
+        $user = User::withoutGlobalScopes()->updateOrCreate(
             ['email' => $email],
             [
+                'organization_id' => $orgId,
                 'name' => $data['name']['formatted']
                     ?? trim(($data['name']['givenName'] ?? '').' '.($data['name']['familyName'] ?? '')),
                 'password' => Hash::make(Str::random(32)),
                 'email_verified_at' => now(),
             ]
         );
+
         return response()->json($this->userResource($user), 201);
     }
 
     public function showUser(Request $request, int $id): JsonResponse
     {
         $this->authenticate($request);
-        $user = User::findOrFail($id);
+        $user = $this->users($request)->findOrFail($id);
+
         return response()->json($this->userResource($user));
     }
 
     public function patchUser(Request $request, int $id): JsonResponse
     {
         $this->authenticate($request);
-        $user = User::findOrFail($id);
+        $user = $this->users($request)->findOrFail($id);
         $operations = $request->json('Operations', []);
         foreach ($operations as $op) {
             $path = $op['path'] ?? null;
@@ -142,41 +151,63 @@ class ScimController extends Controller
             }
         }
         $user->save();
+
         return response()->json($this->userResource($user));
     }
 
     public function putUser(Request $request, int $id): JsonResponse
     {
         $this->authenticate($request);
-        $user = User::findOrFail($id);
+        $user = $this->users($request)->findOrFail($id);
         $data = $request->json()->all();
         $user->name = $data['name']['formatted']
             ?? trim(($data['name']['givenName'] ?? '').' '.($data['name']['familyName'] ?? ''));
-        if (!empty($data['userName'])) $user->email = $data['userName'];
+        if (! empty($data['userName'])) {
+            $email = strtolower((string) $data['userName']);
+            abort_if(User::withoutGlobalScopes()->where('email', $email)->where('id', '!=', $user->id)->exists(), 409, 'userName already in use');
+            $user->email = $email;
+        }
         $user->save();
+
         return response()->json($this->userResource($user));
     }
 
     public function deleteUser(Request $request, int $id): JsonResponse
     {
         $this->authenticate($request);
-        $user = User::findOrFail($id);
+        $user = $this->users($request)->findOrFail($id);
         $user->delete();
+
         return response()->json(null, 204);
     }
 
     /* ------------------------------- helpers ------------------------------- */
     private function authenticate(Request $request): void
     {
-        $header = $request->header('Authorization', '');
+        $header = (string) $request->header('Authorization', '');
         abort_unless(str_starts_with($header, 'Bearer '), 401, 'Missing bearer token');
-        $token = substr($header, 7);
-        $hash = hash('sha256', $token);
-        $exists = ScimToken::where('token_hash', $hash)->exists();
-        // In scaffold mode accept any token prefixed "demo-" for easier testing
-        if (!$exists && !str_starts_with($token, 'demo-')) {
-            abort(401, 'Invalid SCIM token');
-        }
+        $token = trim(substr($header, 7));
+        abort_if($token === '', 401, 'Missing bearer token');
+
+        $record = ScimToken::withoutGlobalScopes()
+            ->where('token_hash', hash('sha256', $token))
+            ->whereNull('revoked_at')
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->first();
+        abort_if(! $record || ! $record->organization_id, 401, 'Invalid SCIM token');
+
+        $record->forceFill(['last_used_at' => now()])->save();
+        $request->attributes->set('scim_org_id', (int) $record->organization_id);
+    }
+
+    private function orgId(Request $request): int
+    {
+        return (int) $request->attributes->get('scim_org_id');
+    }
+
+    private function users(Request $request)
+    {
+        return User::withoutGlobalScopes()->where('organization_id', $this->orgId($request));
     }
 
     private function userResource(User $u): array

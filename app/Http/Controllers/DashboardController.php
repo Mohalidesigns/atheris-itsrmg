@@ -27,6 +27,7 @@ use App\Services\Change\ChangeApprovalRouter;
 use App\Services\Change\ChangeMetrics;
 use App\Services\ComplianceScoreService;
 use App\Services\Continuity\ContinuityMetrics;
+use App\Services\CoreBanking\CoreBankingMetrics;
 use App\Services\Issues\IssueMetrics;
 use App\Services\Monitoring\MonitoringMetrics;
 use App\Services\Policies\PolicyMetrics;
@@ -194,6 +195,7 @@ class DashboardController extends Controller
             'policyPulse' => $orgId ? app(PolicyMetrics::class)->summary() : null,
             'continuity' => $orgId ? app(ContinuityMetrics::class)->summary() : null,
             'monitoring' => $orgId ? app(MonitoringMetrics::class)->summary((int) $orgId) : null,
+            'coreBanking' => $orgId ? app(CoreBankingMetrics::class)->summary((int) $orgId) : null,
             'changes' => $orgId ? $this->changesPulse($request->user()) : null,
         ]);
     }

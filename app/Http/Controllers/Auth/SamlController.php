@@ -3,9 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\SsoConnection;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Config;
 
 /**
  * SAML 2.0 Service Provider endpoints.
@@ -59,35 +57,19 @@ XML;
 
     public function acs(Request $request, string $tenant)
     {
-        // Production: validate SAMLResponse signature, decrypt assertion,
-        // map NameID to App\Models\User, then Auth::login($user).
-        $samlResponse = (string) $request->input('SAMLResponse', '');
-        if ($samlResponse === '') {
-            return response('Missing SAMLResponse', 400);
-        }
-        // Log inbound assertion for audit (stub).
-        \Log::info('[SAML ACS] received assertion', [
-            'tenant' => $tenant,
-            'length' => strlen($samlResponse),
-            'relay_state' => $request->input('RelayState'),
-        ]);
+        // No SAML library is installed, so an assertion's signature cannot be verified. An
+        // unverified assertion must never authenticate anyone: refuse every ACS post.
+        \Log::warning('[SAML ACS] assertion refused: no verified SAML validation configured', ['tenant' => $tenant]);
 
-        // In scaffold mode, redirect to dashboard (assumes user already logged in via Laravel Breeze).
-        return redirect('/dashboard');
+        return redirect()->route('login')->withErrors([
+            'email' => 'SAML sign-in requires a verified assertion; configure the IdP certificate and a SAML validation library before enabling SSO sign-in.',
+        ]);
     }
 
     public function sls(Request $request, string $tenant)
     {
         \Auth::logout();
-        return redirect('/');
-    }
 
-    public function index()
-    {
-        $connections = SsoConnection::all();
-        return response()->json([
-            'connections' => $connections,
-            'metadata_url_template' => url('/auth/saml/{tenant}/metadata'),
-        ]);
+        return redirect('/');
     }
 }

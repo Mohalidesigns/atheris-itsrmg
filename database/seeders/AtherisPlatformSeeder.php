@@ -14,11 +14,6 @@ use App\Models\BusinessService;
 use App\Models\CcmTenantTest;
 use App\Models\CcmTest;
 use App\Models\CcmTestRun;
-use App\Models\CopilotConversation;
-use App\Models\CopilotMessage;
-use App\Models\CoreBankingIntegration;
-use App\Models\CoreBankingSnapshot;
-use App\Models\CustomField;
 use App\Models\DrExercise;
 use App\Models\DrRunbook;
 use App\Models\EvidenceVaultItem;
@@ -37,11 +32,8 @@ use App\Models\Organization;
 use App\Models\RegulatoryCircular;
 use App\Models\RegulatoryReference;
 use App\Models\ReturnTemplate;
-use App\Models\ScimToken;
 use App\Models\SharedVendorDirectory;
-use App\Models\SsoConnection;
 use App\Models\Tenant;
-use App\Models\TenantTheme;
 use App\Models\ThreatAdvisory;
 use App\Models\User;
 use App\Services\FairMonteCarloService;
@@ -84,16 +76,13 @@ class AtherisPlatformSeeder extends Seeder
         $this->boardPacks();
         $this->obligations();
         $this->circulars();
-        $this->copilot();
         $this->tprm();
         $this->notifications();
         $this->fair();
         $this->advisories();
         $this->returns();
-        $this->coreBanking();
         $this->dr();
-        $this->identity();
-        $this->theming();
+        // theming + custom fields now seeded per bank by ReportsIntegrationsSettingsDemoSeeder
         $this->auditSamples();
         $this->assetSync();
     }
@@ -680,24 +669,6 @@ class AtherisPlatformSeeder extends Seeder
         }
     }
 
-    private function copilot(): void
-    {
-        if (CopilotConversation::count() > 0) {
-            return;
-        }
-        $user = $this->tenantUser();
-        $c = CopilotConversation::create([
-            'organization_id' => $this->orgId, 'user_id' => $user->id,
-            'title' => 'Which risks are overdue?', 'mode' => 'risk',
-        ]);
-        CopilotMessage::create(['conversation_id' => $c->id, 'role' => 'user', 'content' => 'Show me overdue critical risks', 'tokens_in' => 12, 'model' => 'claude-sonnet-4-6', 'created_at' => now()->subMinutes(30)]);
-        CopilotMessage::create(['conversation_id' => $c->id, 'role' => 'assistant', 'content' => "I found 3 overdue critical risks:\n• R-0007: Privileged AD accounts missing MFA (owner: Fatima Bello)\n• R-0014: EOL AIX hosts on core network (owner: CTO)\n• R-0021: NIBSS NIP SLA breach (owner: Head of IT Ops)\n\nAll three have linked Issues and exceeded their 14-day remediation SLA.", 'tokens_out' => 120, 'model' => 'claude-sonnet-4-6', 'created_at' => now()->subMinutes(29)]);
-
-        $c2 = CopilotConversation::create(['organization_id' => $this->orgId, 'user_id' => $user->id, 'title' => 'Summarise latest CBN circular', 'mode' => 'general']);
-        CopilotMessage::create(['conversation_id' => $c2->id, 'role' => 'user', 'content' => 'Summarise the latest CBN cybersecurity circular', 'model' => 'claude-sonnet-4-6', 'tokens_in' => 12, 'created_at' => now()->subHours(6)]);
-        CopilotMessage::create(['conversation_id' => $c2->id, 'role' => 'assistant', 'content' => "BSD/DIR/GEN/LAB/14/028 — Guidelines on Cybersecurity Risk Management for OFIs (issued last week). Key obligations: (1) appoint a CISO reporting to the Board, (2) annual self-assessment using the CBN CSAT workbook, (3) 24-hour advisory on material incidents, (4) quarterly BCP testing. I've auto-mapped this to your existing obligations and flagged 2 policies for review.", 'model' => 'claude-sonnet-4-6', 'tokens_out' => 160, 'created_at' => now()->subHours(6)->addSeconds(8)]);
-    }
-
     private function tprm(): void
     {
         // Security ratings and breach-watch events are per bank and are produced by
@@ -893,35 +864,6 @@ class AtherisPlatformSeeder extends Seeder
         }
     }
 
-    private function coreBanking(): void
-    {
-        if (CoreBankingIntegration::count() > 0) {
-            return;
-        }
-        $products = ['finacle', 'flexcube', 't24', 'bankone', 'interswitch', 'nibss'];
-        foreach ($products as $p) {
-            CoreBankingIntegration::create([
-                'organization_id' => $this->orgId,
-                'product' => $p,
-                'config' => ['endpoint' => 'https://'.$p.'.internal/api'],
-                'status' => $p === 't24' ? 'pending' : 'connected',
-                'last_sync_at' => now()->subHours(rand(1, 12)),
-            ]);
-            for ($i = 0; $i < 2; $i++) {
-                CoreBankingSnapshot::create([
-                    'organization_id' => $this->orgId,
-                    'product' => $p,
-                    'captured_at' => now()->subDays($i),
-                    'artefacts' => [
-                        'product_catalogue' => 42 + $i,
-                        'branch_count' => 128,
-                        'technical_health' => ['cpu' => rand(30, 90), 'mem' => rand(40, 95)],
-                    ],
-                ]);
-            }
-        }
-    }
-
     private function dr(): void
     {
         if (DrRunbook::count() > 0) {
@@ -960,46 +902,6 @@ class AtherisPlatformSeeder extends Seeder
                     'evidence_ids' => [1, 2],
                     'outcome_notes' => 'Completed within target RTO.',
                     'status' => 'completed',
-                ]);
-            }
-        }
-    }
-
-    private function identity(): void
-    {
-        if (SsoConnection::count() === 0) {
-            SsoConnection::create(['organization_id' => $this->orgId, 'type' => 'saml', 'idp_name' => 'Entra ID (Tenant Primary)', 'sp_entity_id' => 'https://atheris.ng/sp', 'enabled' => true]);
-            SsoConnection::create(['organization_id' => $this->orgId, 'type' => 'oidc', 'idp_name' => 'Okta Workforce', 'sp_entity_id' => 'https://atheris.ng/sp', 'enabled' => true]);
-            SsoConnection::create(['organization_id' => $this->orgId, 'type' => 'saml', 'idp_name' => 'Ping Identity', 'sp_entity_id' => 'https://atheris.ng/sp', 'enabled' => false]);
-        }
-        if (ScimToken::count() === 0) {
-            ScimToken::create(['organization_id' => $this->orgId, 'name' => 'Entra ID provisioning', 'token_hash' => hash('sha256', Str::random(40)), 'scopes' => ['users:r', 'users:w', 'groups:r', 'groups:w'], 'expires_at' => now()->addYear()]);
-            ScimToken::create(['organization_id' => $this->orgId, 'name' => 'Okta provisioning', 'token_hash' => hash('sha256', Str::random(40)), 'scopes' => ['users:r', 'users:w'], 'expires_at' => now()->addYear(), 'last_used_at' => now()->subHours(2)]);
-        }
-    }
-
-    private function theming(): void
-    {
-        if (TenantTheme::count() === 0) {
-            TenantTheme::create([
-                'organization_id' => $this->orgId,
-                'tokens' => ['navy' => '#0A1F44', 'gold' => '#C9A86A', 'green' => '#2D7D46', 'charcoal' => '#2D3748'],
-                'logo_path' => null, 'status' => 'active',
-            ]);
-        }
-        if (CustomField::count() === 0) {
-            $fields = [
-                ['Risk', 'cbn_clause', 'CBN RBCSF Clause', 'text', 10],
-                ['Risk', 'regulator_reportable', 'Regulator Reportable?', 'boolean', 20],
-                ['Control', 'aucs_code', 'AUCS Code', 'text', 10],
-                ['Incident', 'ncert_reference', 'ngCERT Reference', 'text', 10],
-                ['Vendor', 'nibss_interchange', 'NIBSS Interchange Member?', 'boolean', 10],
-                ['Policy', 'approving_board_date', 'Approving Board Date', 'date', 10],
-            ];
-            foreach ($fields as [$subj, $key, $label, $type, $order]) {
-                CustomField::create([
-                    'organization_id' => $this->orgId, 'subject_type' => $subj, 'key' => $key,
-                    'label' => $label, 'data_type' => $type, 'order_index' => $order, 'required' => false,
                 ]);
             }
         }

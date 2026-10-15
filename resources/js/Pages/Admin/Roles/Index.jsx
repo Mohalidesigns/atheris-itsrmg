@@ -18,9 +18,9 @@ export default function RolesIndex({ roles, totalPermissions }) {
     const { auth } = usePage().props;
     const [deleting, setDeleting] = useState(null);
 
-    const permissions = auth?.user?.permissions || [];
     const isSuperAdmin = (auth?.user?.roles || []).includes('Super Admin');
-    const can = (p) => isSuperAdmin || permissions.includes(p);
+    // Roles are shared by every bank: only a Super Admin may create, edit or delete them.
+    const can = () => isSuperAdmin;
 
     const confirmDelete = () => {
         router.delete(route('admin.roles.destroy', deleting.id), {

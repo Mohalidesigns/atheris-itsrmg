@@ -106,6 +106,8 @@ class RoleController extends Controller
 
     public function create()
     {
+        $this->requireSuperAdmin();
+
         return Inertia::render('Admin/Roles/Create', [
             'permissionGroups' => $this->permissionGroups(),
             'actions' => self::ACTIONS,
@@ -114,6 +116,8 @@ class RoleController extends Controller
 
     public function store(Request $request)
     {
+        $this->requireSuperAdmin();
+
         $validated = $request->validate([
             'name' => 'required|string|max:125|unique:roles,name',
             'permissions' => 'array',
@@ -146,6 +150,8 @@ class RoleController extends Controller
 
     public function edit(Role $role)
     {
+        $this->requireSuperAdmin();
+
         if ($role->name === 'Super Admin') {
             return redirect()->route('admin.roles.index')
                 ->with('error', 'The Super Admin role cannot be modified.');
@@ -165,6 +171,8 @@ class RoleController extends Controller
 
     public function update(Request $request, Role $role)
     {
+        $this->requireSuperAdmin();
+
         if ($role->name === 'Super Admin') {
             return back()->with('error', 'The Super Admin role cannot be modified.');
         }
@@ -186,6 +194,8 @@ class RoleController extends Controller
 
     public function destroy(Role $role)
     {
+        $this->requireSuperAdmin();
+
         if ($role->name === 'Super Admin') {
             return back()->with('error', 'The Super Admin role cannot be deleted.');
         }
@@ -201,5 +211,11 @@ class RoleController extends Controller
 
         return redirect()->route('admin.roles.index')
             ->with('success', "Role \"{$name}\" deleted successfully.");
+    }
+
+    /** Roles are global across every bank, so only the platform owner may change them. */
+    private function requireSuperAdmin(): void
+    {
+        abort_unless(auth()->user()?->hasRole('Super Admin'), 403, 'Roles are shared by all banks; only a Super Admin can change them.');
     }
 }

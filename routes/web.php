@@ -7,6 +7,7 @@ use App\Http\Controllers\Assets\AssetDiscoveryController;
 use App\Http\Controllers\Assets\BusinessServiceMapController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\Auth\SamlController;
+use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\Auth\ScimController;
 use App\Http\Controllers\BcpController;
 use App\Http\Controllers\BusinessAssetController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\ChangeRequestController;
 use App\Http\Controllers\ComplianceController;
 use App\Http\Controllers\ControlController;
 use App\Http\Controllers\ControlStandardController;
+use App\Http\Controllers\CoreBankingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DataBreachController;
 use App\Http\Controllers\DrController;
@@ -565,6 +567,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/reports/risks', [ReportController::class, 'riskReport'])->name('reports.risks');
         Route::get('/reports/compliance', [ReportController::class, 'complianceReport'])->name('reports.compliance');
         Route::get('/reports/scheduled', [ReportController::class, 'scheduled'])->name('reports.scheduled');
+        Route::post('/reports/scheduled', [ReportController::class, 'scheduledStore'])->middleware('permission:create reports')->name('reports.scheduled.store');
+        Route::put('/reports/scheduled/{id}', [ReportController::class, 'scheduledUpdate'])->whereNumber('id')->middleware('permission:edit reports')->name('reports.scheduled.update');
+        Route::post('/reports/scheduled/{id}/toggle', [ReportController::class, 'scheduledToggle'])->whereNumber('id')->middleware('permission:edit reports')->name('reports.scheduled.toggle');
+        Route::delete('/reports/scheduled/{id}', [ReportController::class, 'scheduledDestroy'])->whereNumber('id')->middleware('permission:edit reports')->name('reports.scheduled.destroy');
     });
 
     // Phase 2: Risk graph (risk module, lives with platform controller)
@@ -731,28 +737,43 @@ Route::middleware('auth')->group(function () {
             ->name('returns.transition');
 
         // Phase 7: Core Banking
-        Route::get('/core-banking', [PlatformController::class, 'coreBankingIndex'])->name('core-banking.index');
-        Route::get('/core-banking/snapshots', [PlatformController::class, 'coreBankingSnapshots'])->name('core-banking.snapshots');
+        Route::get('/core-banking', [CoreBankingController::class, 'index'])->name('core-banking.index');
+        Route::get('/core-banking/snapshots', [CoreBankingController::class, 'snapshots'])->name('core-banking.snapshots');
+        Route::post('/core-banking', [CoreBankingController::class, 'store'])->middleware('permission:create platform')->name('core-banking.store');
+        Route::get('/core-banking/{id}', [CoreBankingController::class, 'show'])->whereNumber('id')->name('core-banking.show');
+        Route::put('/core-banking/{id}', [CoreBankingController::class, 'update'])->whereNumber('id')->middleware('permission:edit platform')->name('core-banking.update');
+        Route::post('/core-banking/{id}/sync', [CoreBankingController::class, 'sync'])->whereNumber('id')->middleware('permission:edit platform')->name('core-banking.sync');
 
         // Phase 7: DR
 
         // Integrations Hub (per-category connector pages)
         Route::get('/integrations', [IntegrationsController::class, 'index'])->name('integrations.index');
         Route::get('/integrations/{key}', [IntegrationsController::class, 'show'])->name('integrations.show');
-        Route::post('/integrations/{key}/test', [IntegrationsController::class, 'testConnection'])->name('integrations.test');
+        Route::post('/integrations/{key}/test', [IntegrationsController::class, 'testConnection'])->middleware('permission:edit platform')->name('integrations.test');
+        Route::post('/integrations/{key}/save', [IntegrationsController::class, 'save'])->middleware('permission:edit platform')->name('integrations.save');
         Route::get('/integrations/{key}/sample.csv', [IntegrationsController::class, 'downloadSample'])->name('integrations.sample');
 
         // Phase 1: Identity & Access (SSO/SCIM/API)
-        Route::get('/identity/sso', [PlatformController::class, 'identitySso'])->name('identity.sso');
-        Route::get('/identity/scim', [PlatformController::class, 'identityScim'])->name('identity.scim');
-        Route::get('/identity/api', [PlatformController::class, 'identityApi'])->name('identity.api');
+        Route::get('/identity/sso', [IdentityController::class, 'sso'])->name('identity.sso');
+        Route::post('/identity/sso', [IdentityController::class, 'ssoStore'])->middleware('permission:edit platform')->name('identity.sso.store');
+        Route::put('/identity/sso/{id}', [IdentityController::class, 'ssoUpdate'])->whereNumber('id')->middleware('permission:edit platform')->name('identity.sso.update');
+        Route::get('/identity/sso/{id}/metadata', [IdentityController::class, 'ssoMetadata'])->whereNumber('id')->middleware('permission:edit platform')->name('identity.sso.metadata');
+        Route::get('/identity/scim', [IdentityController::class, 'scim'])->name('identity.scim');
+        Route::post('/identity/scim', [IdentityController::class, 'scimStore'])->middleware('permission:edit platform')->name('identity.scim.store');
+        Route::post('/identity/scim/{id}/revoke', [IdentityController::class, 'scimRevoke'])->whereNumber('id')->middleware('permission:edit platform')->name('identity.scim.revoke');
+        Route::get('/identity/api', [IdentityController::class, 'api'])->name('identity.api');
 
         // Phase 8: Settings extras
         Route::get('/settings/theme', [PlatformController::class, 'settingsTheme'])->name('settings.theme');
+        Route::put('/settings/theme', [PlatformController::class, 'settingsThemeUpdate'])->middleware('permission:edit platform')->name('settings.theme.update');
         Route::get('/settings/custom-fields', [PlatformController::class, 'settingsCustomFields'])->name('settings.custom-fields');
+        Route::post('/settings/custom-fields', [PlatformController::class, 'settingsCustomFieldStore'])->middleware('permission:edit platform')->name('settings.custom-fields.store');
+        Route::delete('/settings/custom-fields/{id}', [PlatformController::class, 'settingsCustomFieldDestroy'])->whereNumber('id')->middleware('permission:edit platform')->name('settings.custom-fields.destroy');
         Route::get('/settings/feature-flags', [PlatformController::class, 'settingsFeatureFlags'])->name('settings.feature-flags');
         Route::post('/settings/feature-flags/{flag}/toggle', [PlatformController::class, 'settingsFeatureFlagToggle'])
-            ->middleware('permission:edit platform')->name('settings.feature-flags.toggle');
+            ->whereNumber('flag')->middleware('permission:edit platform')->name('settings.feature-flags.toggle');
+        Route::post('/settings/feature-flags/{flag}/toggle-global', [PlatformController::class, 'settingsFeatureFlagToggleGlobal'])
+            ->whereNumber('flag')->middleware('permission:edit platform')->name('settings.feature-flags.toggle-global');
     });
 
     /* ========================================================
@@ -1087,6 +1108,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/users', [SettingsController::class, 'users'])
         ->middleware('permission:view users')->name('settings.users');
     Route::get('/settings/notifications', [SettingsController::class, 'notifications'])->name('settings.notifications');
+    Route::patch('/settings/notifications', [SettingsController::class, 'updateNotifications'])->name('settings.notifications.update');
     Route::get('/settings/audit-trail', [AuditTrailController::class, 'index'])
         ->middleware('permission:view audit-trail')->name('settings.audit-trail');
 });
