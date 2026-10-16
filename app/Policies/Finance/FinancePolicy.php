@@ -17,6 +17,7 @@ use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\Period;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\SupplementaryRequest;
+use App\Models\Finance\Termination;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
@@ -91,6 +92,11 @@ class FinancePolicy
         return $user->can('approve it-finance-contracts') && $this->sameOrg($user, $renewal);
     }
 
+    public function decideTermination(User $user, Termination $termination): bool
+    {
+        return $user->can('approve it-finance-contracts') && $this->sameOrg($user, $termination);
+    }
+
     public function terminateContract(User $user, Contract $contract): bool
     {
         return $user->can('approve it-finance-contracts') && $this->sameOrg($user, $contract) && $this->costCentreVisible($user, $contract);
@@ -151,7 +157,7 @@ class FinancePolicy
     private function costCentreVisible(User $user, Model $model): bool
     {
         if ($model instanceof Contract || $model instanceof ContractTeamMember || $model instanceof ContractLink || $model instanceof ContractDocument
-            || $model instanceof ContractEvent || $model instanceof Renewal) {
+            || $model instanceof ContractEvent || $model instanceof Renewal || $model instanceof Termination) {
             return $this->contractVisible($user, $model);
         }
         $planning = [Budget::class, BudgetLine::class, BudgetScenario::class, BudgetComment::class, BudgetTransfer::class, SupplementaryRequest::class];

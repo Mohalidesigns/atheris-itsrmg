@@ -6,6 +6,7 @@ use App\Models\Concerns\GeneratesSequentialCode;
 use App\Models\Finance\Concerns\FinanceRecord;
 use App\Models\User;
 use App\Services\Finance\DoaBandService;
+use App\Services\Finance\FinanceSettings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -28,6 +29,7 @@ class Renewal extends Model
     protected $casts = [
         'opened_on' => 'date', 'proposed_commences_on' => 'date', 'proposed_fx_rate_date' => 'date',
         'proposed_value' => 'decimal:2', 'proposed_base_value' => 'decimal:2', 'proposed_fx_rate' => 'decimal:8', 'uplift_pct' => 'decimal:2',
+        'uplift_base_pct' => 'decimal:2', 'fx_effect_pct' => 'decimal:2',
         'is_auto' => 'boolean', 'submitted_at' => 'datetime', 'approved_at' => 'datetime', 'executed_at' => 'datetime',
     ];
 
@@ -110,8 +112,7 @@ class Renewal extends Model
 
     public function getRequiresCfoAttribute(): string
     {
-        $from = (string) config('finance.approval_defaults.renewal_cfo_from');
-        $pct = (string) config('finance.approval_defaults.renewal_cfo_uplift_pct');
+        [$from, $pct] = app(FinanceSettings::class)->renewalCfoThresholds((int) $this->organization_id);
         $high = bccomp($this->approvalBaseAmount(), $from, 2) >= 0;
         $uplift = $this->uplift_pct !== null && bccomp((string) $this->uplift_pct, $pct, 2) > 0;
 

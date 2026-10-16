@@ -96,7 +96,7 @@ class FinanceTenancyAndRoutesTest extends TestCase
             'finance.calendar', 'finance.calendar.export', 'finance.calendar.ics',
             'finance.contracts.create', 'finance.contracts.documents.download', 'finance.contracts.edit', 'finance.contracts.index', 'finance.contracts.show',
             'finance.cycles.index', 'finance.renewals.index', 'finance.renewals.show',
-            'finance.settings', 'finance.supplementary.index', 'finance.targets.index', 'finance.transfers.index',
+            'finance.settings', 'finance.supplementary.index', 'finance.targets.index', 'finance.terminations.show', 'finance.transfers.index',
         ], $names);
 
         $components = [

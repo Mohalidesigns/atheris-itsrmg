@@ -34,6 +34,10 @@ class FinancePolicySeeder
                 self::stage(10, 'Head of IT review', 'job_title', 'Head of IT', 72),
                 self::stage(20, 'CFO approval (high value or uplift)', 'job_title', 'Chief Financial Officer', 72, 'requires_cfo', ['yes']),
             ],
+            'finance.contract_termination' => [
+                self::stage(10, 'Head of IT review', 'job_title', 'Head of IT', 72),
+                self::stage(20, 'CFO approval (high value or post-deadline)', 'job_title', 'Chief Financial Officer', 72, 'requires_cfo', ['yes']),
+            ],
         ];
 
         foreach ($plans as $process => $stages) {

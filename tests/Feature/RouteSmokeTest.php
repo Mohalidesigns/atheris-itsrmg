@@ -240,7 +240,7 @@ class RouteSmokeTest extends TestCase
                     $this->assertGreaterThan(0, $deciders->count(), "{$slug}: nobody can decide \"{$step->name}\" of {$request->subject_label}");
                 }
             }
-            $this->assertSame(4, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
+            $this->assertSame(5, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
 
             // DoA versions: the bank's own bands are active and each step is audited
             $active = DoaBandVersion::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'active')->firstOrFail();

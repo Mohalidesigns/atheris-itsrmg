@@ -22,7 +22,7 @@ class FinanceSettings
     public const SECTION_KEYS = [
         'general' => ['fiscal_year_start_month', 'period_scheme', 'overbudget_mode', 'match_tolerance_pct', 'match_tolerance_abs', 'eac_method', 'showback_enabled', 'digest_hour'],
         'variance' => ['variance_amber_pct', 'variance_red_pct', 'variance_abs_floor'],
-        'renewal' => ['renewal_lead_days', 'renewal_notice_offsets', 'escalation_role'],
+        'renewal' => ['renewal_lead_days', 'renewal_notice_offsets', 'escalation_role', 'renewal_cfo_from', 'renewal_cfo_uplift_pct'],
     ];
 
     /** @var array<int, Setting> memoised per request (the service is a container singleton) */
@@ -69,6 +69,22 @@ class FinanceSettings
         $this->flush();
 
         return $setting->refresh();
+    }
+
+    /**
+     * The bank's CFO triggers for a contract renewal: base-currency value from which, and like-for-like uplift % above which,
+     * the CFO stage applies. A null setting falls back to config('finance.approval_defaults').
+     *
+     * @return array{0:string,1:string}
+     */
+    public function renewalCfoThresholds(int $orgId): array
+    {
+        $s = $this->for($orgId);
+
+        return [
+            (string) ($s->renewal_cfo_from ?? config('finance.approval_defaults.renewal_cfo_from')),
+            (string) ($s->renewal_cfo_uplift_pct ?? config('finance.approval_defaults.renewal_cfo_uplift_pct')),
+        ];
     }
 
     /** Key of the DoA band an amount (in base currency) falls in: min <= amount < max. */

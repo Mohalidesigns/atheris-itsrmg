@@ -18,6 +18,7 @@ export default function PassedPanel({ passed }) {
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-[#718096]">
                                     <Chip size="xs" tone="error">{p.which === 'notice' ? 'Notice' : 'End'}</Chip>
+                                    {(p.approved_unexecuted || p.status === 'approved_unexecuted') && <Chip size="xs" tone="error" icon="running_with_errors">Approved, not executed</Chip>}
                                     {p.auto_renew && <Chip size="xs" tone="info" icon="autorenew">Auto-renews</Chip>}
                                     <span>{p.vendor ?? ''}</span><span>{localDate(p.date)}</span>{p.owner && <span>· {p.owner}</span>}
                                 </div>

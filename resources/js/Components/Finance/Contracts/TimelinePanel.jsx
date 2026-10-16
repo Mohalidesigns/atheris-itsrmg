@@ -6,8 +6,9 @@ const ICONS = {
     created: 'add_circle', notified: 'notifications', escalated: 'priority_high', window_opened: 'event_upcoming', notice_deadline_passed: 'alarm', expired: 'event_busy',
     decision_recorded: 'gavel', renewed: 'autorenew', terminated: 'cancel', document_added: 'description', status_changed: 'sync_alt', renewal_opened: 'play_circle',
     renewal_submitted: 'send', renewal_rejected: 'block', renewal_withdrawn: 'undo', team_changed: 'group', link_changed: 'link',
+    termination_requested: 'cancel_schedule_send', termination_approved: 'task_alt', termination_rejected: 'block', termination_withdrawn: 'undo', approved_unexecuted_alert: 'running_with_errors',
 };
-const TINT = { escalated: 'text-[#B3261E]', notice_deadline_passed: 'text-[#B3261E]', expired: 'text-[#B3261E]', window_opened: 'text-[#8A6400]', renewed: 'text-[#2D7D46]', decision_recorded: 'text-[#1D4ED8]' };
+const TINT = { escalated: 'text-[#B3261E]', notice_deadline_passed: 'text-[#B3261E]', expired: 'text-[#B3261E]', window_opened: 'text-[#8A6400]', renewed: 'text-[#2D7D46]', termination_approved: 'text-[#2D7D46]', termination_rejected: 'text-[#B3261E]', approved_unexecuted_alert: 'text-[#B3261E]', decision_recorded: 'text-[#1D4ED8]' };
 
 function detail(e) {
     const p = e.payload || {};

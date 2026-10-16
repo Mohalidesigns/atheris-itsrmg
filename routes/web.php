@@ -50,6 +50,7 @@ use App\Http\Controllers\Finance\FinanceSettingsController;
 use App\Http\Controllers\Finance\FiscalCalendarController;
 use App\Http\Controllers\Finance\RenewalController;
 use App\Http\Controllers\Finance\SupplementaryRequestController;
+use App\Http\Controllers\Finance\TerminationController;
 use App\Http\Controllers\GapController;
 use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\IncidentController;
@@ -812,6 +813,7 @@ Route::middleware('auth')->group(function () {
         });
         Route::get('/renewals', [RenewalController::class, 'index'])->name('renewals.index');
         Route::get('/renewals/{renewal}', [RenewalController::class, 'show'])->whereNumber('renewal')->name('renewals.show');
+        Route::get('/terminations/{termination}', [TerminationController::class, 'show'])->whereNumber('termination')->name('terminations.show');
         Route::get('/calendar', [FinanceCalendarController::class, 'index'])->name('calendar');
         Route::post('/calendar/feed/rotate', [FinanceCalendarController::class, 'rotateFeed'])->name('calendar.feed.rotate');
         Route::get('/calendar/export', [FinanceCalendarController::class, 'export'])->middleware('permission:export it-finance')->name('calendar.export');
@@ -840,6 +842,9 @@ Route::middleware('auth')->group(function () {
                 Route::post("/renewals/{renewal}/{$action}", [RenewalController::class, $action])->whereNumber('renewal')->name("renewals.{$action}");
             }
             Route::post('/contracts/{contract}/terminate', [ContractController::class, 'terminate'])->whereNumber('contract')->name('contracts.terminate');
+            foreach (['approve', 'reject', 'withdraw'] as $action) {
+                Route::post("/terminations/{termination}/{$action}", [TerminationController::class, $action])->whereNumber('termination')->name("terminations.{$action}");
+            }
         });
 
         Route::middleware('permission:close it-finance-periods')->group(function () {

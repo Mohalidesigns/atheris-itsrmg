@@ -100,7 +100,7 @@ Artisan::command('fin:doa-activate', function (DoaBandService $d) {
 Schedule::command('fin:doa-activate')->dailyAt('00:05')->name('finance.doa-activate')->withoutOverlapping();
 Artisan::command('fin:contracts-sweep {--date= : Y-m-d, run as if today (demo/testing)}', function (ContractSweeper $s) {
     $r = $s->sweep($this->option('date') ? CarbonImmutable::parse($this->option('date'), config('finance.timezone'))->startOfDay() : null);
-    $this->info(sprintf('%d derived, %d rolled, %d T-minus sent, %d escalated, %d passed notices.', $r['derived'], $r['rolled'], $r['notified'], $r['escalated'], $r['passed']));
+    $this->info(sprintf('%d derived, %d rolled, %d T-minus sent, %d escalated, %d passed notices, %d approved-not-executed alerts.', $r['derived'], $r['rolled'], $r['notified'], $r['escalated'], $r['passed'], $r['unexecuted']));
 })->purpose('Derive contract statuses, auto-renew, send renewal T-minus, escalation and passed notices (ATH-FIN-001 §5.4)');
 Schedule::command('fin:contracts-sweep')->dailyAt('06:30')->timezone(config('finance.timezone'))->name('finance.contracts-sweep')->withoutOverlapping();
 Artisan::command('fin:digest', function (FinanceDigest $d) {

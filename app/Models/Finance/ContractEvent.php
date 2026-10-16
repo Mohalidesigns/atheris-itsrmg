@@ -19,6 +19,7 @@ class ContractEvent extends Model
         'created', 'notified', 'escalated', 'window_opened', 'notice_deadline_passed', 'decision_recorded', 'renewed', 'terminated',
         'expired', 'document_added', 'status_changed', 'dates_changed',
         'renewal_opened', 'renewal_submitted', 'renewal_rejected', 'renewal_withdrawn', 'team_changed', 'link_changed',
+        'termination_requested', 'termination_approved', 'termination_rejected', 'termination_withdrawn', 'approved_unexecuted_alert',
     ];
 
     protected $table = 'fin_contract_events';

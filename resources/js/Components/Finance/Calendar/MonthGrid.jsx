@@ -6,8 +6,9 @@ import { groupByDay, longDay, monthWeeks, weekdayLabels } from './calendarUtils'
 
 export function EventChip({ event, compact = false }) {
     const col = CAL_COLORS[event.color] ?? CAL_COLORS.grey;
+    const unexecuted = event.meta?.approved_unexecuted || event.status === 'approved_unexecuted';
     return (
-        <Link href={event.href || '#'} title={event.title} className={`block truncate rounded-md border-l-[3px] px-1.5 py-0.5 text-[11px] leading-4 ${col.chip} ${compact ? '' : 'hover:brightness-95'}`}>{event.title}</Link>
+        <Link href={event.href || '#'} title={unexecuted ? `${event.title} (approved renewal not executed)` : event.title} className={`block truncate rounded-md border-l-[3px] px-1.5 py-0.5 text-[11px] leading-4 ${col.chip} ${unexecuted ? 'ring-1 ring-[#B3261E] font-semibold' : ''} ${compact ? '' : 'hover:brightness-95'}`}>{unexecuted && <span aria-hidden>! </span>}{event.title}{unexecuted && <span className="sr-only"> (approved renewal not executed)</span>}</Link>
     );
 }
 

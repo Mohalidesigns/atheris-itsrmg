@@ -250,7 +250,7 @@ Plan: [docs/build/ATH-FIN-PLAN-p2.md](build/ATH-FIN-PLAN-p2.md), work packages W
   - The Playwright renewal step follows the row's link by its href.
 
 ### Fixes during the build
-- **Six forms never submitted.** In Inertia 2.3 `form.transform()` returns `undefined`, so chaining `.put()` or `.post()` onto it threw and no request was sent. The six were five new contract forms and the P0 `RenewalPolicyTab`. The calls are now split into two statements. `Pages/Ea/Surveys.jsx` has the same bug but is outside this module, so it is logged and not fixed.
+- **Six forms never submitted.** In Inertia 2.3 `form.transform()` returns `undefined`, so chaining `.put()` or `.post()` onto it threw and no request was sent. The six were five new contract forms and the P0 `RenewalPolicyTab`. The calls are now split into two statements. `Pages/Ea/Surveys.jsx` has the same bug but is outside this module, so it was logged and not fixed then. It is fixed in P2.1.
 - **Missing props:** `currencies` added to `Contracts/Show` and `can.edit` to `Renewals/Index`.
 - **SupplementaryBudgetService** now calls `FinanceClock::today()` directly.
 - **The renewal approval trail returned 403 to everyone but Super Admin.** `WorkflowStudioController::trail` built the view permission from the approve permission, which gave `view it-finance-contracts`, and that permission doesn't exist. Process definitions can now set `view_permission`, and `finance.contract_renewal` uses `view it-finance`. A regression test covers it.
@@ -270,12 +270,12 @@ Both reviews were run on Opus. The first verdict from each was no-go.
 - **Finance missing from T-minus recipients (domain M7).** Added, per FIN-06.04.
 
 ### Deferred / logged (not fixed)
-- **P2.1, before UAT:**
-  - Early termination through a full approval workflow (domain H2 remainder).
-  - An approved but never-executed renewal goes silent (domain M1).
-  - Terminating an auto-renewing contract after its notice deadline is accepted as effective (domain M4).
-  - The CFO threshold is a hard-coded NGN config value; it should be per tenant (domain M5).
-  - Uplift mixes in FX movement (domain M6).
+- **P2.1, before UAT:** all five items are resolved. See §P2.1 below.
+  - ~~Early termination through a full approval workflow (domain H2 remainder).~~ Resolved.
+  - ~~An approved but never-executed renewal goes silent (domain M1).~~ Resolved.
+  - ~~Terminating an auto-renewing contract after its notice deadline is accepted as effective (domain M4).~~ Resolved.
+  - ~~The CFO threshold is a hard-coded NGN config value; it should be per tenant (domain M5).~~ Resolved.
+  - ~~Uplift mixes in FX movement (domain M6).~~ Resolved.
 - **Low:**
   - Domain L1: `fixed_term` and `evergreen` have no distinct semantics.
   - Domain L3: digest gaps. The passed count ignores lapsed contracts, and the digest tells users about approvals they cannot decide.
@@ -308,3 +308,44 @@ Both reviews were run on Opus. The first verdict from each was no-go.
 ### Review verdicts
 - Security (Opus): NO-GO on H1 and M1–M3. H1, M1, M2 and M4–M7 are fixed, and M3 is partly fixed: termination now has SoD, with the workflow deferred. The branch is GO.
 - Domain (Opus): NO-GO on H1–H4. H1, H3 and H4 are fixed with regression tests. H2 is fixed as far as SoD and date bounds go; the full approval workflow is deferred to P2.1. M2, M3 and M7 are fixed too.
+
+## Phase P2.1 — P2 deferrals before UAT (2026-10-16, branch `feature/it-finance-p2`)
+
+This phase resolves the five items that P2 deferred to "P2.1, before UAT". It also fixes `Pages/Ea/Surveys.jsx`. Each item has a regression test in `tests/Feature/Finance/ContractP21RegressionTest.php`, which has 9 tests.
+
+### Resolved
+| item | finding | resolution |
+|---|---|---|
+| 1 | Domain H2 remainder: early termination took effect at once | **Approval process:** `finance.contract_termination` is the 16th process, and the 5th finance one. Stage 1 is Head of IT. Stage 2 is the CFO when `requires_cfo`, that is, when the base value is at or above the bank's threshold or the request is a post-deadline override. It declares `view_permission` `view it-finance`.<br>**Request record:** a `Termination` subject (`fin_contract_terminations`, `TRM-`).<br>**Request route:** `POST finance.contracts.terminate` now creates a request, and the contract is terminated only on final approval.<br>**Decision routes:** `finance.terminations.{approve,reject,withdraw,show}`.<br>**SoD:** the request-time SoD and date bounds stay in place. `sod_excluded_ids` (requester, request creator, contract owner and contract creator) is snapshotted into the approval context.<br>**Withdrawal:** a renewal that is executed or auto-rolled withdraws the pending termination.<br>**Design choice:** this is a separate process rather than a renewal with recommendation=terminate. A renewal has no place for the termination date or the override fields, and it carries a separate execute step. |
+| 2 | Domain M1: an approved renewal that was never executed went silent | **Sweep alert:** `ContractApprovedNotExecutedNotification`, which carries no amounts, is sent at the end-date T-minus offsets and then daily after `ends_on` until the renewal is executed or withdrawn.<br>**Repeat sends:** they are made idempotent by `fin_notification_logs`, with the target date in the key.<br>**Calendar:** a red `contract_end_unexecuted` event and timeline status `approved_unexecuted`, shown until the renewal is executed. |
+| 3 | Domain M4: a post-deadline termination of an auto-renewing contract was accepted as effective | **Rule:** the request needs `override_reason` and a `document_id` pointing at one of the contract's own documents.<br>**Recording:** the override is recorded on the request and terminated events, and it forces the CFO stage.<br>**UI:** the UI asks for both fields when `terminationNeedsOverride` is true. |
+| 4 | Domain M5: the CFO threshold was hard-coded in config | **Storage:** `renewal_cfo_from` and `renewal_cfo_uplift_pct` are now nullable per-tenant columns on `fin_settings`. A null falls back to `config('finance…renewal_cfo_*')`.<br>**Editing:** both are editable in Settings › Renewal policy.<br>**Demo values:** KHB uses 5,000,000 and 8 %. FBN uses 50,000,000 and 10 %. |
+| 5 | Domain M6: uplift mixed in FX movement | **`uplift_pct`:** now like-for-like. A same-currency renewal is struck in the contract currency. A foreign-currency quote is re-valued at the contract's own rate date.<br>**New fields:** `uplift_base_pct` (total change in base) and `fx_effect_pct` are stored and shown separately. Both are on the amount mask list.<br>**Thresholds:** `uplift_band` and `requires_cfo` use the like-for-like figure. |
+| — | `Pages/Ea/Surveys.jsx` chained `.post()` onto `form.transform()`, so the form never submitted | **Fix:** the call is split into two statements.<br>**Regression guard:** `tests/Feature/InertiaTransformChainTest.php` scans `resources/js` for any call chained onto `.transform(…)`. It fails on the old file. |
+
+### Schema, seed and UI
+- **Migration:** `2027_02_15_000001_p21_terminations_cfo_thresholds_and_fx_uplift`. It is driver-agnostic.
+- **Seed:**
+  - One pending termination per bank (KHB-TRM-0001, FBN-TRM-0001), both at the CFO stage.
+  - Per-bank CFO thresholds.
+  - Proofpoint's approved-unexecuted renewal now ends 7 days out.
+  - Every seeded pending request still has someone who can decide it.
+- **UI:**
+  - `TerminateModal` is now "Request termination", with the override fields.
+  - New `TerminationPanel` on the renewal tab, with the trail, decisions and history.
+  - Timeline icons for the termination events.
+  - Calendar chip, gantt and passed-view treatment for "approved renewal not executed".
+  - CFO threshold inputs.
+  - Renewal facts show "Uplift (like-for-like)", "FX effect" and "Total change in base".
+
+### Gate (PostgreSQL)
+- **Full suite** on `it_security_risk_test`: 541 passed, 8,156 assertions. The 4 skipped are the opt-in smoke tests. It ran in 17.5 minutes.
+- **Seed:** `migrate:fresh --seed` on `it_security_risk_scratch` is clean.
+- **SMOKE:** `SMOKE=1 RouteSmokeTest` gave 4 passed, 2,999 assertions. The finance-workflow count assertion was updated from 4 to 5.
+- **Build:** `npm run build` passes.
+- **Not run:** Playwright, and no review pass was made on P2.1.
+
+### Still open
+- `PresentsContracts::optionsPayload()` has no termination status list.
+- The renewals index and show pages don't list terminations. Terminations are shown on the contract's renewal tab only.
+- The "Approved, not executed" badge on the contract renewal tab is inferred from `days_to_end <= 0`. The calendar uses the backend flag.

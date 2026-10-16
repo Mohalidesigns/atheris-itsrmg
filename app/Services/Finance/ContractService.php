@@ -255,36 +255,49 @@ class ContractService
         });
     }
 
-    /** Early termination (plan C65). */
-    public function terminate(Contract $c, string $reason, ?string $terminatedOn, User $by): Contract
+    /**
+     * Validates an early-termination request and returns the normalised date (plan C65, H2): renewable status, a reason,
+     * segregation of duties and the date bounds. Applying the termination is {@see applyTermination}, on final approval.
+     */
+    public function assertTerminationAllowed(Contract $c, string $reason, ?string $terminatedOn, User $by): string
     {
         in_array($c->status, Contract::RENEWABLE, true) || $this->fail("A {$c->status} contract cannot be terminated.");
         blank(trim($reason)) && $this->fail('Give a reason for the termination.', 'reason');
         $this->assertCanTerminate($c, $by);
         $on = $terminatedOn ? CarbonImmutable::parse($terminatedOn)->toDateString() : FinanceClock::today()->toDateString();
-        $floor = max($c->commenced_on->toDateString(), FinanceClock::today()->subDays((int) config('finance.contracts.terminate_backdate_days', 30))->toDateString());
+        $floor = $this->terminationFloor($c);
         $on < $floor && $this->fail("The termination date cannot be before {$floor}.", 'terminated_on');
         $on > $c->ends_on->toDateString() && $this->fail('The termination date cannot be after the contract end date ('.$c->ends_on->toDateString().').', 'terminated_on');
 
-        return DB::transaction(function () use ($c, $reason, $on, $by) {
-            $c = Contract::withoutGlobalScopes()->lockForUpdate()->findOrFail($c->id);
-            foreach (Renewal::withoutGlobalScopes()->where('contract_id', $c->id)->whereIn('status', Renewal::ACTIVE)->get() as $r) {
-                app(RenewalService::class)->withdrawForClosure($r, $by);
-            }
-            $c->forceFill([
-                'status' => 'terminated', 'terminated_on' => $on, 'termination_reason' => trim($reason),
-                'decision' => 'terminate', 'decision_at' => now(), 'decision_by_id' => $by->id,
-            ])->save();
-            ContractEvent::record($c, 'terminated', ['reason' => trim($reason), 'terminated_on' => $on], $by);
-            $this->audit($c, $by, 'terminated', "Contract {$c->contract_code} terminated", ['terminated_on' => $on]);
-            $this->syncVendorSummary($c->vendor_id);
+        return $on;
+    }
 
-            return $c->refresh();
-        });
+    public function terminationFloor(Contract $c): string
+    {
+        return max($c->commenced_on->toDateString(), FinanceClock::today()->subDays((int) config('finance.contracts.terminate_backdate_days', 30))->toDateString());
+    }
+
+    /** Closes the contract on its approved early termination: withdraws open renewals, records the decision. Run inside the approval transaction. */
+    public function applyTermination(Contract $c, string $reason, string $on, User $by, array $extra = []): Contract
+    {
+        $c = Contract::withoutGlobalScopes()->lockForUpdate()->findOrFail($c->id);
+        in_array($c->status, Contract::RENEWABLE, true) || $this->fail("A {$c->status} contract cannot be terminated.");
+        foreach (Renewal::withoutGlobalScopes()->where('contract_id', $c->id)->whereIn('status', Renewal::ACTIVE)->get() as $r) {
+            app(RenewalService::class)->withdrawForClosure($r, $by);
+        }
+        $c->forceFill([
+            'status' => 'terminated', 'terminated_on' => $on, 'termination_reason' => trim($reason),
+            'decision' => 'terminate', 'decision_at' => now(), 'decision_by_id' => $by->id,
+        ])->save();
+        ContractEvent::record($c, 'terminated', ['reason' => trim($reason), 'terminated_on' => $on] + $extra, $by);
+        $this->audit($c, $by, 'terminated', "Contract {$c->contract_code} terminated", ['terminated_on' => $on]);
+        $this->syncVendorSummary($c->vendor_id);
+
+        return $c->refresh();
     }
 
     /** Minimal segregation of duties: the owner, the creator and whoever recommended or requested an open renewal cannot terminate. */
-    private function assertCanTerminate(Contract $c, User $by): void
+    public function assertCanTerminate(Contract $c, User $by): void
     {
         $id = (int) $by->id;
         $parties = Renewal::withoutGlobalScopes()->where('contract_id', $c->id)->whereIn('status', Renewal::ACTIVE)->get()

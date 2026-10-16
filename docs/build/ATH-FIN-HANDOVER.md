@@ -26,7 +26,7 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 ## State (2026-10-16, P2 done)
 
 - P2 Contracts, renewals & calendar is committed on `feature/it-finance-p2` (branched from 723ffbd on P1). ATH-FIN-003 §P2 records what shipped, the review fixes, decisions P2-1 to P2-8 and what's deferred.
-- **P2.1 before UAT** (ATH-FIN-003 §P2 Deferred):
+- **P2.1 before UAT** is done (ATH-FIN-003 §P2.1). It was:
   - Termination through a full approval workflow.
   - An alert for approved but unexecuted renewals.
   - Post-deadline termination of auto-renewing contracts.
@@ -34,7 +34,7 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
   - Uplift computed excluding FX.
 - **Playwright against a non-default DB:** `php artisan serve` drops `DB_*` env overrides and falls back to `.env`, which is the dev DB. Serve instead with `PHP_CLI_SERVER_WORKERS=4 DB_CONNECTION=pgsql DB_DATABASE=it_security_risk_scratch SESSION_DRIVER=file CACHE_STORE=file QUEUE_CONNECTION=sync php -S 127.0.0.1:8000 -t public`. Kill the worker PIDs afterwards: `lsof -ti tcp:8000`. Don't run Playwright while the full suite is running, because 5 s waits time out under the load.
 - **Playwright cache:** version 1.62 needs the symlinks `~/Library/Caches/ms-playwright/chromium_headless_shell-1234 -> -1248` and `ffmpeg-1011 -> ffmpeg-1009`.
-- **Inertia 2.3:** `form.transform()` returns undefined, so never chain `.put()` or `.post()` onto it. `Pages/Ea/Surveys.jsx` still does.
+- **Inertia 2.3:** `form.transform()` returns undefined, so never chain `.put()` or `.post()` onto it. `Pages/Ea/Surveys.jsx` was fixed in P2.1, and `InertiaTransformChainTest` guards against it.
 
 ## Next session — paste this
 

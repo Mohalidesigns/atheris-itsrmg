@@ -25,6 +25,7 @@ class FinanceApprovalNotifier
             'finance.budget_approval' => route('finance.budgets.show', [$subject->getKey(), 'tab' => 'approvals']),
             'finance.budget_transfer' => route('finance.transfers.index', ['highlight' => $subject->getKey()]),
             'finance.contract_renewal' => route('finance.renewals.show', $subject),
+            'finance.contract_termination' => route('finance.terminations.show', $subject),
             default => route('finance.supplementary.index', ['highlight' => $subject->getKey()]),
         };
     }

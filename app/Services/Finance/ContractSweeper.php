@@ -3,7 +3,9 @@
 namespace App\Services\Finance;
 
 use App\Models\Finance\Contract;
+use App\Models\Finance\Renewal;
 use App\Models\User;
+use App\Notifications\Finance\ContractApprovedNotExecutedNotification;
 use App\Notifications\Finance\ContractDeadlinePassedNotification;
 use App\Notifications\Finance\ContractRenewalDueNotification;
 use App\Notifications\Finance\ContractRenewalEscalationNotification;
@@ -28,11 +30,11 @@ class ContractSweeper
         private readonly FinanceApprovalNotifier $approvalNotifier,
     ) {}
 
-    /** @return array{derived:int,rolled:int,notified:int,escalated:int,passed:int} */
+    /** @return array{derived:int,rolled:int,notified:int,escalated:int,passed:int,unexecuted:int} */
     public function sweep(?CarbonInterface $today = null): array
     {
         $today ??= FinanceClock::today();
-        $totals = ['derived' => 0, 'rolled' => 0, 'notified' => 0, 'escalated' => 0, 'passed' => 0];
+        $totals = ['derived' => 0, 'rolled' => 0, 'notified' => 0, 'escalated' => 0, 'passed' => 0, 'unexecuted' => 0];
 
         $orgIds = Contract::withoutGlobalScopes()->whereNull('deleted_at')->whereNotIn('status', array_merge(['draft'], Contract::TERMINAL))
             ->distinct()->orderBy('organization_id')->pluck('organization_id');
@@ -50,10 +52,10 @@ class ContractSweeper
         return $totals;
     }
 
-    /** @return array{derived:int,rolled:int,notified:int,escalated:int,passed:int} */
+    /** @return array{derived:int,rolled:int,notified:int,escalated:int,passed:int,unexecuted:int} */
     private function sweepOrg(int $orgId, CarbonInterface $today): array
     {
-        $r = ['derived' => 0, 'rolled' => 0, 'notified' => 0, 'escalated' => 0, 'passed' => 0];
+        $r = ['derived' => 0, 'rolled' => 0, 'notified' => 0, 'escalated' => 0, 'passed' => 0, 'unexecuted' => 0];
         $queue = Contract::withoutGlobalScopes()->whereNull('deleted_at')->where('organization_id', $orgId)
             ->whereNotIn('status', array_merge(['draft'], Contract::TERMINAL))->orderBy('id')->get()->all();
 
@@ -74,6 +76,7 @@ class ContractSweeper
                 $r['notified'] += $this->tMinus($c, $today);
                 $r['escalated'] += $this->escalate($c, $today);
                 $r['passed'] += $this->passed($c, $today);
+                $r['unexecuted'] += $this->approvedUnexecuted($c, $today);
             } catch (Throwable $e) {
                 report($e);
             }
@@ -157,6 +160,47 @@ class ContractSweeper
         }
 
         return $sent;
+    }
+
+    /**
+     * An approved renewal that was never executed keeps alerting (plan M1): at the contract's end-date T-minus offsets, then
+     * every day once the end date has passed, until it is executed, withdrawn or the contract closes. The target date (and, after
+     * the end, today's date) is in the key, so each alert is sent once per recipient and a moved date re-arms the series.
+     */
+    private function approvedUnexecuted(Contract $c, CarbonInterface $today): int
+    {
+        if ($c->is_terminal || $c->status === 'draft') {
+            return 0;
+        }
+        $renewal = Renewal::withoutGlobalScopes()->where('contract_id', $c->id)->where('status', 'approved')->orderByDesc('id')->first();
+        $d = FinanceClock::daysUntil($c->ends_on, $today);
+        if (! $renewal || $d === null) {
+            return 0;
+        }
+        $end = $c->ends_on->format('Y-m-d');
+        if ($d >= 0) {
+            $catchUp = (int) config('finance.contracts.catch_up_days', 3);
+            $k = collect($c->effective_offsets)->filter(fn ($o) => $o - $catchUp <= $d && $d <= $o)->min();
+            if ($k === null) {
+                return 0;
+            }
+            $key = "approved_unexecuted.end.{$end}";
+            $offset = (int) $k;
+        } else {
+            $key = "approved_unexecuted.lapsed.{$end}.".$today->format('Y-m-d');
+            $offset = 0;
+        }
+        $recipients = $this->contracts->recipients($c)->merge($this->contracts->financeUsers((int) $c->organization_id))
+            ->merge($this->escalationRecipients((int) $c->organization_id))->unique('id')->values();
+        $users = $this->claim($c, $key, $offset, $recipients);
+        if ($users->isEmpty()) {
+            return 0;
+        }
+        Notification::send($users, new ContractApprovedNotExecutedNotification(
+            $c->label, (string) ($c->vendor?->name ?? 'No vendor'), $renewal->renewal_code, $c->ends_on->format('d M Y'), $d, route('finance.renewals.show', $renewal->id)));
+        $this->contracts->event($c, 'approved_unexecuted_alert', ['renewal' => $renewal->renewal_code, 'days_to_end' => $d, 'recipients' => $users->pluck('id')->all()]);
+
+        return 1;
     }
 
     /** Escalation users from the settings role plus the configured executive job titles. @return Collection<int,User> */

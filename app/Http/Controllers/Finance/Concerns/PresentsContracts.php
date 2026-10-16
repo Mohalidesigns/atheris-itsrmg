@@ -25,7 +25,7 @@ trait PresentsContracts
         'contract_value', 'base_contract_value', 'amount_per_billing', 'annualised_base_value', 'next_term_forecast', 'proposed_value',
         'proposed_base_value', 'base_value', 'amount', 'base_amount', 'current_base_amount', 'amount_band', 'amount_band_label',
         'value_base_total', 'annualised_base_total', 'fx_rate', 'proposed_fx_rate',
-        'value_band', 'uplift_pct', 'uplift_band', 'requires_cfo', 'price_escalation_pct',
+        'value_band', 'uplift_pct', 'uplift_base_pct', 'fx_effect_pct', 'uplift_band', 'requires_cfo', 'price_escalation_pct',
     ];
 
     private const CONTRACT_MONEY_LISTS = ['billing', 'vendorSpend'];
@@ -135,7 +135,8 @@ trait PresentsContracts
             'alternatives_considered' => $r->alternatives_considered, 'proposed_term_months' => $r->proposed_term_months,
             'proposed_commences_on' => $r->proposed_commences_on?->toDateString(), 'proposed_value' => $r->proposed_value === null ? null : (string) $r->proposed_value,
             'proposed_currency' => $r->proposed_currency, 'proposed_base_value' => $r->proposed_base_value === null ? null : (string) $r->proposed_base_value,
-            'uplift_pct' => $r->uplift_pct === null ? null : (string) $r->uplift_pct, 'uplift_band' => $r->uplift_band,
+            'uplift_pct' => $r->uplift_pct === null ? null : (string) $r->uplift_pct,
+            'uplift_base_pct' => $r->uplift_base_pct === null ? null : (string) $r->uplift_base_pct, 'fx_effect_pct' => $r->fx_effect_pct === null ? null : (string) $r->fx_effect_pct, 'uplift_band' => $r->uplift_band,
             'amount_band' => $r->amount_band, 'amount_band_label' => $r->amount_band_label, 'requires_cfo' => $r->requires_cfo, 'is_auto' => $r->is_auto,
             'requested_by' => $this->userMini($r->requestedBy), 'submitted_at' => $r->submitted_at?->toIso8601String(),
             'approved_by' => $this->userMini($r->approvedBy), 'approved_at' => $r->approved_at?->toIso8601String(), 'rejection_reason' => $r->rejection_reason,
@@ -205,6 +206,8 @@ trait PresentsContracts
             'notice_deadline_passed' => 'Notice deadline passed', 'decision_recorded' => 'Renewal decision recorded', 'renewed' => 'Renewed', 'terminated' => 'Terminated',
             'expired' => 'Expired', 'document_added' => 'Document added', 'status_changed' => 'Status changed', 'dates_changed' => 'Dates changed', 'renewal_opened' => 'Renewal opened',
             'renewal_submitted' => 'Renewal submitted for approval', 'renewal_rejected' => 'Renewal rejected', 'renewal_withdrawn' => 'Renewal withdrawn',
+            'termination_requested' => 'Termination requested', 'termination_approved' => 'Termination approved', 'termination_rejected' => 'Termination rejected',
+            'termination_withdrawn' => 'Termination withdrawn', 'approved_unexecuted_alert' => 'Approved renewal not executed',
             'team_changed' => 'Team changed', 'link_changed' => 'Links changed',
         ][$type] ?? Str::headline($type);
     }

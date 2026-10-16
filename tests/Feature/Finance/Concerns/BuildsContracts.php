@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\Vendor;
 use App\Services\Finance\ContractService;
 use App\Services\Finance\RenewalService;
+use App\Services\Finance\TerminationService;
 use Carbon\Carbon;
 use Illuminate\Validation\ValidationException;
 
@@ -80,6 +81,16 @@ trait BuildsContracts
         ], $this->procurement);
 
         return $svc->submit($r, $this->procurement);
+    }
+
+    /** Requests an early termination as the CFO and approves it as the Head of IT (no workflow stages configured: one other approver). */
+    protected function terminateViaWorkflow(Contract $c, string $reason = 'Vendor exit', ?string $on = null): Contract
+    {
+        $svc = app(TerminationService::class);
+        $t = $svc->request($c, ['reason' => $reason, 'terminated_on' => $on], $this->cfo);
+        $svc->approve($t, $this->head);
+
+        return $c->refresh();
     }
 
     protected function refuses(callable $fn, string $key, string $needle = ''): void

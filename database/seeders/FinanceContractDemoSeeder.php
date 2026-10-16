@@ -13,6 +13,7 @@ use App\Models\Finance\Contract;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\FxRate;
 use App\Models\Finance\Renewal;
+use App\Models\Finance\Termination;
 use App\Models\Organization;
 use App\Models\Risk;
 use App\Models\User;
@@ -23,6 +24,7 @@ use App\Services\Finance\FinanceClock;
 use App\Services\Finance\FinancePolicySeeder;
 use App\Services\Finance\FinanceSettings;
 use App\Services\Finance\RenewalService;
+use App\Services\Finance\TerminationService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Seeder;
@@ -116,7 +118,7 @@ class FinanceContractDemoSeeder extends Seeder
             ['k' => 'galaxy', 'ti' => 'Galaxy Backbone government connectivity', 'ty' => 'telecom', 'v' => '%galaxy%', 'cc' => 'NET', 'o' => 'net', 'to' => 'ops', 'end' => 230, 'term' => 12, 'n' => 60, 'ccy' => 'NGN', 'val' => 9600000, 'b' => 'monthly', 'scn' => 'unowned', 'asset' => 'vpn', 'risk' => 'network', 'ea' => 'network', 'bs' => 'branch'],
             ['k' => 'tenable', 'ti' => 'Tenable.io vulnerability scanning', 'ty' => 'subscription', 'v' => '%tenable%', 'cc' => 'SEC', 'o' => 'sec', 'to' => 'soc', 'end' => 30, 'term' => 12, 'n' => 30, 'ccy' => 'USD', 'val' => 5500, 'fv' => 5500, 'b' => 'annual', 'scn' => 'executed',
                 'asset' => 'windows server', 'risk' => 'vulnerab', 'ea' => 'endpoint'],
-            ['k' => 'proofpoint', 'ti' => 'Proofpoint email security', 'ty' => 'subscription', 'v' => '%proofpoint%', 'cc' => 'SEC', 'o' => 'sec', 'to' => 'ops', 'end' => 40, 'term' => 12, 'n' => 30, 'ccy' => 'USD', 'val' => 6000, 'fv' => 6500, 'b' => 'annual', 'scn' => 'approved', 'dp' => ['processor', 'signed'],
+            ['k' => 'proofpoint', 'ti' => 'Proofpoint email security', 'ty' => 'subscription', 'v' => '%proofpoint%', 'cc' => 'SEC', 'o' => 'sec', 'to' => 'ops', 'end' => 7, 'term' => 12, 'n' => 30, 'ccy' => 'USD', 'val' => 6000, 'fv' => 6500, 'b' => 'annual', 'scn' => 'approved', 'dp' => ['processor', 'signed'],
                 'lm' => 'user', 'lq' => [900, 8000], 'dq' => [960, 8400], 'asset' => 'microsoft 365', 'risk' => 'phishing', 'ea' => 'email', 'bs' => 'email'],
             ['k' => 'thales', 'ti' => 'Thales Luna HSM support', 'ty' => 'support_maintenance', 'v' => '%thales%', 'cc' => 'SEC', 'o' => 'sec', 'to' => 'sys', 'end' => 55, 'term' => 12, 'n' => 30, 'ccy' => 'USD', 'val' => 12000, 'fv' => 60000, 'b' => 'annual', 'scn' => 'rejected',
                 'asset' => 'hsm', 'risk' => 'key', 'ea' => 'hsm', 'bs' => 'hsm'],
@@ -182,6 +184,7 @@ class FinanceContractDemoSeeder extends Seeder
                 // because AssetManagementDemoSeeder creates those services after this seeder first runs.
                 $this->people($bank);
                 $this->topUpServiceLinks();
+                $this->seedP21(); // banks seeded before P2.1 get the thresholds, the termination workflow stages and a pending request
 
                 continue;
             }
@@ -257,6 +260,35 @@ class FinanceContractDemoSeeder extends Seeder
 
         $this->history();
         $this->normaliseCodes();
+        $this->seedP21();
+    }
+
+    /**
+     * P2.1 demo data, idempotent per bank: per-bank CFO thresholds (M5), the termination workflow stages (H2) and one
+     * early-termination request awaiting the Head of IT and the CFO (KPMG advisory, above the CFO threshold).
+     */
+    private function seedP21(): void
+    {
+        $settings = app(FinanceSettings::class);
+        $row = $settings->for($this->orgId);
+        $row->renewal_cfo_from ??= $this->bank['first'] ? '50000000' : '5000000';
+        $row->renewal_cfo_uplift_pct ??= $this->bank['first'] ? '10' : '8';
+        $row->save();
+        $settings->flush();
+        FinancePolicySeeder::ensureDefaults($this->orgId);
+
+        if (Termination::withoutGlobalScopes()->where('organization_id', $this->orgId)->exists()) {
+            return;
+        }
+        $c = Contract::withoutGlobalScopes()->where('organization_id', $this->orgId)->where('title', 'like', 'KPMG IT audit%')->whereIn('status', Contract::RENEWABLE)->orderBy('id')->first();
+        if (! $c) {
+            return;
+        }
+        $t = app(TerminationService::class)->request($c, [
+            'reason' => 'The IT audit scope moves to the Big Four firm already contracted for the external audit; the advisory retainer duplicates it.',
+            'terminated_on' => $this->today->addDays(30)->toDateString(),
+        ], $this->who['cio']);
+        $t->forceFill(['termination_code' => "{$this->prefix}-TRM-0001"])->saveQuietly();
     }
 
     private function createContract(array $spec, bool $first, int $index): Contract

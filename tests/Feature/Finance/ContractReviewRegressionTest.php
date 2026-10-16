@@ -14,6 +14,7 @@ use App\Services\Finance\ContractService;
 use App\Services\Finance\FinanceApprovals;
 use App\Services\Finance\FinanceCalendarService;
 use App\Services\Finance\RenewalService;
+use App\Services\Finance\TerminationService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -155,7 +156,15 @@ class ContractReviewRegressionTest extends TestCase
     /** D-H2, S-M3 (FIN-06.05): termination SoD, a bounded termination date and a mandatory reason. */
     public function test_termination_segregation_dates_and_reason(): void
     {
-        $svc = app(ContractService::class);
+        $svc = new class(app(TerminationService::class))
+        {
+            public function __construct(private TerminationService $t) {}
+
+            public function terminate($c, $reason, $on, $by)
+            {
+                return $this->t->request($c, ['reason' => $reason, 'terminated_on' => $on], $by);
+            }
+        };
         $c = $this->contract(['commenced_on' => '2027-01-01', 'ends_on' => '2027-12-31']);
 
         $this->refuses(fn () => $svc->terminate($c, 'Exit', null, $this->owner), 'terminated_on', 'segregation');   // owner
@@ -168,7 +177,12 @@ class ContractReviewRegressionTest extends TestCase
         $this->refuses(fn () => $svc->terminate($c, 'Exit', '2027-01-15', $this->cfo), 'terminated_on', 'before');      // beyond the 30-day back-date
         $this->refuses(fn () => $svc->terminate($c, 'Exit', '2028-01-01', $this->cfo), 'terminated_on', 'after');       // after the end date
 
-        $done = $svc->terminate($c, 'Vendor exit', '2027-02-15', $this->cfo);
+        $t = $svc->terminate($c, 'Vendor exit', '2027-02-15', $this->cfo);
+        $this->assertSame('submitted', $t->status);
+        $this->assertSame('active', $c->refresh()->status, 'requesting applies nothing');
+        $this->refuses(fn () => $svc->terminate($c, 'Again', '2027-02-15', $this->cfo), 'workflow', 'awaiting approval');
+        app(TerminationService::class)->approve($t, $this->head);
+        $done = $c->refresh();
         $this->assertSame('terminated', $done->status);
         $this->assertSame('2027-02-15', $done->terminated_on->toDateString());
         $this->assertSame(30, (int) config('finance.contracts.terminate_backdate_days'));

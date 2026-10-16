@@ -156,6 +156,8 @@ class FinanceSettingsController extends Controller
                 'renewal_notice_offsets' => ['required', 'array', 'min:1', 'max:12'],
                 'renewal_notice_offsets.*' => ['integer', 'between:0,730', 'distinct'],
                 'escalation_role' => ['nullable', 'string', 'max:64'],
+                'renewal_cfo_from' => ['nullable', 'numeric', 'min:0', 'max:9999999999999999'],
+                'renewal_cfo_uplift_pct' => ['nullable', 'numeric', 'between:0,1000'],
             ],
         };
         $validated = $request->validate($rules);
@@ -170,6 +172,9 @@ class FinanceSettingsController extends Controller
             'id' => $s->id, 'fiscal_year_start_month' => $s->fiscal_year_start_month, 'period_scheme' => $s->period_scheme,
             'variance_amber_pct' => (string) $s->variance_amber_pct, 'variance_red_pct' => (string) $s->variance_red_pct, 'variance_abs_floor' => (string) $s->variance_abs_floor,
             'renewal_lead_days' => $s->renewal_lead_days, 'renewal_notice_offsets' => $s->renewal_notice_offsets ?? [], 'escalation_role' => $s->escalation_role,
+            'renewal_cfo_from' => $s->renewal_cfo_from === null ? null : (string) $s->renewal_cfo_from,
+            'renewal_cfo_uplift_pct' => $s->renewal_cfo_uplift_pct === null ? null : (string) $s->renewal_cfo_uplift_pct,
+            'renewal_cfo_defaults' => ['from' => (string) config('finance.approval_defaults.renewal_cfo_from'), 'uplift_pct' => (string) config('finance.approval_defaults.renewal_cfo_uplift_pct')],
             'overbudget_mode' => $s->overbudget_mode, 'match_tolerance_pct' => (string) $s->match_tolerance_pct, 'match_tolerance_abs' => (string) $s->match_tolerance_abs,
             'eac_method' => $s->eac_method, 'showback_enabled' => $s->showback_enabled, 'digest_hour' => $s->digest_hour,
             'doa_bands' => $s->doa_bands ?? [], 'investment_score_weights' => $s->investment_score_weights ?? [],

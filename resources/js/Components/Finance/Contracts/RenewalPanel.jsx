@@ -1,5 +1,6 @@
 import Chip from '@/Components/Material/Chip';
 import ApprovalTrail from '@/Components/Approvals/ApprovalTrail';
+import TerminationPanel from './TerminationPanel';
 import RecommendationForm from './RecommendationForm';
 import { Card, Empty, Table } from '@/Components/Finance/Settings/ui';
 import { BTN_PRIMARY, BTN_SECONDARY, DECISION_LABELS, RENEWAL_TONES, formatPct, humanize, localDate, moneyOrMask } from '@/Utils/finance';
@@ -13,7 +14,11 @@ export function RenewalFacts({ renewal, baseCurrency, can }) {
         ['Commences', localDate(renewal.proposed_commences_on)],
         ['Proposed value', moneyOrMask(renewal.proposed_value, renewal.proposed_currency, money)],
         [`Proposed (${baseCurrency})`, moneyOrMask(renewal.proposed_base_value, baseCurrency, money)],
-        ['Uplift', money ? formatPct(renewal.uplift_pct, 1) : '•••'],
+        ['Uplift (like-for-like)', money ? formatPct(renewal.uplift_pct, 1) : '•••'],
+        ...(renewal.fx_effect_pct !== null && renewal.fx_effect_pct !== undefined && Number(renewal.fx_effect_pct) !== 0 ? [
+            ['FX effect', money ? formatPct(renewal.fx_effect_pct, 1) : '•••'],
+            ['Total change in base', money ? formatPct(renewal.uplift_base_pct, 1) : '•••'],
+        ] : []),
         ['Requested by', renewal.requested_by?.name ?? '—'],
         ['Submitted', localDate(renewal.submitted_at)],
     ];
@@ -26,20 +31,22 @@ export function RenewalFacts({ renewal, baseCurrency, can }) {
 }
 
 /** The Renewal tab on a contract: current renewal, inline recommendation while open, submit / withdraw, trail and history. */
-export default function RenewalPanel({ contract, renewal, renewals, approval, options, currencies, baseCurrency, can, errors }) {
+export default function RenewalPanel({ termination, terminations, terminationApproval, contract, renewal, renewals, approval, options, currencies, baseCurrency, can, errors }) {
     const post = (name, confirmText) => () => (!confirmText || confirm(confirmText)) && router.post(route(name, renewal.id), {}, { preserveScroll: true });
     const open = () => router.post(route('finance.renewals.open', contract.id), {}, { preserveScroll: true });
+    const closedAt = renewal?.status === 'approved' && contract.ends_on && contract.days_to_end !== null && contract.days_to_end <= 0;
     const active = renewal && ['open', 'submitted', 'approved'].includes(renewal.status);
     const history = renewals.filter((r) => !renewal || r.id !== renewal.id);
 
     return (
         <div className="space-y-4">
+            <TerminationPanel termination={termination} terminations={terminations} approval={terminationApproval} errors={errors} />
             {!renewal && (
                 <Card title="Renewal"><Empty>No renewal has been opened for this contract.</Empty>
                     {can.openRenewal && <div className="flex justify-center pb-6"><button type="button" onClick={open} className={BTN_PRIMARY}>Open renewal</button></div>}</Card>
             )}
             {renewal && (
-                <Card title={<span className="flex items-center gap-2"><Link className="underline" href={route('finance.renewals.show', renewal.id)}>{renewal.renewal_code}</Link><Chip size="xs" tone={RENEWAL_TONES[renewal.status] || 'neutral'}>{humanize(renewal.status)}</Chip>{renewal.is_auto && <Chip size="xs" tone="neutral" icon="autorenew">Auto</Chip>}</span>}
+                <Card title={<span className="flex items-center gap-2"><Link className="underline" href={route('finance.renewals.show', renewal.id)}>{renewal.renewal_code}</Link><Chip size="xs" tone={RENEWAL_TONES[renewal.status] || 'neutral'}>{humanize(renewal.status)}</Chip>{renewal.is_auto && <Chip size="xs" tone="neutral" icon="autorenew">Auto</Chip>}{closedAt && <Chip size="xs" tone="error" icon="running_with_errors">Approved, not executed</Chip>}</span>}
                     right={<>
                         {renewal.status === 'open' && can.edit && renewal.recommendation && renewal.justification && <button type="button" onClick={post('finance.renewals.submit', 'Submit this recommendation for approval?')} className={BTN_PRIMARY}>Submit for approval</button>}
                         {['open', 'submitted'].includes(renewal.status) && can.edit && <button type="button" onClick={post('finance.renewals.withdraw', 'Withdraw this renewal?')} className={BTN_SECONDARY}>Withdraw</button>}

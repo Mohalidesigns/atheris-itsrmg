@@ -6,6 +6,7 @@ use App\Models\Finance\BudgetCycle;
 use App\Models\Finance\Contract;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\Period;
+use App\Models\Finance\Renewal;
 use App\Models\Organization;
 use App\Models\User;
 use App\Models\Vendor;
@@ -30,6 +31,7 @@ class FinanceCalendarService
         'contract_window_opens' => ['Renewal window opens', 'amber'],
         'contract_notice_deadline' => ['Notice deadline', 'red'],
         'contract_end' => ['Contract ends', 'red'],
+        'contract_end_unexecuted' => ['Contract ends: approved renewal not executed', 'red'],
         'contract_auto_renew' => ['Auto-renewal', 'blue'],
         'budget_cycle_opens' => ['Budget cycle opens', 'blue'],
         'budget_cycle_closes' => ['Budget cycle closes', 'blue'],
@@ -41,7 +43,7 @@ class FinanceCalendarService
     private const LEGEND = [
         ['color' => 'green', 'label' => 'Active contract'], ['color' => 'amber', 'label' => 'In renewal window'],
         ['color' => 'red', 'label' => 'Notice deadline passed or lapsed'], ['color' => 'grey', 'label' => 'Decided, renewed or closed'],
-        ['color' => 'blue', 'label' => 'Milestone, cycle or period'],
+        ['color' => 'red', 'label' => 'Approved renewal not yet executed'], ['color' => 'blue', 'label' => 'Milestone, cycle or period'],
     ];
 
     /** @return array{0:CarbonImmutable,1:CarbonImmutable} */
@@ -77,14 +79,19 @@ class FinanceCalendarService
         $t = $to->toDateString();
         $filters = $this->blind($filters, $viewer);
 
-        return $this->contractQuery($orgId, $filters, $viewer)->whereNot('status', 'draft')
-            ->where('commenced_on', '<=', $t)->where('ends_on', '>=', $f)->with('vendor:id,name')->orderBy('ends_on')->get()
+        $rows = $this->contractQuery($orgId, $filters, $viewer)->whereNot('status', 'draft')
+            ->where('commenced_on', '<=', $t)->where('ends_on', '>=', $f)->with('vendor:id,name')->orderBy('ends_on')->get();
+        $unexecuted = $this->unexecutedIds($rows->pluck('id')->all());
+
+        return $rows
             ->filter(fn (Contract $c) => $this->bandMatches($c, $filters))
             ->map(fn (Contract $c) => [
                 'id' => $c->id, 'contract_code' => $c->contract_code, 'title' => $c->title, 'vendor' => $c->vendor?->name,
                 'start' => $c->commenced_on->toDateString(), 'end' => $c->ends_on->toDateString(),
                 'window_opens_on' => $c->renewal_window_opens_on->toDateString(), 'notice_deadline_on' => $c->notice_deadline_on->toDateString(),
-                'status' => $c->status, 'color' => $this->color($c), 'href' => route('finance.contracts.show', $c->id),
+                'status' => in_array($c->id, $unexecuted, true) ? 'approved_unexecuted' : $c->status,
+                'color' => in_array($c->id, $unexecuted, true) ? 'red' : $this->color($c), 'approved_unexecuted' => in_array($c->id, $unexecuted, true),
+                'href' => route('finance.contracts.show', $c->id),
             ])->values()->all();
     }
 
@@ -238,7 +245,9 @@ class FinanceCalendarService
                 ->orWhereBetween('notice_deadline_on', [$f, $t])->orWhereBetween('ends_on', [$f, $t])
                 ->orWhereBetween('ends_on', [CarbonImmutable::parse($f)->subDay()->toDateString(), CarbonImmutable::parse($t)->subDay()->toDateString()]))->get();
 
+        $unexecuted = $this->unexecutedIds($contracts->pluck('id')->all());
         foreach ($contracts->filter(fn (Contract $c) => $this->bandMatches($c, $filters)) as $c) {
+            $pending = in_array($c->id, $unexecuted, true);
             $dates = [
                 'contract_commencement' => $c->commenced_on, 'contract_window_opens' => $c->renewal_window_opens_on,
                 'contract_notice_deadline' => $c->notice_deadline_on, 'contract_end' => $c->ends_on,
@@ -252,14 +261,20 @@ class FinanceCalendarService
                     continue;
                 }
                 $color = $type === 'contract_commencement' || $type === 'contract_auto_renew' ? 'blue' : $this->color($c);
+                $status = $c->status;
+                if ($pending) { // an approved renewal that was never executed stays red until it is (plan M1)
+                    $color = $type === 'contract_commencement' ? $color : 'red';
+                    $type === 'contract_end' && $status = 'approved_unexecuted';
+                    $type === 'contract_end' && $type = 'contract_end_unexecuted';
+                }
                 $out->push([
                     'id' => "contract-{$c->id}-{$type}", 'type' => $type, 'title' => $c->contract_code.' · '.$this->label($type).' · '.$c->title,
-                    'start' => $d, 'end' => $d, 'color' => $color, 'status' => $c->status, 'href' => route('finance.contracts.show', $c->id),
+                    'start' => $d, 'end' => $d, 'color' => $color, 'status' => $status, 'href' => route('finance.contracts.show', $c->id),
                     'meta' => [
                         'source' => 'contracts', 'contract_code' => $c->contract_code, 'vendor' => $c->vendor?->name, 'owner' => $c->owner?->name,
                         'cost_centre' => $c->costCentre?->code, 'contract_type' => $c->type, 'value_band' => $canAmounts ? $c->amount_band : null,
                         'base_value' => $canAmounts ? (string) $c->base_contract_value : null,
-                        'days_left' => FinanceClock::daysUntil($date), 'auto_renew' => $c->is_auto,
+                        'days_left' => FinanceClock::daysUntil($date), 'auto_renew' => $c->is_auto, 'approved_unexecuted' => $pending,
                     ],
                 ]);
             }
@@ -322,6 +337,12 @@ class FinanceCalendarService
     private function label(string $type): string
     {
         return self::EVENT_TYPES[$type][0] ?? $type;
+    }
+
+    /** @param list<int> $ids  @return list<int> contracts holding an approved renewal that has not been executed */
+    private function unexecutedIds(array $ids): array
+    {
+        return $ids ? Renewal::withoutGlobalScopes()->whereIn('contract_id', $ids)->where('status', 'approved')->pluck('contract_id')->map(fn ($i) => (int) $i)->unique()->values()->all() : [];
     }
 
     /** Colour by contract status (plan §4.5). */

@@ -81,6 +81,7 @@ class RenewalService
             'alternatives_considered' => $this->text($data['alternatives_considered'] ?? null),
             'proposed_term_months' => null, 'proposed_commences_on' => null, 'proposed_value' => null, 'proposed_currency' => null, 'proposed_fx_rate' => null,
             'proposed_fx_rate_type' => null, 'proposed_fx_rate_date' => null, 'proposed_base_value' => null, 'uplift_pct' => null,
+            'uplift_base_pct' => null, 'fx_effect_pct' => null,
         ];
         if ($rec !== 'terminate') {
             $term = (int) ($data['proposed_term_months'] ?? 0);
@@ -97,7 +98,7 @@ class RenewalService
             }
             if ($hasValue) {
                 $attrs = array_merge($attrs, $this->quote($orgId, (string) $data['proposed_value'], strtoupper((string) ($data['proposed_currency'] ?? $c->currency))));
-                $attrs['uplift_pct'] = $this->uplift($c, $attrs['proposed_base_value'], $term);
+                $attrs = array_merge($attrs, $this->upliftSet($c, $attrs['proposed_value'], $attrs['proposed_currency'], $attrs['proposed_base_value'], $term));
             }
         }
         $r->fill($attrs);
@@ -121,7 +122,7 @@ class RenewalService
             // Re-quote at submit so the DoA snapshot uses today's rate (the lesson of the P1 supplementary review).
             if ($r->proposed_value !== null) {
                 $r->forceFill($this->quote((int) $r->organization_id, (string) $r->proposed_value, (string) $r->proposed_currency));
-                $r->uplift_pct = $this->uplift($c, $r->proposed_base_value, (int) $r->proposed_term_months);
+                $r->forceFill($this->upliftSet($c, (string) $r->proposed_value, (string) $r->proposed_currency, (string) $r->proposed_base_value, (int) $r->proposed_term_months));
             }
             $r->forceFill(['status' => 'submitted', 'submitted_at' => now(), 'requested_by_id' => $by->id, 'rejection_reason' => null])->save();
             $this->approvals->start(self::PROCESS, $r, $by);
@@ -230,6 +231,7 @@ class RenewalService
                 $this->contracts->event($new, 'renewed', ['renewal' => $r->renewal_code, 'from' => $old->contract_code], $by);
                 $this->audit($old, $by, $replace ? 'replaced' : 'renewed', "Contract {$old->contract_code} ".($replace ? 'replaced' : 'renewed')." as {$new->contract_code}");
             }
+            app(TerminationService::class)->withdrawForClosure($old, $by);
             $r->forceFill(['status' => 'executed', 'executed_by_id' => $by->id, 'executed_at' => now(), 'new_contract_id' => $new?->id])->save();
             $this->audit($r, $by, 'executed', "Renewal {$r->renewal_code} executed", ['successor' => $new?->contract_code]);
             $this->contracts->syncVendorSummary($old->vendor_id);
@@ -255,6 +257,7 @@ class RenewalService
             foreach (Renewal::withoutGlobalScopes()->where('contract_id', $c->id)->whereIn('status', Renewal::ACTIVE)->get() as $active) {
                 $this->close($active, null);
             }
+            app(TerminationService::class)->withdrawForClosure($c, null);
             $orgId = (int) $c->organization_id;
             $factor = bcadd('1', bcdiv((string) ($c->price_escalation_pct ?? '0'), '100', 8), 8);
             $value = bcadd(bcmul((string) $c->contract_value, $factor, 8), '0.005', 2);
@@ -265,10 +268,10 @@ class RenewalService
                     'proposed_fx_rate_type' => $c->fx_rate_type, 'proposed_fx_rate_date' => $c->fx_rate_date?->toDateString(),
                     'proposed_base_value' => bcadd(bcmul($value, (string) $c->fx_rate, 8), '0.005', 2)];
             }
-            $r = Renewal::withoutGlobalScopes()->create($money + [
+            $r = Renewal::withoutGlobalScopes()->create($money + $this->upliftSet($c, $money['proposed_value'], $money['proposed_currency'], $money['proposed_base_value'], (int) $c->term_months) + [
                 'organization_id' => $orgId, 'renewal_code' => Renewal::generateNextCode($orgId), 'contract_id' => $c->id,
                 'opened_on' => $today->toDateString(), 'recommendation' => 'renew_as_is', 'justification' => "Auto-renewed under the contract's renewal terms",
-                'proposed_term_months' => $c->term_months, 'uplift_pct' => $this->uplift($c, $money['proposed_base_value'], (int) $c->term_months),
+                'proposed_term_months' => $c->term_months,
                 'status' => 'executed', 'is_auto' => true, 'executed_at' => now(),
             ]);
             $start = CarbonImmutable::parse($c->ends_on->toDateString())->addDay();
@@ -353,14 +356,49 @@ class RenewalService
         ];
     }
 
-    /** Percentage change of the proposed annualised base value against the contract's, null when the contract is worth nothing. */
-    private function uplift(Contract $c, ?string $proposedBase, int $term): ?string
+    /**
+     * Like-for-like uplift and its FX effect (plan M6). Same currency as the contract: the change is struck in the
+     * contract currency, with no base conversion, so a rate move never shows as a price rise. Different currency:
+     * the proposal is re-valued at the rate on the contract's own rate date to strip FX out of `uplift_pct`;
+     * `uplift_base_pct` is always the plain change in base currency and `fx_effect_pct` is the difference.
+     *
+     * @return array{uplift_pct:?string,uplift_base_pct:?string,fx_effect_pct:?string}
+     */
+    private function upliftSet(Contract $c, ?string $proposedValue, ?string $proposedCurrency, ?string $proposedBase, int $term): array
     {
-        $current = (string) $c->annualised_base_value;
-        if ($proposedBase === null || bccomp($current, '0', 2) <= 0) {
+        $none = ['uplift_pct' => null, 'uplift_base_pct' => null, 'fx_effect_pct' => null];
+        if ($proposedValue === null || $proposedBase === null) {
+            return $none;
+        }
+        $total = $this->pct((string) $c->annualised_base_value, $this->annual($proposedBase, $term));
+        if ($proposedCurrency === $c->currency) {
+            $own = $this->pct($this->annual((string) $c->contract_value, (int) $c->term_months), $this->annual($proposedValue, $term));
+
+            return ['uplift_pct' => $own, 'uplift_base_pct' => $total, 'fx_effect_pct' => $own !== null && $total !== null ? bcsub($total, $own, 2) : null];
+        }
+        $like = $total;
+        try {
+            $asOf = $c->fx_rate_date ?? $c->commenced_on;
+            $constant = $this->fx->convert((int) $c->organization_id, $proposedValue, (string) $proposedCurrency, CarbonImmutable::parse($asOf->toDateString()), (string) ($c->fx_rate_type ?: 'spot'));
+            $like = $this->pct((string) $c->annualised_base_value, $this->annual($constant['base_amount'], $term));
+        } catch (ValidationException) {
+            // no rate on file for the contract's rate date: the base change stands as the like-for-like figure
+        }
+
+        return ['uplift_pct' => $like, 'uplift_base_pct' => $total, 'fx_effect_pct' => $like !== null && $total !== null ? bcsub($total, $like, 2) : null];
+    }
+
+    private function annual(string $amount, int $term): string
+    {
+        return bcmul(bcdiv($amount, (string) max($term, 1), 8), '12', 8);
+    }
+
+    /** Percentage change from $current to $proposed, 2 dp half-up; null when the current figure is nil. */
+    private function pct(string $current, string $proposed): ?string
+    {
+        if (bccomp($current, '0', 2) <= 0) {
             return null;
         }
-        $proposed = bcmul(bcdiv((string) $proposedBase, (string) max($term, 1), 8), '12', 8);
         $pct = bcmul(bcdiv(bcsub($proposed, $current, 8), $current, 8), '100', 8);
 
         return bcadd($pct, bccomp($pct, '0', 8) < 0 ? '-0.005' : '0.005', 2);

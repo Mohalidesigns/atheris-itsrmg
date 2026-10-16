@@ -88,7 +88,7 @@ function Overview({ c, baseCurrency, money }) {
 }
 
 export default function Show(props) {
-    const { contract: c, team, links, documents, renewal, renewals, approval, events, spend, linkOptions, users, options, baseCurrency, can, errors } = props;
+    const { contract: c, team, links, documents, renewal, renewals, approval, termination, terminations, terminationApproval, terminationNeedsOverride, events, spend, linkOptions, users, options, baseCurrency, can, errors } = props;
     const money = can.viewAmounts !== false;
     const [tab, setTab] = useState(TABS.includes(props.tab) ? props.tab : 'overview');
     const [terminate, setTerminate] = useState(false);
@@ -138,11 +138,13 @@ export default function Show(props) {
                 {can.activate && <button type="button" onClick={post('finance.contracts.activate', 'Activate this contract?')} className={BTN_PRIMARY}>Activate</button>}
                 {can.recompute && <button type="button" onClick={post('finance.contracts.recompute')} className={BTN_SECONDARY}>Recompute dates</button>}
                 {can.openRenewal && <button type="button" onClick={post('finance.renewals.open')} className={BTN_PRIMARY}>Open renewal</button>}
-                {can.terminate && <button type="button" onClick={() => setTerminate(true)} className="rounded-lg border border-[#B3261E] px-4 py-2 text-sm text-[#B3261E]">Terminate</button>}
+                {can.terminate && <button type="button" onClick={() => setTerminate(true)} className="rounded-lg border border-[#B3261E] px-4 py-2 text-sm text-[#B3261E]">Request termination</button>}
                 {can.edit && c.status === 'draft' && <button type="button" onClick={remove} className="rounded-lg border border-gray-200 px-4 py-2 text-sm text-[#B3261E]">Delete draft</button>}
                 <button type="button" onClick={() => window.print()} className={BTN_SECONDARY}>Print</button>
             </div>
             {errors?.approval && <p className="mb-3 text-sm text-[#B3261E]">{errors.approval}</p>}
+            {errors?.workflow && <p role="alert" className="mb-3 text-sm text-[#B3261E]">{errors.workflow}</p>}
+            {termination?.status === 'submitted' && <div className="mb-4 flex items-start gap-2 rounded-lg border border-[#E5A100]/40 bg-[#FCEBC4] px-4 py-3 text-sm text-[#5F4300]"><Icon name="pending_actions" size={20} className="mt-0.5" /><span>Termination {termination.termination_code} is awaiting approval. <button type="button" className="underline" onClick={() => select('renewal')}>View request</button></span></div>}
 
             <div className="mb-4 flex gap-1 overflow-x-auto whitespace-nowrap border-b border-gray-200 print:hidden" role="tablist">
                 {TABS.map((k) => (
@@ -155,11 +157,11 @@ export default function Show(props) {
             {tab === 'team' && <TeamPanel contract={c} team={team} users={users} options={options} can={can} />}
             {tab === 'links' && <LinksPanel contract={c} links={links} linkOptions={linkOptions} options={options} can={can} />}
             {tab === 'documents' && <DocumentsPanel contract={c} documents={documents} options={options} can={can} />}
-            {tab === 'renewal' && <RenewalPanel contract={c} renewal={renewal} renewals={renewals} approval={approval} options={{ decisions: options.decisions }} currencies={props.currencies ?? [{ code: c.currency }, { code: baseCurrency }].filter((x, i, a) => a.findIndex((y) => y.code === x.code) === i)} baseCurrency={baseCurrency} can={can} errors={errors} />}
+            {tab === 'renewal' && <RenewalPanel termination={termination} terminations={terminations ?? []} terminationApproval={terminationApproval} contract={c} renewal={renewal} renewals={renewals} approval={approval} options={{ decisions: options.decisions }} currencies={props.currencies ?? [{ code: c.currency }, { code: baseCurrency }].filter((x, i, a) => a.findIndex((y) => y.code === x.code) === i)} baseCurrency={baseCurrency} can={can} errors={errors} />}
             {tab === 'timeline' && <TimelinePanel events={events} />}
             {tab === 'spend' && <SpendPanel contract={c} spend={spend} baseCurrency={baseCurrency} can={can} />}
 
-            <TerminateModal show={terminate} onClose={() => setTerminate(false)} contract={c} />
+            <TerminateModal show={terminate} onClose={() => setTerminate(false)} contract={c} documents={documents} needsOverride={!!terminationNeedsOverride} />
         </AuthenticatedLayout>
     );
 }

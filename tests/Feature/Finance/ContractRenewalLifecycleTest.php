@@ -18,6 +18,7 @@ use App\Services\Finance\ContractStatusDeriver;
 use App\Services\Finance\FinanceApprovals;
 use App\Services\Finance\FinanceSettings;
 use App\Services\Finance\RenewalService;
+use App\Services\Finance\TerminationService;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -257,10 +258,10 @@ class ContractRenewalLifecycleTest extends TestCase
 
         $c = $this->contract(['title' => 'Cloud commitment']);
         $open = $svc->open($c, $this->procurement);
-        app(ContractService::class)->terminate($c, 'Vendor exit', null, $this->cfo);
+        $this->terminateViaWorkflow($c);
         $this->assertSame('terminated', $c->refresh()->status);
         $this->assertSame('withdrawn', $open->refresh()->status);
-        $this->refuses(fn () => app(ContractService::class)->terminate($c, 'again', null, $this->cfo), 'workflow');
+        $this->refuses(fn () => app(TerminationService::class)->request($c, ['reason' => 'again'], $this->cfo), 'workflow');
         $this->refuses(fn () => app(ContractService::class)->update($c, ['title' => 'x'], $this->procurement), 'workflow', 'read-only');
     }
 

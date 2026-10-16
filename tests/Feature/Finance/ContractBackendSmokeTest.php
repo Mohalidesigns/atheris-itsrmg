@@ -19,6 +19,7 @@ use App\Services\Finance\ContractService;
 use App\Services\Finance\FinanceApprovals;
 use App\Services\Finance\FinanceSettings;
 use App\Services\Finance\RenewalService;
+use App\Services\Finance\TerminationService;
 use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -310,11 +311,13 @@ class ContractBackendSmokeTest extends TestCase
 
         $c = $this->make(['title' => 'Cloud commitment']);
         $open = $svc->open($c, $this->procurement);
-        app(ContractService::class)->terminate($c, 'Vendor exit', null, $this->cfo);
+        $term = app(TerminationService::class);
+        $approver = tap(User::factory()->create(['organization_id' => $this->org->id, 'job_title' => 'Head of IT']), fn ($u) => $u->assignRole('Finance Approver'));
+        $term->approve($term->request($c, ['reason' => 'Vendor exit'], $this->cfo), $approver);
         $this->assertSame('terminated', $c->refresh()->status);
         $this->assertSame('withdrawn', $open->refresh()->status);
         $this->assertSame('terminate', $c->decision);
-        $this->refused(fn () => app(ContractService::class)->terminate($c, 'again', null, $this->cfo), 'workflow');
+        $this->refused(fn () => $term->request($c, ['reason' => 'again'], $this->cfo), 'workflow');
     }
 
     /** FIN-06.02, FIN-06.09: an auto-renewing contract rolls into one new term, exactly once, with the escalation applied. */

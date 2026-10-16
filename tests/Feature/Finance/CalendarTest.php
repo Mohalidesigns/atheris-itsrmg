@@ -54,7 +54,7 @@ class CalendarTest extends TestCase
         $this->noticePassed = $this->contract(['title' => 'Notice passed', 'commenced_on' => '2026-03-21', 'ends_on' => '2027-03-20', 'notice_period_days' => 60]); // notice 2027-01-19
         $this->expired = $this->contract(['title' => 'Expired', 'commenced_on' => '2026-02-11', 'ends_on' => '2027-02-10']);
         $this->closed = $this->contract(['title' => 'Closed', 'commenced_on' => '2026-11-01', 'ends_on' => '2027-10-31']);
-        app(ContractService::class)->terminate($this->closed, 'Vendor exit', null, $this->cfo);
+        $this->terminateViaWorkflow($this->closed);
     }
 
     private function events(array $filters = [], string $from = '2026-01-01', string $to = '2028-12-31', ?User $viewer = null): array

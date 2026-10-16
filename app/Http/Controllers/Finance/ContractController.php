@@ -17,6 +17,7 @@ use App\Models\Finance\CostCentre;
 use App\Models\Finance\Currency;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\Renewal;
+use App\Models\Finance\Termination;
 use App\Models\LegalEntity;
 use App\Models\Risk;
 use App\Models\User;
@@ -27,6 +28,7 @@ use App\Services\Finance\FinanceApprovals;
 use App\Services\Finance\FinanceClock;
 use App\Services\Finance\FinanceSettings;
 use App\Services\Finance\RenewalService;
+use App\Services\Finance\TerminationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Gate;
@@ -40,6 +42,7 @@ class ContractController extends Controller
 
     public function __construct(
         private readonly ContractService $contracts,
+        private readonly TerminationService $terminations,
         private readonly FinanceApprovals $approvals,
         private readonly FinanceSettings $settings,
     ) {}
@@ -133,6 +136,8 @@ class ContractController extends Controller
         $orgId = (int) $contract->organization_id;
         $renewals = Renewal::query()->where('contract_id', $contract->id)->orderByDesc('id')->get();
         $active = $renewals->first(fn (Renewal $r) => in_array($r->status, Renewal::ACTIVE, true)) ?? $renewals->first();
+        $terminations = Termination::query()->where('contract_id', $contract->id)->with(['requestedBy:id,name', 'approvedBy:id,name', 'overrideDocument:id,title'])->orderByDesc('id')->get();
+        $termination = $terminations->first(fn (Termination $t) => $t->status === 'submitted') ?? $terminations->first();
         $line = $contract->budgetLine;
         $edit = Gate::forUser($user)->allows('updateContract', $contract) && ! $contract->is_terminal;
 
@@ -147,6 +152,10 @@ class ContractController extends Controller
             'renewals' => $renewals->map(fn (Renewal $r) => $this->renewalSummary($r))->values(),
             'approval' => $active && in_array($active->status, ['submitted', 'approved', 'rejected', 'executed'], true) ? $this->approvals->trail(RenewalService::PROCESS, $active, $user) : null,
             'events' => $this->eventsPayload($contract),
+            'termination' => $termination ? $this->terminationSummary($termination, $user) : null,
+            'terminations' => $terminations->map(fn (Termination $t) => $this->terminationSummary($t, $user))->values(),
+            'terminationApproval' => $termination && $termination->status !== 'withdrawn' ? $this->approvals->trail(TerminationService::PROCESS, $termination, $user) : null,
+            'terminationNeedsOverride' => $this->terminations->needsOverride($contract),
             'spend' => [
                 'contract_value' => (string) $contract->contract_value, 'base_contract_value' => (string) $contract->base_contract_value,
                 'annualised_base_value' => $contract->annualised_base_value, 'next_term_forecast' => $contract->next_term_forecast,
@@ -168,7 +177,8 @@ class ContractController extends Controller
             'currencies' => Currency::query()->where('is_active', true)->orderByDesc('is_base')->orderBy('code')->get()->map(fn ($c) => ['code' => $c->code, 'decimals' => $c->decimals, 'is_base' => $c->is_base])->values(),
             'can' => [
                 'edit' => $edit, 'activate' => $edit && $contract->status === 'draft', 'recompute' => $edit && $contract->status !== 'draft',
-                'terminate' => Gate::forUser($user)->allows('terminateContract', $contract) && in_array($contract->status, Contract::RENEWABLE, true),
+                'terminate' => Gate::forUser($user)->allows('terminateContract', $contract) && in_array($contract->status, Contract::RENEWABLE, true)
+                    && ! $terminations->contains(fn (Termination $t) => $t->status === 'submitted'),
                 'manageTeam' => $edit, 'addDocument' => $edit,
                 'openRenewal' => Gate::forUser($user)->allows('updateContract', $contract) && in_array($contract->status, Contract::RENEWABLE, true)
                     && ! $renewals->contains(fn (Renewal $r) => in_array($r->status, Renewal::ACTIVE, true)),
@@ -223,10 +233,49 @@ class ContractController extends Controller
     public function terminate(Request $request, Contract $contract)
     {
         Gate::authorize('terminateContract', $contract);
-        $data = $request->validate(['reason' => ['required', 'string', 'max:5000'], 'terminated_on' => ['nullable', 'date']]);
-        $this->contracts->terminate($contract, $data['reason'], $data['terminated_on'] ?? null, $request->user());
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:5000'], 'terminated_on' => ['nullable', 'date'],
+            'override_reason' => ['nullable', 'string', 'max:5000'], 'document_id' => ['nullable', 'integer'],
+        ]);
+        $t = $this->terminations->request($contract, $data, $request->user());
 
-        return back()->with('success', "Contract {$contract->contract_code} terminated.");
+        return back()->with('success', "Termination {$t->termination_code} requested for {$contract->contract_code}; it is applied once approved.");
+    }
+
+    /** @return array<string,mixed> */
+    private function terminationSummary(Termination $t, User $user): array
+    {
+        $open = $t->status === 'submitted';
+        $excluded = in_array((int) $user->id, $t->sodExcludedIds(), true);
+        $deciding = $open && ! $excluded && Gate::forUser($user)->allows('decideTermination', $t) && $this->canDecideTermination($t, $user);
+
+        return [
+            'id' => $t->id, 'termination_code' => $t->termination_code, 'status' => $t->status, 'reason' => $t->reason,
+            'requested_terminated_on' => $t->requested_terminated_on?->toDateString(), 'is_post_deadline' => $t->is_post_deadline,
+            'override_reason' => $t->override_reason,
+            'override_document' => $t->overrideDocument ? ['id' => $t->overrideDocument->id, 'title' => $t->overrideDocument->title] : null,
+            'requested_by' => $this->userMini($t->requestedBy), 'requested_at' => $t->requested_at?->toIso8601String(),
+            'approved_by' => $this->userMini($t->approvedBy), 'approved_at' => $t->approved_at?->toIso8601String(), 'rejection_reason' => $t->rejection_reason,
+            'amount_band' => $t->amount_band, 'amount_band_label' => $t->amount_band_label, 'requires_cfo' => $t->requires_cfo,
+            'can' => [
+                'approve' => $deciding, 'reject' => $deciding,
+                'withdraw' => $open && Gate::forUser($user)->allows('decideTermination', $t) && ((int) $t->requested_by_id === (int) $user->id || (int) $t->contract?->owner_id === (int) $user->id),
+            ],
+        ];
+    }
+
+    private function canDecideTermination(Termination $t, User $u): bool
+    {
+        if (! $this->approvals->configured(TerminationService::PROCESS, (int) $t->organization_id)) {
+            return true;
+        }
+        foreach ($this->approvals->trail(TerminationService::PROCESS, $t, $u)['request']['steps'] ?? [] as $step) {
+            if (! empty($step['can_decide'])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @return array<string,mixed> */

@@ -14,6 +14,7 @@ use App\Models\Finance\Category;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\SupplementaryRequest;
+use App\Models\Finance\Termination;
 use App\Models\Policy;
 use App\Models\PolicyException;
 use App\Models\SoaVersion;
@@ -168,6 +169,18 @@ class ApprovalProcesses
                 'requires_cfo' => ['label' => 'Needs CFO (high value or uplift above threshold)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
             ],
             'default' => 'One approval by anyone with "approve it-finance-contracts" other than the requester and the contract owner.',
+        ],
+        'finance.contract_termination' => [
+            'module' => 'IT Financial Management', 'label' => 'Contract early termination', 'engine' => 'generic', 'owner_cannot_approve' => true,
+            'description' => 'Ending a contract before its end date is approved before the termination is applied (FIN-06, plan H2).',
+            'permission' => 'approve it-finance-contracts', 'view_permission' => 'view it-finance', 'model' => Termination::class, 'initiator' => 'requested_by_id', 'owner' => 'contract_owner_id',
+            'title' => ['termination_code', 'contract_label'], 'route' => 'finance.terminations.show', 'initiate' => 'Requesting an early termination',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA, contract value)', 'values' => 'finance.doa_bands'],
+                'contract_type' => ['label' => 'Contract type', 'values' => self::CONTRACT_TYPE_LABELS],
+                'requires_cfo' => ['label' => 'Needs CFO (high value or after the notice deadline)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance-contracts" other than the requester, the contract owner and its creator.',
         ],
     ];
 

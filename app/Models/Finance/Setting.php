@@ -27,6 +27,8 @@ class Setting extends Model
         'variance_amber_pct' => 'decimal:2',
         'variance_red_pct' => 'decimal:2',
         'variance_abs_floor' => 'decimal:2',
+        'renewal_cfo_from' => 'decimal:2',
+        'renewal_cfo_uplift_pct' => 'decimal:2',
         'match_tolerance_pct' => 'decimal:2',
         'match_tolerance_abs' => 'decimal:2',
         'showback_enabled' => 'boolean',
