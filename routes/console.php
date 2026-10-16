@@ -18,6 +18,8 @@ use App\Models\User;
 use App\Services\Change\ChangeWorkflow;
 use App\Services\CoreBanking\CoreBankingConnector;
 use App\Services\Ea\ArchiMateExchange;
+use App\Services\Finance\DoaBandService;
+use App\Services\Finance\FinanceApprovalSweeper;
 use App\Services\Issues\IssueWorkflow;
 use App\Services\Kri\KriService;
 use App\Services\Monitoring\CcmRunner;
@@ -83,6 +85,16 @@ Artisan::command('changes:sweep', function (ChangeWorkflow $workflow) {
     $this->info($workflow->sweepOverdueApprovals().' overdue approval reminder(s) sent.');
 })->purpose('Remind approvers of overdue change approvals');
 Schedule::command('changes:sweep')->hourly()->name('changes.sweep')->withoutOverlapping();
+
+/* =====================  IT Financial Management ===================== */
+Artisan::command('fin:approvals-sweep', function (FinanceApprovalSweeper $s) {
+    $this->info($s->sweep().' overdue finance approval reminder(s) sent.');
+})->purpose('Remind approvers of overdue IT finance approvals (ATH-FIN-001 §7)');
+Schedule::command('fin:approvals-sweep')->hourly()->name('finance.approvals-sweep')->withoutOverlapping();
+Artisan::command('fin:doa-activate', function (DoaBandService $d) {
+    $this->info($d->activateDue().' DoA band version(s) activated.');
+})->purpose('Activate approved DoA band versions whose effective date has arrived');
+Schedule::command('fin:doa-activate')->dailyAt('00:05')->name('finance.doa-activate')->withoutOverlapping();
 
 /* =====================  Policy Management ===================== */
 // Approved policy exceptions past their end date become expired (ATH-VAL-009).

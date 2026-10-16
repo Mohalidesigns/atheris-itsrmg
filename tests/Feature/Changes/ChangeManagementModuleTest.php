@@ -745,6 +745,8 @@ class ChangeManagementModuleTest extends TestCase
         $this->assertSame([$cab->change_code, false, null], [$member['change']['change_code'], $member['can_decide'], $member['my_vote']], 'a plain member votes but does not decide');
 
         // Decided approvals move to the history and the next stage's approver inherits the item.
+        // (decided_at is second-precision on Postgres: step the clock so the order is not a tie.)
+        $this->travel(1)->seconds();
         $this->actingAs($this->headIt)->post(route('changes.decide', $medium), ['decision' => 'approve']);
         $this->assertSame([], $codes($this->headIt));
         $this->actingAs($this->headIt)->get(route('changes.approvals'))

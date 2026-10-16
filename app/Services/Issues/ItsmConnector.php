@@ -133,7 +133,10 @@ class ItsmConnector
         $this->workflow->log($issue, 'ticket', "{$connection->name} ticket {$reference} is now \"{$state}\"".($comment ? ": {$comment}" : '.'), null);
 
         if (in_array(strtolower($state), self::RESOLVED_STATES, true) && $issue->status === 'in_progress') {
-            if (filled($issue->root_cause) && filled($issue->remediation_plan)) {
+            if ($issue->isCapa()) {
+                // A CAPA moves to verification only through its stage gates (IT-GOV-CAPA-001 §4).
+                $this->workflow->log($issue, 'note', 'The ticket is resolved. Complete the CAPA action plan in Atheris to move it to verification.', null);
+            } elseif (filled($issue->root_cause) && filled($issue->remediation_plan)) {
                 $issue->update(['status' => 'remediated', 'remediated_at' => now(), 'remediated_by_id' => null]);
                 $this->workflow->log($issue, 'status', "Marked remediated from {$connection->name}. Awaiting verification in Atheris.", null);
             } else {

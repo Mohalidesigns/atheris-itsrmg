@@ -120,6 +120,14 @@ class DatabaseSeeder extends Seeder
         // change register per bank linked to the records above (ATH-CHG-001 §10)
         $this->call(ChangeManagementDemoSeeder::class);
 
+        // IT Financial Management foundation: settings, TBM taxonomy, chart of accounts, currencies & FX, taxes,
+        // fiscal calendar, cost centres, drivers and finance users per bank (ATH-FIN-001 §3.1, §13)
+        $this->call(FinanceFoundationSeeder::class);
+
+        // IT Financial Management P1 (budgeting): DoA band versions, budget FX rates, cycles, FY baselines, a mid-year
+        // revision, Workflow Studio default stages, transfers, supplementary requests, ceilings and next-year budgets
+        $this->call(FinanceDemoSeeder::class);
+
         // Asset Management: coherent owners and departments, provenance from real sandbox connector
         // runs and a CSV import, business services and dependency chains per bank, asset → service
         // links, inherited criticality, and First Bank's EA applications tied to their assets
@@ -180,5 +188,10 @@ class DatabaseSeeder extends Seeder
         $this->call(ReportsIntegrationsSettingsDemoSeeder::class);
 
         $this->call(RoleDemoUsersSeeder::class);
+
+        // Integrated CAPA (IT-GOV-CAPA-001): last, because CCM, KRI, drift and core banking findings are
+        // raised by the seeders above. Moves Kano's register onto the six-stage workflow across all three
+        // framework paths, routes actions through the change register, and fires the CPR §6.0 trigger
+        $this->call(CapaDemoSeeder::class);
     }
 }

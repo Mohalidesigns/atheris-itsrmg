@@ -8,9 +8,15 @@ use App\Models\BiaRecord;
 use App\Models\BoardPackRun;
 use App\Models\ConfigDriftEvent;
 use App\Models\Ea\MaturityAssessment;
+use App\Models\Finance\Budget;
+use App\Models\Finance\BudgetTransfer;
+use App\Models\Finance\Category;
+use App\Models\Finance\CostCentre;
+use App\Models\Finance\SupplementaryRequest;
 use App\Models\Policy;
 use App\Models\PolicyException;
 use App\Models\SoaVersion;
+use App\Services\Finance\DoaBandService;
 
 /**
  * Every process in the platform that needs an approval (ATH-VAL-016), and what Workflow Studio
@@ -112,6 +118,42 @@ class ApprovalProcesses
             'title' => ['title'], 'route' => 'ea.maturity.show', 'initiate' => 'Submitting the assessment',
             'default' => 'One approval by anyone with "approve ea" other than the submitter.',
         ],
+        'finance.budget_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Budget version approval', 'engine' => 'generic', 'owner_cannot_approve' => true,
+            'description' => 'A budget version is approved before Finance baselines it (COBIT APO06.03).',
+            'permission' => 'approve it-finance', 'model' => Budget::class, 'initiator' => 'submitted_by_id', 'owner' => 'owner_id',
+            'title' => ['budget_code', 'version_label', 'title'], 'route' => 'finance.budgets.show', 'initiate' => 'Submitting a budget version',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'cost_centre_id' => ['label' => 'Cost centre', 'values' => 'finance.cost_centres'],
+                'cycle_type' => ['label' => 'Cycle type', 'values' => ['annual' => 'Annual', 'mid_year_reforecast' => 'Mid-year reforecast', 'rolling_forecast' => 'Rolling forecast', 'supplementary' => 'Supplementary']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the submitter and the budget owner.',
+        ],
+        'finance.budget_transfer' => [
+            'module' => 'IT Financial Management', 'label' => 'Budget transfer (virement)', 'engine' => 'generic',
+            'description' => 'Moving approved budget between lines, cost centres or periods is approved before it is applied.',
+            'permission' => 'approve it-finance', 'model' => BudgetTransfer::class, 'initiator' => 'requested_by_id',
+            'title' => ['transfer_code'], 'route' => 'finance.transfers.index', 'initiate' => 'Submitting a budget transfer',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'crosses_cost_centre' => ['label' => 'Crosses cost centres', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'capex_opex' => ['label' => 'CapEx / OpEx', 'values' => ['capex' => 'CapEx', 'opex' => 'OpEx', 'mixed' => 'Mixed']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the requester.',
+        ],
+        'finance.supplementary_budget' => [
+            'module' => 'IT Financial Management', 'label' => 'Supplementary budget', 'engine' => 'generic',
+            'description' => 'A mid-year top-up of the approved budget is approved before it is applied.',
+            'permission' => 'approve it-finance', 'model' => SupplementaryRequest::class, 'initiator' => 'requested_by_id',
+            'title' => ['request_code', 'title'], 'route' => 'finance.supplementary.index', 'initiate' => 'Submitting a supplementary request',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'category_id' => ['label' => 'TBM category', 'values' => 'finance.categories'],
+                'capex_opex' => ['label' => 'CapEx / OpEx', 'values' => ['capex' => 'CapEx', 'opex' => 'OpEx']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the requester.',
+        ],
     ];
 
     public const APPROVER_TYPES = [
@@ -125,6 +167,33 @@ class ApprovalProcesses
     public static function get(string $process): array
     {
         return self::PROCESSES[$process] ?? throw new \InvalidArgumentException("Unknown approval process {$process}.");
+    }
+
+    /**
+     * Stage-condition options with per-bank value lists resolved (plan C28): a process may name a
+     * marker such as `finance.doa_bands` instead of a fixed list.
+     *
+     * @return array<string, array{label:string, values: array<string,string>}>
+     */
+    public static function conditions(string $process, ?int $orgId = null): array
+    {
+        $out = [];
+        foreach ((self::PROCESSES[$process]['conditions'] ?? []) as $field => $c) {
+            $values = $c['values'];
+            if (is_string($values)) {
+                $values = $orgId === null ? [] : match ($values) {
+                    'finance.doa_bands' => app(DoaBandService::class)->conditionValues($orgId),
+                    'finance.cost_centres' => CostCentre::withoutGlobalScopes()->where('organization_id', $orgId)->orderBy('code')->get()
+                        ->mapWithKeys(fn ($c) => [(string) $c->id => $c->code.' '.$c->name])->all(),
+                    'finance.categories' => Category::withoutGlobalScopes()->where('organization_id', $orgId)->orderBy('kind')->orderBy('code')->get()
+                        ->mapWithKeys(fn ($c) => [(string) $c->id => $c->code.' '.$c->name])->all(),
+                    default => [],
+                };
+            }
+            $out[$field] = ['label' => $c['label'], 'values' => $values];
+        }
+
+        return $out;
     }
 
     public static function generic(): array

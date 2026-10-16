@@ -7,10 +7,10 @@ use App\Http\Controllers\Assets\AssetDiscoveryController;
 use App\Http\Controllers\Assets\BusinessServiceMapController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\Auth\SamlController;
-use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\Auth\ScimController;
 use App\Http\Controllers\BcpController;
 use App\Http\Controllers\BusinessAssetController;
+use App\Http\Controllers\CapaController;
 use App\Http\Controllers\Change\ChangeCabController;
 use App\Http\Controllers\Change\ChangePolicyController;
 use App\Http\Controllers\Change\ChangeRequestController as ChangeManagementController;
@@ -33,7 +33,21 @@ use App\Http\Controllers\Ea\SurveyController;
 use App\Http\Controllers\Ea\WedgeController;
 use App\Http\Controllers\EaController;
 use App\Http\Controllers\EvidenceController;
+use App\Http\Controllers\Finance\BudgetController;
+use App\Http\Controllers\Finance\BudgetCycleController;
+use App\Http\Controllers\Finance\BudgetLineController;
+use App\Http\Controllers\Finance\BudgetScenarioController;
+use App\Http\Controllers\Finance\BudgetTargetController;
+use App\Http\Controllers\Finance\BudgetTransferController;
+use App\Http\Controllers\Finance\BudgetWorkbookController;
+use App\Http\Controllers\Finance\DoaBandController;
+use App\Http\Controllers\Finance\FinanceCurrencyController;
+use App\Http\Controllers\Finance\FinanceDimensionsController;
+use App\Http\Controllers\Finance\FinanceSettingsController;
+use App\Http\Controllers\Finance\FiscalCalendarController;
+use App\Http\Controllers\Finance\SupplementaryRequestController;
 use App\Http\Controllers\GapController;
+use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\IsmsController;
@@ -590,6 +604,21 @@ Route::middleware('auth')->group(function () {
         Route::post('/issues/{issue}/escalate', [IssueController::class, 'escalate'])->name('issues.escalate');
         Route::post('/issues/{issue}/comment', [IssueController::class, 'comment'])->name('issues.comment');
         Route::post('/issues/{issue}/push', [IssueController::class, 'push'])->name('issues.push');
+        // Integrated CAPA stages (IT-GOV-CAPA-001). Owners or edit issues work a CAPA; sign-off and
+        // verification are gated on the RACI Accountable role inside CapaWorkflow.
+        Route::get('/issues/capa/export', [CapaController::class, 'export'])->middleware('permission:export issues')->name('issues.capa.export');
+        Route::prefix('/issues/{issue}/capa')->whereNumber('issue')->name('issues.capa.')->group(function () {
+            Route::put('/', [CapaController::class, 'update'])->name('update');
+            Route::post('/stage', [CapaController::class, 'advance'])->name('stage');
+            Route::post('/signoff', [CapaController::class, 'signoff'])->name('signoff');
+            Route::post('/containment', [CapaController::class, 'containmentStore'])->name('containment.store');
+            Route::delete('/containment/{action}', [CapaController::class, 'containmentDestroy'])->whereNumber('action')->name('containment.destroy');
+            Route::put('/root-cause', [CapaController::class, 'rootCause'])->name('root-cause');
+            Route::post('/actions', [CapaController::class, 'actionStore'])->name('actions.store');
+            Route::put('/actions/{action}', [CapaController::class, 'actionUpdate'])->whereNumber('action')->name('actions.update');
+            Route::delete('/actions/{action}', [CapaController::class, 'actionDestroy'])->whereNumber('action')->name('actions.destroy');
+            Route::post('/verify', [CapaController::class, 'verify'])->name('verify');
+        });
         Route::middleware('permission:approve issues')->group(function () {
             Route::put('/issues/sla-policies/{severity}', [IssueController::class, 'slaPolicyUpdate'])->name('issues.sla-policies.update');
             Route::post('/itsm', [IssueController::class, 'itsmStore'])->name('itsm.store');
@@ -654,6 +683,123 @@ Route::middleware('auth')->group(function () {
         Route::post('/{change}/tasks', [ChangeTaskController::class, 'store'])->whereNumber('change')->name('tasks.store');
         Route::put('/{change}/tasks/{task}', [ChangeTaskController::class, 'update'])->whereNumber('change')->whereNumber('task')->name('tasks.update');
         Route::post('/{change}/comment', [ChangeManagementController::class, 'comment'])->whereNumber('change')->name('comment');
+    });
+
+    // IT Financial Management: foundation & configuration (ATH-FIN-001 §3.1, §9)
+    Route::middleware('permission:view it-finance')->prefix('it-finance')->name('finance.')->group(function () {
+        Route::get('/settings', [FinanceSettingsController::class, 'show'])->name('settings');
+
+        Route::middleware('permission:manage it-finance-settings')->group(function () {
+            Route::put('/settings', [FinanceSettingsController::class, 'update'])->name('settings.update');
+
+            Route::post('/fiscal-years', [FiscalCalendarController::class, 'store'])->name('fiscal-years.store');
+            Route::put('/fiscal-years/{fiscalYear}', [FiscalCalendarController::class, 'update'])->whereNumber('fiscalYear')->name('fiscal-years.update');
+            Route::delete('/fiscal-years/{fiscalYear}', [FiscalCalendarController::class, 'destroy'])->whereNumber('fiscalYear')->name('fiscal-years.destroy');
+
+            Route::middleware('permission:import it-finance')->group(function () {
+                Route::post('/cost-centres/import', [FinanceDimensionsController::class, 'costCentreImport'])->name('cost-centres.import');
+                Route::post('/fx-rates/import', [FinanceCurrencyController::class, 'fxRateImport'])->name('fx-rates.import');
+            });
+            Route::post('/cost-centres', [FinanceDimensionsController::class, 'costCentreStore'])->name('cost-centres.store');
+            Route::put('/cost-centres/{costCentre}', [FinanceDimensionsController::class, 'costCentreUpdate'])->whereNumber('costCentre')->name('cost-centres.update');
+            Route::delete('/cost-centres/{costCentre}', [FinanceDimensionsController::class, 'costCentreDestroy'])->whereNumber('costCentre')->name('cost-centres.destroy');
+
+            Route::post('/categories', [FinanceDimensionsController::class, 'categoryStore'])->name('categories.store');
+            Route::put('/categories/{category}', [FinanceDimensionsController::class, 'categoryUpdate'])->whereNumber('category')->name('categories.update');
+            Route::delete('/categories/{category}', [FinanceDimensionsController::class, 'categoryDestroy'])->whereNumber('category')->name('categories.destroy');
+
+            Route::post('/gl-accounts', [FinanceDimensionsController::class, 'glAccountStore'])->name('gl-accounts.store');
+            Route::put('/gl-accounts/{glAccount}', [FinanceDimensionsController::class, 'glAccountUpdate'])->whereNumber('glAccount')->name('gl-accounts.update');
+            Route::delete('/gl-accounts/{glAccount}', [FinanceDimensionsController::class, 'glAccountDestroy'])->whereNumber('glAccount')->name('gl-accounts.destroy');
+
+            Route::post('/currencies', [FinanceCurrencyController::class, 'currencyStore'])->name('currencies.store');
+            Route::put('/currencies/{currency}', [FinanceCurrencyController::class, 'currencyUpdate'])->whereNumber('currency')->name('currencies.update');
+            Route::post('/fx-rates', [FinanceCurrencyController::class, 'fxRateStore'])->name('fx-rates.store');
+            Route::delete('/fx-rates/{fxRate}', [FinanceCurrencyController::class, 'fxRateDestroy'])->whereNumber('fxRate')->name('fx-rates.destroy');
+
+            Route::post('/tax-types', [FinanceCurrencyController::class, 'taxTypeStore'])->name('tax-types.store');
+            Route::put('/tax-types/{taxType}', [FinanceCurrencyController::class, 'taxTypeUpdate'])->whereNumber('taxType')->name('tax-types.update');
+
+            Route::post('/drivers', [FinanceDimensionsController::class, 'driverStore'])->name('drivers.store');
+            Route::put('/drivers/{driver}', [FinanceDimensionsController::class, 'driverUpdate'])->whereNumber('driver')->name('drivers.update');
+            Route::delete('/drivers/{driver}', [FinanceDimensionsController::class, 'driverDestroy'])->whereNumber('driver')->name('drivers.destroy');
+            Route::put('/drivers/{driver}/values', [FinanceDimensionsController::class, 'driverValuesUpdate'])->whereNumber('driver')->name('drivers.values.update');
+        });
+
+        // P1 budgeting (ATH-FIN-001 §3.2, §9)
+        Route::get('/budgets', [BudgetController::class, 'index'])->name('budgets.index');
+        Route::middleware('permission:create it-finance')->group(function () {
+            Route::get('/budgets/create', [BudgetController::class, 'create'])->name('budgets.create');
+            Route::post('/budgets', [BudgetController::class, 'store'])->name('budgets.store');
+            Route::post('/transfers', [BudgetTransferController::class, 'store'])->name('transfers.store');
+            Route::post('/supplementary', [SupplementaryRequestController::class, 'store'])->name('supplementary.store');
+        });
+        Route::get('/budgets/{budget}', [BudgetController::class, 'show'])->whereNumber('budget')->name('budgets.show');
+        Route::get('/budgets/{budget}/edit', [BudgetController::class, 'edit'])->whereNumber('budget')->name('budgets.edit');
+        Route::get('/budgets/{budget}/diff', [BudgetController::class, 'diff'])->whereNumber('budget')->name('budgets.diff');
+        Route::get('/cycles', [BudgetCycleController::class, 'index'])->name('cycles.index');
+        Route::get('/targets', [BudgetTargetController::class, 'index'])->name('targets.index');
+        Route::get('/transfers', [BudgetTransferController::class, 'index'])->name('transfers.index');
+        Route::get('/supplementary', [SupplementaryRequestController::class, 'index'])->name('supplementary.index');
+        Route::get('/budgets/{budget}/workbook', [BudgetWorkbookController::class, 'export'])->whereNumber('budget')->middleware('permission:export it-finance')->name('budgets.workbook');
+
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::put('/budgets/{budget}', [BudgetController::class, 'update'])->whereNumber('budget')->name('budgets.update');
+            Route::scopeBindings()->group(function () {
+                Route::post('/budgets/{budget}/lines', [BudgetLineController::class, 'store'])->whereNumber('budget')->name('budgets.lines.store');
+                Route::put('/budgets/{budget}/lines/bulk', [BudgetLineController::class, 'bulk'])->whereNumber('budget')->name('budgets.lines.bulk');
+                Route::post('/budgets/{budget}/lines/reorder', [BudgetLineController::class, 'reorder'])->whereNumber('budget')->name('budgets.lines.reorder');
+                Route::put('/budgets/{budget}/lines/{line}', [BudgetLineController::class, 'update'])->whereNumber(['budget', 'line'])->name('budgets.lines.update');
+                Route::delete('/budgets/{budget}/lines/{line}', [BudgetLineController::class, 'destroy'])->whereNumber(['budget', 'line'])->name('budgets.lines.destroy');
+                Route::post('/budgets/{budget}/lines/{line}/phase', [BudgetLineController::class, 'phase'])->whereNumber(['budget', 'line'])->name('budgets.phase');
+                Route::post('/budgets/{budget}/scenarios', [BudgetScenarioController::class, 'store'])->whereNumber('budget')->name('budgets.scenarios.store');
+                Route::put('/budgets/{budget}/scenarios/{scenario}', [BudgetScenarioController::class, 'update'])->whereNumber(['budget', 'scenario'])->name('budgets.scenarios.update');
+                Route::delete('/budgets/{budget}/scenarios/{scenario}', [BudgetScenarioController::class, 'destroy'])->whereNumber(['budget', 'scenario'])->name('budgets.scenarios.destroy');
+                Route::post('/budgets/{budget}/scenarios/{scenario}/promote', [BudgetScenarioController::class, 'promote'])->whereNumber(['budget', 'scenario'])->name('budgets.scenarios.promote');
+            });
+            Route::post('/budgets/{budget}/workbook', [BudgetWorkbookController::class, 'import'])->whereNumber('budget')->name('budgets.workbook.import');
+            Route::post('/budgets/{budget}/comments', [BudgetController::class, 'comment'])->whereNumber('budget')->name('budgets.comments.store');
+            Route::post('/budgets/{budget}/submit', [BudgetController::class, 'submit'])->whereNumber('budget')->name('budgets.submit');
+            Route::post('/budgets/{budget}/withdraw', [BudgetController::class, 'withdraw'])->whereNumber('budget')->name('budgets.withdraw');
+            Route::post('/budgets/{budget}/revise', [BudgetController::class, 'revise'])->whereNumber('budget')->name('budgets.revise');
+            Route::put('/transfers/{transfer}', [BudgetTransferController::class, 'update'])->whereNumber('transfer')->name('transfers.update');
+            Route::post('/transfers/{transfer}/submit', [BudgetTransferController::class, 'submit'])->whereNumber('transfer')->name('transfers.submit');
+            Route::post('/transfers/{transfer}/withdraw', [BudgetTransferController::class, 'withdraw'])->whereNumber('transfer')->name('transfers.withdraw');
+            Route::put('/supplementary/{supplementary}', [SupplementaryRequestController::class, 'update'])->whereNumber('supplementary')->name('supplementary.update');
+            Route::post('/supplementary/{supplementary}/submit', [SupplementaryRequestController::class, 'submit'])->whereNumber('supplementary')->name('supplementary.submit');
+            Route::post('/supplementary/{supplementary}/withdraw', [SupplementaryRequestController::class, 'withdraw'])->whereNumber('supplementary')->name('supplementary.withdraw');
+        });
+
+        Route::middleware('permission:approve it-finance')->group(function () {
+            Route::post('/budgets/{budget}/approve', [BudgetController::class, 'approve'])->whereNumber('budget')->name('budgets.approve');
+            Route::post('/budgets/{budget}/return', [BudgetController::class, 'returnToDraft'])->whereNumber('budget')->name('budgets.return');
+            Route::post('/budgets/{budget}/reject', [BudgetController::class, 'reject'])->whereNumber('budget')->name('budgets.reject');
+            Route::post('/budgets/{budget}/baseline', [BudgetController::class, 'baseline'])->whereNumber('budget')->name('budgets.baseline');
+            foreach (['approve', 'reject', 'apply'] as $action) {
+                Route::post("/transfers/{transfer}/{$action}", [BudgetTransferController::class, $action])->whereNumber('transfer')->name("transfers.{$action}");
+                Route::post("/supplementary/{supplementary}/{$action}", [SupplementaryRequestController::class, $action])->whereNumber('supplementary')->name("supplementary.{$action}");
+            }
+        });
+
+        Route::middleware('permission:manage it-finance-settings')->group(function () {
+            Route::post('/cycles', [BudgetCycleController::class, 'store'])->name('cycles.store');
+            Route::put('/cycles/{cycle}', [BudgetCycleController::class, 'update'])->whereNumber('cycle')->name('cycles.update');
+            Route::post('/cycles/{cycle}/transition', [BudgetCycleController::class, 'transition'])->whereNumber('cycle')->name('cycles.transition');
+            Route::post('/targets', [BudgetTargetController::class, 'store'])->name('targets.store');
+            Route::put('/targets/{target}', [BudgetTargetController::class, 'update'])->whereNumber('target')->name('targets.update');
+            Route::delete('/targets/{target}', [BudgetTargetController::class, 'destroy'])->whereNumber('target')->name('targets.destroy');
+            Route::post('/doa-bands', [DoaBandController::class, 'store'])->name('doa-bands.store');
+            Route::post('/doa-bands/{doaBandVersion}/withdraw', [DoaBandController::class, 'withdraw'])->whereNumber('doaBandVersion')->name('doa-bands.withdraw');
+        });
+        Route::middleware('permission:approve it-finance|manage it-finance-settings')->group(function () {
+            Route::post('/doa-bands/{doaBandVersion}/approve', [DoaBandController::class, 'approve'])->whereNumber('doaBandVersion')->name('doa-bands.approve');
+            Route::post('/doa-bands/{doaBandVersion}/reject', [DoaBandController::class, 'reject'])->whereNumber('doaBandVersion')->name('doa-bands.reject');
+        });
+
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/periods/{period}/close', [FiscalCalendarController::class, 'closePeriod'])->whereNumber('period')->name('periods.close');
+            Route::post('/periods/{period}/lock', [FiscalCalendarController::class, 'lockPeriod'])->whereNumber('period')->name('periods.lock');
+        });
     });
 
     /* ========================================================

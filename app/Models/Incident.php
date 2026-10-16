@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Events\Core\IncidentDeclared;
+use App\Events\Core\IncidentSaved;
 use App\Models\Concerns\GeneratesSequentialCode;
 use App\Models\Concerns\HasTenantIdAlias;
 use App\Models\Traits\BelongsToOrganization;
@@ -27,7 +28,7 @@ class Incident extends Model
         'contained_at', 'resolved_at', 'closed_at', 'assigned_to',
         'lead_investigator_id', 'affected_systems', 'affected_users_count',
         'is_data_breach', 'root_cause', 'lessons_learned', 'tags',
-        'response_procedure_id',
+        'response_procedure_id', 'customer_impact',
     ];
 
     /**
@@ -41,6 +42,8 @@ class Incident extends Model
      */
     protected $dispatchesEvents = [
         'created' => IncidentDeclared::class,
+        // IT-GOV-CAPA-001 §3.3 (CBN CPR §6.0): a customer-impacting failure opens a CAPA.
+        'saved' => IncidentSaved::class,
     ];
 
     protected function casts(): array
@@ -49,6 +52,7 @@ class Incident extends Model
             'affected_systems' => 'array',
             'tags' => 'array',
             'is_data_breach' => 'boolean',
+            'customer_impact' => 'boolean',
             'detected_at' => 'datetime',
             'responded_at' => 'datetime',
             'contained_at' => 'datetime',

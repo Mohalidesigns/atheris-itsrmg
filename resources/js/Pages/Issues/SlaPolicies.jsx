@@ -83,7 +83,7 @@ export default function SlaPolicies({ policies = [] }) {
         <AuthenticatedLayout header="SLA Policies">
             <Head title="SLA Policies" />
             <PageHeader
-                breadcrumbs={[{ label: 'Issues & Remediation', href: route('issues.index') }, { label: 'SLA Policies' }]}
+                breadcrumbs={[{ label: 'CAPA & Remediation', href: route('issues.index') }, { label: 'SLA Policies' }]}
                 title="Remediation SLA Policies"
                 subtitle="One policy per severity for this bank, shared by Issues and the vulnerability prioritiser. Recommended defaults: critical 72 h, high 14 days, medium 30 days, low 90 days."
             />

@@ -27,6 +27,7 @@ import {
     ScaleIcon,
     BuildingLibraryIcon,
     UserGroupIcon,
+    CurrencyDollarIcon,
 } from '@/Components/Material/Symbols';
 
 /**
@@ -120,10 +121,10 @@ const navigation = [
         ],
     },
     {
-        name: 'Issues & Remediation',
+        name: 'CAPA & Remediation',
         icon: BoltIcon,
         children: [
-            { name: 'Issues Console', href: 'issues.index', permission: 'view issues' },
+            { name: 'CAPA Register', href: 'issues.index', permission: 'view issues' },
             { name: 'SLA Policies', href: 'issues.sla-policies', permission: 'view issues' },
             { name: 'ITSM Integrations', href: 'itsm.index', permission: 'view issues' },
         ],
@@ -139,6 +140,15 @@ const navigation = [
             { name: 'Standard Changes', href: 'changes.templates', permission: 'view changes' },
             { name: 'Approval Policy', href: 'changes.policy', permission: 'view changes' },
             { name: 'Freeze Windows', href: 'changes.freeze.index', permission: 'view changes' },
+        ],
+    },
+    {
+        name: 'IT Financial Management',
+        icon: CurrencyDollarIcon,
+        permission: 'view it-finance',
+        children: [
+            { name: 'Budgets', href: 'finance.budgets.index', permission: 'view it-finance' },
+            { name: 'Settings', href: 'finance.settings', permission: 'view it-finance' },
         ],
     },
     {
