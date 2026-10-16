@@ -151,7 +151,7 @@ class ReportsIntegrationsSettingsModuleTest extends TestCase
     public function test_notification_preferences_save_for_self_only(): void
     {
         $payload = ['email_risk_alerts' => false, 'email_compliance_deadlines' => true, 'email_incidents' => true,
-            'email_weekly_digest' => true, 'inapp_task_assignments' => false, 'inapp_mentions' => true];
+            'email_weekly_digest' => true, 'inapp_task_assignments' => false, 'inapp_mentions' => true, 'finance_daily_digest' => true];
         $this->actingAs($this->admin)->patch(route('settings.notifications.update'), $payload)->assertSessionDoesntHaveErrors();
 
         $this->assertFalse($this->admin->fresh()->notification_preferences['email_risk_alerts']);

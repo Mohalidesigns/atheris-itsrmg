@@ -11,11 +11,14 @@ use App\Models\Finance\GlAccount;
 use App\Models\Finance\Period;
 use App\Models\Organization;
 use App\Models\User;
+use App\Services\Finance\ContractService;
 use App\Services\Finance\FinanceSettings;
 use App\Services\Finance\FiscalCalendarService;
+use App\Services\Finance\RenewalService;
 use App\Services\Finance\TbmTaxonomy;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\Route;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -90,13 +93,17 @@ class FinanceTenancyAndRoutesTest extends TestCase
             ->map(fn (RouteDefinition $r) => $r->getName())->sort()->values()->all();
         $this->assertSame([
             'finance.budgets.create', 'finance.budgets.diff', 'finance.budgets.edit', 'finance.budgets.index', 'finance.budgets.show', 'finance.budgets.workbook',
-            'finance.cycles.index', 'finance.settings', 'finance.supplementary.index', 'finance.targets.index', 'finance.transfers.index',
+            'finance.calendar', 'finance.calendar.export', 'finance.calendar.ics',
+            'finance.contracts.create', 'finance.contracts.documents.download', 'finance.contracts.edit', 'finance.contracts.index', 'finance.contracts.show',
+            'finance.cycles.index', 'finance.renewals.index', 'finance.renewals.show',
+            'finance.settings', 'finance.supplementary.index', 'finance.targets.index', 'finance.transfers.index',
         ], $names);
 
         $components = [
             'finance.settings' => 'Finance/Settings', 'finance.budgets.index' => 'Finance/Budgets/Index', 'finance.budgets.create' => 'Finance/Budgets/Create',
             'finance.cycles.index' => 'Finance/Budgets/Cycles', 'finance.targets.index' => 'Finance/Budgets/Targets',
             'finance.transfers.index' => 'Finance/Budgets/Transfers', 'finance.supplementary.index' => 'Finance/Budgets/Supplementary',
+            'finance.contracts.index' => 'Finance/Contracts/Index', 'finance.contracts.create' => 'Finance/Contracts/Create', 'finance.renewals.index' => 'Finance/Renewals/Index',
         ];
         foreach ($components as $name => $component) {
             $this->actingAs($this->admin)->get(route($name))->assertOk()->assertInertia(fn (Assert $p) => $p->component($component, false)->has('auth.user'));
@@ -138,6 +145,30 @@ class FinanceTenancyAndRoutesTest extends TestCase
         $this->get(route('finance.settings'))->assertOk()->assertInertia(fn (Assert $p) => $p
             ->has('costCentres', 0)->has('fiscalYears', 0)->has('drivers', 0)->has('fxRates', 0)
             ->has('categories', TbmTaxonomy::count()));
+    }
+
+    /** P2 tenancy (FIN-06): another bank's contract, renewal and document 404 on every read and write. */
+    public function test_contract_records_404_for_another_banks_records(): void
+    {
+        $this->actingAs($this->admin);
+        $contract = app(ContractService::class)->create([
+            'title' => 'Finacle AMC', 'type' => 'support_maintenance', 'commenced_on' => '2027-01-01', 'ends_on' => '2027-12-31', 'contract_value' => '1000000',
+        ], $this->admin);
+        $renewal = app(RenewalService::class)->open($contract->refresh()->forceFill(['status' => 'active']), $this->admin);
+        $doc = app(ContractService::class)->addDocument($contract, ['kind' => 'contract', 'title' => 'Signed'], UploadedFile::fake()->create('c.pdf', 4, 'application/pdf'), $this->admin);
+        auth()->logout();
+
+        $this->actingAs($this->otherAdmin);
+        $this->get(route('finance.contracts.show', $contract))->assertNotFound();
+        $this->get(route('finance.contracts.edit', $contract))->assertNotFound();
+        $this->put(route('finance.contracts.update', $contract), ['title' => 'x'])->assertNotFound();
+        $this->post(route('finance.contracts.activate', $contract))->assertNotFound();
+        $this->post(route('finance.contracts.terminate', $contract), ['reason' => 'x'])->assertNotFound();
+        $this->get(route('finance.renewals.show', $renewal))->assertNotFound();
+        $this->post(route('finance.renewals.submit', $renewal))->assertNotFound();
+        $this->get(route('finance.contracts.documents.download', [$contract, $doc]))->assertNotFound();
+        $this->get(route('finance.contracts.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('contracts', 0));
+        $this->get(route('finance.renewals.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('renewals', 0));
     }
 
     public function test_a_new_bank_with_no_finance_data_renders_empty_not_errors(): void

@@ -55,14 +55,19 @@ class BudgetController extends Controller
         $rows = $q->get();
 
         $sum = fn ($c) => $c->reduce(fn ($carry, $b) => bcadd($carry, (string) $b->total_base_amount, 2), '0');
+        $adjMap = $this->adjustmentsByBudget($rows->pluck('id')->all());
+        $sumAdj = fn ($c) => $c->reduce(fn ($carry, $b) => bcadd($carry, $adjMap[$b->id] ?? '0', 2), '0');
+        $baselines = $rows->where('status', 'baseline');
 
         return $this->renderMasked('Finance/Budgets/Index', [
             'filters' => $filters,
-            'budgets' => $rows->map(fn (Budget $b) => $this->budgetSummary($b))->values(),
+            'budgets' => $rows->map(fn (Budget $b) => $this->budgetSummary($b, $adjMap))->values(),
             'summary' => [
                 'count' => $rows->count(), 'draft' => $rows->where('status', 'draft')->count(),
                 'in_approval' => $rows->whereIn('status', Budget::IN_APPROVAL)->count(), 'approved' => $rows->where('status', 'approved')->count(),
-                'baseline' => $rows->where('status', 'baseline')->count(), 'total_baseline_base' => $sum($rows->where('status', 'baseline')),
+                'baseline' => $rows->where('status', 'baseline')->count(), 'total_baseline_base' => $sum($baselines),
+                'total_baseline_adjustments_base' => $sumAdj($baselines),
+                'total_baseline_current_base' => bcadd($sum($baselines), $sumAdj($baselines), 2),
                 'total_in_flight_base' => $sum($rows->whereIn('status', ['draft', 'submitted', 'under_review', 'approved'])),
             ],
             'fiscalYears' => $this->fiscalYearsPayload(),
@@ -353,6 +358,8 @@ class BudgetController extends Controller
         foreach ($d['lines'] as &$l) {
             $l['periods'] = [];
             $l['base_delta'] = null;
+            $l['revision_delta'] = null;
+            $l['current_delta'] = null;
             foreach ($l['fields'] as $f => $pair) {
                 if (in_array($f, ['annual_amount', 'base_annual_amount'], true)) {
                     $l['fields'][$f] = [null, null];

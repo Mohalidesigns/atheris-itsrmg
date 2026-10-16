@@ -7,9 +7,15 @@ use App\Models\Finance\BudgetComment;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetScenario;
 use App\Models\Finance\BudgetTransfer;
+use App\Models\Finance\Contract;
+use App\Models\Finance\ContractDocument;
+use App\Models\Finance\ContractEvent;
+use App\Models\Finance\ContractLink;
+use App\Models\Finance\ContractTeamMember;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\Period;
+use App\Models\Finance\Renewal;
 use App\Models\Finance\SupplementaryRequest;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -68,6 +74,28 @@ class FinancePolicy
             && $this->sameOrg($user, $version) && (int) $version->proposed_by_id !== (int) $user->id;
     }
 
+    /* Contracts and renewals (P2). */
+
+    public function createContract(User $user): bool
+    {
+        return $user->can('create it-finance');
+    }
+
+    public function updateContract(User $user, Model $model): bool
+    {
+        return $user->can('edit it-finance') && $this->sameOrg($user, $model) && $this->costCentreVisible($user, $model);
+    }
+
+    public function decideRenewal(User $user, Renewal $renewal): bool
+    {
+        return $user->can('approve it-finance-contracts') && $this->sameOrg($user, $renewal);
+    }
+
+    public function terminateContract(User $user, Contract $contract): bool
+    {
+        return $user->can('approve it-finance-contracts') && $this->sameOrg($user, $contract) && $this->costCentreVisible($user, $contract);
+    }
+
     public function create(User $user): bool
     {
         return $user->can('manage it-finance-settings');
@@ -122,6 +150,10 @@ class FinancePolicy
     /** Cost-centre row restriction for planning records; null visibility means every cost centre. */
     private function costCentreVisible(User $user, Model $model): bool
     {
+        if ($model instanceof Contract || $model instanceof ContractTeamMember || $model instanceof ContractLink || $model instanceof ContractDocument
+            || $model instanceof ContractEvent || $model instanceof Renewal) {
+            return $this->contractVisible($user, $model);
+        }
         $planning = [Budget::class, BudgetLine::class, BudgetScenario::class, BudgetComment::class, BudgetTransfer::class, SupplementaryRequest::class];
         if (! in_array($model::class, $planning, true)) {
             return true;
@@ -142,6 +174,24 @@ class FinancePolicy
         }
 
         return (bool) array_intersect(array_map('intval', array_filter($cc)), $ids);
+    }
+
+    /** Plan C70: every cost centre, Procurement, the contract's own people, its team, or its cost centre in the user's tree. */
+    private function contractVisible(User $user, Model $model): bool
+    {
+        $contract = $model instanceof Contract ? $model : Contract::withoutGlobalScopes()->find($model->contract_id);
+        if (! $contract) {
+            return false;
+        }
+        $ids = self::visibleCostCentreIds($user);
+        if ($ids === null || $user->hasRole('Procurement Officer')) {
+            return true;
+        }
+        if ($contract->cost_centre_id && in_array((int) $contract->cost_centre_id, $ids, true)) {
+            return true;
+        }
+
+        return $contract->involves($user);
     }
 
     private function sameOrg(User $user, Model $model): bool

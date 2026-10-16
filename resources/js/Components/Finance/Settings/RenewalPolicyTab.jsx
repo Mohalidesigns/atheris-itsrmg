@@ -23,7 +23,7 @@ export default function RenewalPolicyTab({ settings, jobTitles, can }) {
     const remove = (n) => form.setData('renewal_notice_offsets', offsets.filter((x) => x !== n));
     return (
         <Card title="Renewal policy">
-            <form onSubmit={(e) => { e.preventDefault(); form.transform((d) => ({ ...d, escalation_role: d.escalation_role || null })).put(route('finance.settings.update'), { preserveScroll: true }); }}>
+            <form onSubmit={(e) => { e.preventDefault(); form.transform((d) => ({ ...d, escalation_role: d.escalation_role || null })); form.put(route('finance.settings.update'), { preserveScroll: true }); }}>
                 <fieldset disabled={!can.manage} className="space-y-4 px-5 py-4">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div><label className={LABEL}>Renewal lead days</label><input type="number" min="1" max="730" value={form.data.renewal_lead_days} onChange={(e) => form.setData('renewal_lead_days', e.target.value)} className={FIELD} /><InputError message={form.errors.renewal_lead_days} /></div>

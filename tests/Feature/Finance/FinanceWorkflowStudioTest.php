@@ -64,10 +64,11 @@ class FinanceWorkflowStudioTest extends TestCase
         FinancePolicySeeder::ensureDefaults($this->org->id);
 
         $wfs = ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $this->org->id)->where('process', 'like', 'finance.%')->with('stages')->get()->keyBy('process');
-        $this->assertCount(3, $wfs);
+        $this->assertCount(4, $wfs);
         $this->assertCount(4, $wfs['finance.budget_approval']->stages);
         $this->assertCount(3, $wfs['finance.budget_transfer']->stages);
         $this->assertCount(3, $wfs['finance.supplementary_budget']->stages);
+        $this->assertCount(2, $wfs['finance.contract_renewal']->stages);
 
         $md = $wfs['finance.budget_approval']->stages->firstWhere('sequence', 40);
         $this->assertSame('amount_band', $md->condition_field);
@@ -83,7 +84,7 @@ class FinanceWorkflowStudioTest extends TestCase
     public function test_studio_lists_and_shows_finance_processes_with_resolved_conditions_and_accepts_band_values(): void
     {
         $this->actingAs($this->admin)->get(route('workflows.index'))->assertOk()->assertInertia(fn (Assert $p) => $p
-            ->has('processes.IT Financial Management', 3));
+            ->has('processes.IT Financial Management', 4));
 
         $this->get(route('workflows.process', 'finance.budget_approval'))->assertOk()->assertInertia(fn (Assert $p) => $p
             ->component('Workflows/Process')->has('stages', 4)
@@ -186,24 +187,24 @@ class FinanceWorkflowStudioTest extends TestCase
         return ApprovalRequest::withoutGlobalScopes()->where('process', $process)->where('subject_id', $subject->id)->with('steps')->latest('id')->firstOrFail();
     }
 
-    /** FIN-07.01: the index lists 14 processes; opening a finance process seeds its stages once and never re-seeds. */
+    /** FIN-07.01: the index lists 15 processes; opening a finance process seeds its stages once and never re-seeds. */
     public function test_three_budget_processes_listed_with_defaults_seeded_on_open(): void
     {
         $this->actingAs($this->admin)->get(route('workflows.index'))->assertOk()->assertInertia(fn (Assert $p) => $p
-            ->where('summary.processes', 14)->has('processes.IT Financial Management', 3));
+            ->where('summary.processes', 15)->has('processes.IT Financial Management', 4));
         $count = fn () => ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $this->org->id)->where('process', 'like', 'finance.%')->count();
         $this->assertSame(0, $count(), 'nothing is seeded until a bank opens the process or starts using it');
 
-        $expected = ['finance.budget_approval' => 4, 'finance.budget_transfer' => 3, 'finance.supplementary_budget' => 3];
+        $expected = ['finance.budget_approval' => 4, 'finance.budget_transfer' => 3, 'finance.supplementary_budget' => 3, 'finance.contract_renewal' => 2];
         foreach ($expected as $process => $stages) {
             $this->get(route('workflows.process', $process))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Workflows/Process')->has('stages', $stages));
         }
-        $this->assertSame(3, $count());
+        $this->assertSame(4, $count());
         foreach ($expected as $process => $stages) {
             $this->get(route('workflows.process', $process))->assertInertia(fn (Assert $p) => $p->has('stages', $stages));
         }
-        $this->assertSame(3, $count());
-        $this->assertSame(10, ApprovalWorkflowStage::withoutGlobalScopes()->where('organization_id', $this->org->id)->count());
+        $this->assertSame(4, $count());
+        $this->assertSame(12, ApprovalWorkflowStage::withoutGlobalScopes()->where('organization_id', $this->org->id)->count());
 
         $wf = ApprovalWorkflow::where('process', 'finance.budget_transfer')->first();
         $this->delete(route('workflows.stages.destroy', $wf->stages()->first()))->assertSessionHasNoErrors();

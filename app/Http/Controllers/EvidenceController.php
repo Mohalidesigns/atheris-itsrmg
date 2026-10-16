@@ -6,6 +6,7 @@ use App\Models\ComplianceAssessment;
 use App\Models\ComplianceResult;
 use App\Models\Control;
 use App\Models\Evidence;
+use App\Models\Finance\Contract;
 use App\Models\Gap;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -25,7 +26,7 @@ class EvidenceController extends Controller
 
     public function index(Request $request)
     {
-        $query = Evidence::with(['uploader:id,name', 'reviewer:id,name', 'evidenceable']);
+        $query = Evidence::with(['uploader:id,name', 'reviewer:id,name', 'evidenceable'])->where($this->notFinanceDocument());
 
         if ($request->filled('type')) {
             $query->where('type', $request->type);
@@ -49,7 +50,7 @@ class EvidenceController extends Controller
         $evidence = $query->latest()->paginate(20)->withQueryString();
         $evidence->getCollection()->transform(fn ($e) => $this->present($e));
 
-        $all = Evidence::get(['id', 'status', 'valid_until']);
+        $all = Evidence::where($this->notFinanceDocument())->get(['id', 'status', 'valid_until']);
         $stats = [
             'total' => $all->count(),
             'approved' => $all->where('status', 'approved')->filter(fn ($e) => ! $e->is_expired)->count(),
@@ -129,6 +130,7 @@ class EvidenceController extends Controller
     /** Approve or reject (with notes). The uploader cannot review their own evidence. */
     public function review(Request $request, Evidence $evidence)
     {
+        $this->hideFinanceDocument($evidence);
         $validated = $request->validate([
             'decision' => 'required|in:approved,rejected',
             'review_notes' => 'nullable|required_if:decision,rejected|string|max:2000',
@@ -150,6 +152,7 @@ class EvidenceController extends Controller
 
     public function download(Evidence $evidence)
     {
+        $this->hideFinanceDocument($evidence);
         if ($evidence->type === 'url' && $evidence->url) {
             return redirect()->away($evidence->url);
         }
@@ -162,6 +165,7 @@ class EvidenceController extends Controller
 
     public function destroy(Evidence $evidence)
     {
+        $this->hideFinanceDocument($evidence);
         if ($evidence->status === 'approved' && ! auth()->user()->hasRole(['Super Admin', 'Organization Admin'])) {
             throw ValidationException::withMessages(['evidence' => 'Approved evidence is part of the audit trail and can only be removed by an administrator.']);
         }
@@ -174,6 +178,17 @@ class EvidenceController extends Controller
         $evidence->delete();
 
         return back()->with('success', 'Evidence removed.');
+    }
+
+    /** Contract documents sit in the vault but are served only through the finance module's own gated route. */
+    private function hideFinanceDocument(Evidence $evidence): void
+    {
+        abort_if($evidence->evidenceable_type === Contract::class, 404);
+    }
+
+    private function notFinanceDocument(): \Closure
+    {
+        return fn ($q) => $q->whereNull('evidenceable_type')->orWhere('evidenceable_type', '!=', Contract::class);
     }
 
     /** Only whitelisted subject types, and only records in the user's organisation. */

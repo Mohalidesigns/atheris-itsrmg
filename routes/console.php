@@ -18,12 +18,15 @@ use App\Models\User;
 use App\Services\Change\ChangeWorkflow;
 use App\Services\CoreBanking\CoreBankingConnector;
 use App\Services\Ea\ArchiMateExchange;
+use App\Services\Finance\ContractSweeper;
 use App\Services\Finance\DoaBandService;
 use App\Services\Finance\FinanceApprovalSweeper;
+use App\Services\Finance\FinanceDigest;
 use App\Services\Issues\IssueWorkflow;
 use App\Services\Kri\KriService;
 use App\Services\Monitoring\CcmRunner;
 use App\Services\Reports\ReportFigures;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -95,6 +98,15 @@ Artisan::command('fin:doa-activate', function (DoaBandService $d) {
     $this->info($d->activateDue().' DoA band version(s) activated.');
 })->purpose('Activate approved DoA band versions whose effective date has arrived');
 Schedule::command('fin:doa-activate')->dailyAt('00:05')->name('finance.doa-activate')->withoutOverlapping();
+Artisan::command('fin:contracts-sweep {--date= : Y-m-d, run as if today (demo/testing)}', function (ContractSweeper $s) {
+    $r = $s->sweep($this->option('date') ? CarbonImmutable::parse($this->option('date'), config('finance.timezone'))->startOfDay() : null);
+    $this->info(sprintf('%d derived, %d rolled, %d T-minus sent, %d escalated, %d passed notices.', $r['derived'], $r['rolled'], $r['notified'], $r['escalated'], $r['passed']));
+})->purpose('Derive contract statuses, auto-renew, send renewal T-minus, escalation and passed notices (ATH-FIN-001 §5.4)');
+Schedule::command('fin:contracts-sweep')->dailyAt('06:30')->timezone(config('finance.timezone'))->name('finance.contracts-sweep')->withoutOverlapping();
+Artisan::command('fin:digest', function (FinanceDigest $d) {
+    $this->info($d->send().' finance digest(s) sent.');
+})->purpose("Send the IT finance daily digest to opted-in users at their bank's digest hour");
+Schedule::command('fin:digest')->hourly()->name('finance.digest')->withoutOverlapping();
 
 /* =====================  Policy Management ===================== */
 // Approved policy exceptions past their end date become expired (ATH-VAL-009).

@@ -14,6 +14,7 @@ use App\Models\Finance\BudgetLinePeriod;
 use App\Models\Finance\BudgetScenario;
 use App\Models\Finance\BudgetTarget;
 use App\Models\Finance\Category;
+use App\Models\Finance\Contract;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\Currency;
 use App\Models\Finance\Driver;
@@ -204,12 +205,13 @@ class BudgetService
             'budget_id' => $new->id, 'source_line_id' => $old->id, 'created_by_id' => $new->created_by_id,
         ]));
         $current = $this->ledger->currentByPeriod($old);
+        $currentLine = $this->ledger->currentByPeriodLine($old);
         $fold = BudgetAdjustment::withoutGlobalScopes()->where('budget_line_id', $old->id)->exists();
         $annual = '0';
         $base = '0';
         foreach (BudgetLinePeriod::withoutGlobalScopes()->where('budget_line_id', $old->id)->get() as $p) {
             $pb = $current[$p->period_id] ?? (string) $p->base_amount;
-            $pa = $fold ? $this->phasing->round(bcdiv($pb, (string) $old->fx_rate, 12), 2) : (string) $p->amount;
+            $pa = $fold ? $currentLine[$p->period_id] ?? (string) $p->amount : (string) $p->amount;
             $annual = bcadd($annual, $pa, 2);
             $base = bcadd($base, $pb, 2);
             BudgetLinePeriod::withoutGlobalScopes()->create(['organization_id' => $new->organization_id, 'created_by_id' => $new->created_by_id,
@@ -348,10 +350,14 @@ class BudgetService
         in_array($rgt, BudgetLine::RGT, true) || $this->fail('Unknown run / grow / transform value.', 'rgt');
         $method = $get('phasing_method', 'equal');
         in_array($method, BudgetLine::PHASING, true) || $this->fail('Unknown phasing method.', 'phasing_method');
-        foreach (['contract_id' => 'Contracts', 'investment_id' => 'Investments'] as $k => $label) {
-            if (! empty($data[$k])) {
-                $this->fail("{$label} can be linked from a later phase.", $k);
-            }
+        if (! empty($data['investment_id'])) {
+            $this->fail('Investments can be linked from a later phase.', 'investment_id');
+        }
+        $contractId = null;
+        if (! empty($data['contract_id'])) {
+            Contract::withoutGlobalScopes()->where('organization_id', $orgId)->whereKey($data['contract_id'])->exists()
+                || $this->fail('Unknown contract for this bank.', 'contract_id');
+            $contractId = (int) $data['contract_id'];
         }
 
         $baseCode = $this->settings->baseCurrency($orgId);
@@ -427,6 +433,7 @@ class BudgetService
             'description' => $description, 'cost_pool_id' => $pool->id, 'tower_id' => $tower->id, 'category_id' => $cat?->id, 'gl_account_id' => $glId ?: null,
             'cost_centre_id' => $b->cost_centre_id, 'legal_entity_id' => $dims['legal_entity_id'] ?? $b->legal_entity_id,
             'is_capex' => $isCapex, 'is_recurring' => (bool) $get('is_recurring', false), 'priority' => $priority, 'rgt' => $rgt,
+            'contract_id' => array_key_exists('contract_id', $data) ? $contractId : ($cur['contract_id'] ?? null),
             'vendor_id' => $dims['vendor_id'], 'asset_id' => $dims['asset_id'], 'risk_id' => $dims['risk_id'], 'driver_id' => $driverId ?: null,
             'ea_application_id' => $dims['ea_application_id'], 'business_service_id' => $dims['business_service_id'],
             'driver_rate' => $driverRate === '' ? null : $driverRate, 'quantity' => $quantity, 'unit_cost' => $unit === '' ? null : $unit,
@@ -895,57 +902,134 @@ class BudgetService
         if ($a->budget_code !== $b->budget_code || (int) $a->organization_id !== (int) $b->organization_id) {
             $this->fail('Only versions of the same budget can be compared.', 'against');
         }
+        if ($a->version_no > $b->version_no) {
+            [$a, $b] = [$b, $a];
+        }
         $periods = $this->phasing->periodsFor(FiscalYear::withoutGlobalScopes()->findOrFail($b->fiscal_year_id));
         $aLines = BudgetLine::withoutGlobalScopes()->where('budget_id', $a->id)->get();
         $bLines = BudgetLine::withoutGlobalScopes()->where('budget_id', $b->id)->get();
+
+        // Lineage: every line of the versions between a and b, so v1 vs v3 follows source_line_id through v2 (M3a).
+        $between = Budget::withoutGlobalScopes()->where('organization_id', $a->organization_id)->where('budget_code', $a->budget_code)
+            ->whereBetween('version_no', [$a->version_no, $b->version_no])->pluck('id');
+        $chain = BudgetLine::withoutGlobalScopes()->whereIn('budget_id', $between)->get(['id', 'budget_id', 'source_line_id'])
+            ->mapWithKeys(fn ($l) => [$l->id => ['budget_id' => (int) $l->budget_id, 'source' => $l->source_line_id]])->all();
+        $ancestor = function (BudgetLine $bl) use ($chain, $a, $between) {
+            $id = $bl->source_line_id;
+            for ($hops = 0; $id && $hops <= $between->count(); $hops++) {
+                $node = $chain[$id] ?? null;
+                if (! $node) {
+                    return null;
+                }
+                if ($node['budget_id'] === (int) $a->id) {
+                    return $id;
+                }
+                $id = $node['source'];
+            }
+
+            return null;
+        };
+
+        $adjSum = BudgetAdjustment::withoutGlobalScopes()->whereIn('budget_line_id', $aLines->pluck('id')->merge($bLines->pluck('id')))
+            ->selectRaw('budget_line_id, sum(amount) as amount, sum(base_amount) as base')->groupBy('budget_line_id')->get()->keyBy('budget_line_id');
+        $adjBase = fn (BudgetLine $l) => bcadd((string) ($adjSum[$l->id]->base ?? '0'), '0', 2);
+        $adjLine = fn (BudgetLine $l) => bcadd((string) ($adjSum[$l->id]->amount ?? '0'), '0', 2);
+
         $matched = [];
         $rows = [];
-        $mini = fn (BudgetLine $l) => ['id' => $l->id, 'line_no' => $l->line_no, 'description' => $l->description, 'annual_amount' => (string) $l->annual_amount, 'base_annual_amount' => (string) $l->base_annual_amount];
-        $periodMap = fn (?BudgetLine $l) => $l ? BudgetLinePeriod::withoutGlobalScopes()->where('budget_line_id', $l->id)->pluck('base_amount', 'period_id')->map(fn ($v) => (string) $v)->all() : [];
-        $watch = ['description', 'cost_pool_id', 'tower_id', 'category_id', 'is_capex', 'priority', 'rgt', 'currency', 'annual_amount', 'base_annual_amount', 'phasing_method', 'vendor_id'];
+        $mini = fn (BudgetLine $l) => [
+            'id' => $l->id, 'line_no' => $l->line_no, 'description' => $l->description, 'annual_amount' => (string) $l->annual_amount, 'base_annual_amount' => (string) $l->base_annual_amount,
+            'original_base' => bcadd((string) $l->base_annual_amount, '0', 2), 'adjustments_base' => $adjBase($l),
+            'current_base' => bcadd((string) $l->base_annual_amount, $adjBase($l), 2),
+        ];
+        $origPeriods = fn (BudgetLine $l) => BudgetLinePeriod::withoutGlobalScopes()->where('budget_line_id', $l->id)->pluck('base_amount', 'period_id')->map(fn ($v) => (string) $v)->all();
+        $watch = ['description', 'cost_pool_id', 'tower_id', 'category_id', 'is_capex', 'priority', 'rgt', 'currency', 'phasing_method', 'vendor_id'];
+        $capexCurrent = ['a' => '0', 'b' => '0'];
+        $opexCurrent = ['a' => '0', 'b' => '0'];
+        $revisionTotal = '0';
+        $tally = function (string $side, BudgetLine $l, array $mini) use (&$capexCurrent, &$opexCurrent) {
+            if ($l->is_capex) {
+                $capexCurrent[$side] = bcadd($capexCurrent[$side], $mini['current_base'], 2);
+            } else {
+                $opexCurrent[$side] = bcadd($opexCurrent[$side], $mini['current_base'], 2);
+            }
+        };
+        foreach ($aLines as $al) {
+            $tally('a', $al, $mini($al));
+        }
 
         foreach ($bLines as $bl) {
-            $al = $aLines->firstWhere('id', $bl->source_line_id) ?? $aLines->first(fn ($x) => ! isset($matched[$x->id]) && (int) $x->line_no === (int) $bl->line_no && $bl->source_line_id === null);
+            $aid = $ancestor($bl);
+            $al = $aid ? $aLines->firstWhere('id', $aid) : null;
+            $al ??= $aLines->first(fn ($x) => ! isset($matched[$x->id]) && (int) $x->line_no === (int) $bl->line_no && $bl->source_line_id === null);
             if ($al) {
                 $matched[$al->id] = true;
             }
+            $bm = $mini($bl);
+            $tally('b', $bl, $bm);
+            $am = $al ? $mini($al) : null;
             $fields = [];
             if ($al) {
                 foreach ($watch as $f) {
+                    if ($f === 'phasing_method' && $bl->phasing_method === 'custom' && bccomp($adjBase($al), '0', 2) !== 0) {
+                        continue; // cloneLine re-phases a line it folded adjustments into; that is not an edit
+                    }
                     if ((string) $al->{$f} !== (string) $bl->{$f}) {
                         $fields[$f] = [$al->{$f}, $bl->{$f}];
                     }
                 }
+                // Amounts compare against what the older line stood at after virements and top-ups, not its original.
+                $aAnnual = bcadd((string) $al->annual_amount, $adjLine($al), 2);
+                if (bccomp($aAnnual, (string) $bl->annual_amount, 2) !== 0) {
+                    $fields['annual_amount'] = [$aAnnual, (string) $bl->annual_amount];
+                }
+                if (bccomp($am['current_base'], $bm['original_base'], 2) !== 0) {
+                    $fields['base_annual_amount'] = [$am['current_base'], $bm['original_base']];
+                }
             }
-            $pa = $periodMap($al);
-            $pb = $periodMap($bl);
+            $aCur = $al ? $this->ledger->currentByPeriod($al) : [];
+            $pb = $origPeriods($bl);
             $pd = [];
             foreach ($periods as $p) {
-                $d = bcsub($pb[$p->id] ?? '0', $pa[$p->id] ?? '0', 2);
+                $d = bcsub($pb[$p->id] ?? '0', $aCur[$p->id] ?? '0', 2);
                 if (bccomp($d, '0', 2) !== 0) {
                     $pd[$p->id] = $d;
                 }
             }
+            $revision = bcsub($bm['original_base'], $am['current_base'] ?? '0', 2);
+            $revisionTotal = bcadd($revisionTotal, $revision, 2);
             $rows[] = [
-                'key' => $bl->id, 'change' => ! $al ? 'added' : ($fields || $pd ? 'changed' : 'unchanged'), 'a' => $al ? $mini($al) : null, 'b' => $mini($bl), 'fields' => $fields,
-                'base_delta' => bcsub((string) $bl->base_annual_amount, $al ? (string) $al->base_annual_amount : '0', 2), 'periods' => $pd,
+                'key' => $bl->id, 'change' => ! $al ? 'added' : ($fields || bccomp($revision, '0', 2) !== 0 || $pd ? 'changed' : 'unchanged'), 'a' => $am, 'b' => $bm, 'fields' => $fields,
+                'revision_delta' => $revision, 'current_delta' => bcsub($bm['current_base'], $am['current_base'] ?? '0', 2),
+                'base_delta' => $revision, 'periods' => $pd,
             ];
         }
         foreach ($aLines as $al) {
             if (! isset($matched[$al->id])) {
-                $pa = $periodMap($al);
-                $rows[] = ['key' => 'a'.$al->id, 'change' => 'removed', 'a' => $mini($al), 'b' => null, 'fields' => [],
-                    'base_delta' => bcsub('0', (string) $al->base_annual_amount, 2), 'periods' => collect($pa)->map(fn ($v) => bcsub('0', $v, 2))->all()];
+                $am = $mini($al);
+                $revision = bcsub('0', $am['current_base'], 2);
+                $revisionTotal = bcadd($revisionTotal, $revision, 2);
+                $rows[] = ['key' => 'a'.$al->id, 'change' => 'removed', 'a' => $am, 'b' => null, 'fields' => [],
+                    'revision_delta' => $revision, 'current_delta' => $revision, 'base_delta' => $revision,
+                    'periods' => collect($this->ledger->currentByPeriod($al))->map(fn ($v) => bcsub('0', $v, 2))->filter(fn ($v) => bccomp($v, '0', 2) !== 0)->all()];
             }
         }
         $head = fn (Budget $x) => ['id' => $x->id, 'version_no' => $x->version_no, 'status' => $x->status, 'total_base_amount' => (string) $x->total_base_amount];
+        $adjTotal = fn ($lines) => $lines->reduce(fn ($c, $l) => bcadd($c, $adjBase($l), 2), '0');
+        $adjA = $adjTotal($aLines);
+        $adjB = $adjTotal($bLines);
+        $curA = bcadd((string) $a->total_base_amount, $adjA, 2);
+        $curB = bcadd((string) $b->total_base_amount, $adjB, 2);
 
         return [
             'a' => $head($a), 'b' => $head($b),
             'totals' => [
-                'capex_delta' => bcsub((string) $b->total_capex, (string) $a->total_capex, 2),
-                'opex_delta' => bcsub((string) $b->total_opex, (string) $a->total_opex, 2),
-                'base_delta' => bcsub((string) $b->total_base_amount, (string) $a->total_base_amount, 2),
+                'original_delta' => bcsub((string) $b->total_base_amount, (string) $a->total_base_amount, 2),
+                'adjustments' => ['a' => $adjA, 'b' => $adjB],
+                'revision_delta' => $revisionTotal, 'base_delta' => $revisionTotal,
+                'current_delta' => bcsub($curB, $curA, 2),
+                'capex_delta' => bcsub($capexCurrent['b'], $capexCurrent['a'], 2),
+                'opex_delta' => bcsub($opexCurrent['b'], $opexCurrent['a'], 2),
             ],
             'lines' => $rows,
         ];

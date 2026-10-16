@@ -61,11 +61,25 @@ return [
     'phasing' => ['seasonal' => [6, 7, 8, 8, 8, 8, 8, 8, 9, 9, 10, 11]], // weights by period sequence 1..12
     'transfers' => ['allow_capex_opex' => false],
     // Tables that hold money; the base currency is frozen once any has a row (P3+ append).
-    'money_tables' => ['fin_budget_lines', 'fin_budget_transfers', 'fin_supplementary_requests'],
+    'money_tables' => ['fin_budget_lines', 'fin_budget_transfers', 'fin_supplementary_requests', 'fin_contracts', 'fin_contract_renewals'],
     'workbook' => ['max_rows' => 2000, 'max_kb' => 4096],
     'approval_defaults' => [ // base-currency thresholds that FinancePolicySeeder maps onto each bank's bands
         'budget_md_ceo_from' => 250000000,
         'supplementary_cio_from' => 50000000,
         'transfer_cio_from' => 50000000,
+        'renewal_cfo_from' => 10000000, 'renewal_cfo_uplift_pct' => 10, // a contract renewal also needs the CFO above either threshold (plan C50)
+    ],
+
+    // P2 contracts, subscriptions, renewals and calendar (ATH-FIN-001 §3.6, §5.4)
+    'timezone' => 'Africa/Lagos', // "today" for status derivation, sweeps, the digest hour and the calendar (the app runs on UTC)
+    'contracts' => [
+        'default_notice_period_days' => 90, // FIN-01.09 default; no fin_settings column yet (plan C57)
+        'catch_up_days' => 3, // T-minus tolerance for a missed sweep (plan C60)
+        'escalation_days_before_notice' => 7,
+        'terminate_backdate_days' => 30, // an early termination may be dated at most this many days back
+        'escalation_job_titles' => ['Chief Information Officer', 'Chief Financial Officer'],
+        'finance_roles' => ['IT Finance Controller'],
+        'calendar' => ['ics_past_days' => 90, 'ics_future_days' => 548, 'max_range_days' => 400],
+        'document_max_kb' => 20480,
     ],
 ];

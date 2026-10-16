@@ -12,6 +12,7 @@ use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetTransfer;
 use App\Models\Finance\Category;
 use App\Models\Finance\CostCentre;
+use App\Models\Finance\Renewal;
 use App\Models\Finance\SupplementaryRequest;
 use App\Models\Policy;
 use App\Models\PolicyException;
@@ -154,6 +155,27 @@ class ApprovalProcesses
             ],
             'default' => 'One approval by anyone with "approve it-finance" other than the requester.',
         ],
+        'finance.contract_renewal' => [
+            'module' => 'IT Financial Management', 'label' => 'Contract renewal decision', 'engine' => 'generic', 'owner_cannot_approve' => true,
+            'description' => 'A renewal recommendation (renew, renegotiate, replace, terminate, extend) is approved before the next term is created (FIN-06.05).',
+            'permission' => 'approve it-finance-contracts', 'view_permission' => 'view it-finance', 'model' => Renewal::class, 'initiator' => 'requested_by_id', 'owner' => 'contract_owner_id',
+            'title' => ['renewal_code', 'contract_label'], 'route' => 'finance.renewals.show', 'initiate' => 'Submitting a renewal recommendation',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA, proposed value)', 'values' => 'finance.doa_bands'],
+                'decision' => ['label' => 'Recommendation', 'values' => ['renew_as_is' => 'Renew as is', 'renew_renegotiated' => 'Renew (renegotiated)', 'replace' => 'Replace', 'terminate' => 'Terminate', 'extend_short_term' => 'Short-term extension']],
+                'contract_type' => ['label' => 'Contract type', 'values' => self::CONTRACT_TYPE_LABELS],
+                'uplift_band' => ['label' => 'Price uplift', 'values' => ['decrease' => 'Decrease or flat', '0-5' => 'Up to 5 %', '5-10' => '5 % to 10 %', '10+' => 'Above 10 %']],
+                'requires_cfo' => ['label' => 'Needs CFO (high value or uplift above threshold)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance-contracts" other than the requester and the contract owner.',
+        ],
+    ];
+
+    /** @var array<string,string> Contract::TYPES humanised, for the renewal process's contract_type condition. */
+    public const CONTRACT_TYPE_LABELS = [
+        'licence' => 'Licence', 'subscription' => 'Subscription', 'saas' => 'SaaS', 'support_maintenance' => 'Support and maintenance',
+        'managed_service' => 'Managed service', 'professional_services' => 'Professional services', 'lease' => 'Lease', 'telecom' => 'Telecom',
+        'cloud_commitment' => 'Cloud commitment', 'hardware_warranty' => 'Hardware warranty', 'other' => 'Other',
     ];
 
     public const APPROVER_TYPES = [

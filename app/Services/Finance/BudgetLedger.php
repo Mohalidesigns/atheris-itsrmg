@@ -26,6 +26,20 @@ class BudgetLedger
         return $out;
     }
 
+    /** @return array<int, string> period_id => current amount in the line's own currency (period amount + adjustment amount) */
+    public function currentByPeriodLine(BudgetLine $line): array
+    {
+        $out = [];
+        foreach (BudgetLinePeriod::withoutGlobalScopes()->where('budget_line_id', $line->id)->get() as $p) {
+            $out[$p->period_id] = bcadd((string) $p->amount, '0', 2);
+        }
+        foreach (BudgetAdjustment::withoutGlobalScopes()->where('budget_line_id', $line->id)->get() as $a) {
+            $out[$a->period_id] = bcadd($out[$a->period_id] ?? '0', (string) $a->amount, 2);
+        }
+
+        return $out;
+    }
+
     /** Current base amount available in a period, or the whole year. P3 subtracts committed and actual here. */
     public function available(BudgetLine $line, ?Period $period = null): string
     {
@@ -60,10 +74,10 @@ class BudgetLedger
         return bcadd($sum, '0', 2);
     }
 
-    public function post(BudgetLine $line, Period $period, string $baseAmount, string $sourceType, int $sourceId, User $by): BudgetAdjustment
+    public function post(BudgetLine $line, Period $period, string $baseAmount, string $sourceType, int $sourceId, User $by, ?string $lineAmount = null): BudgetAdjustment
     {
         $rate = (string) $line->fx_rate;
-        $amount = bccomp($rate, '0', 8) > 0 ? app(BudgetPhasing::class)->round(bcdiv($baseAmount, $rate, 12), 2) : $baseAmount;
+        $amount = $lineAmount ?? (bccomp($rate, '0', 8) > 0 ? app(BudgetPhasing::class)->round(bcdiv($baseAmount, $rate, 12), 2) : $baseAmount);
 
         return BudgetAdjustment::withoutGlobalScopes()->create([
             'organization_id' => $line->organization_id, 'created_by_id' => $by->id, 'budget_line_id' => $line->id, 'period_id' => $period->id,

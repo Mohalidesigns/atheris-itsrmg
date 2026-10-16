@@ -8,6 +8,7 @@ const GROUPS = [
         ['email_compliance_deadlines', 'Compliance deadlines', 'Upcoming assessment deadlines'],
         ['email_incidents', 'Incident reports', 'Security incidents reported'],
         ['email_weekly_digest', 'Weekly digest', 'Weekly summary of GRC activity'],
+        ['finance_daily_digest', 'IT Finance daily digest', 'Renewals due in 30 days and approvals waiting for you'],
     ]],
     ['In-app', [
         ['inapp_task_assignments', 'Task assignments', 'Tasks assigned to you'],

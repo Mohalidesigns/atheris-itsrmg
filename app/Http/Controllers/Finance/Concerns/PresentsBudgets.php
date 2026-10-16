@@ -10,6 +10,7 @@ use App\Models\Finance\BudgetAdjustment;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetLinePeriod;
 use App\Models\Finance\Category;
+use App\Models\Finance\Contract;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\Currency;
 use App\Models\Finance\Driver;
@@ -34,8 +35,9 @@ trait PresentsBudgets
     }
 
     /** @return array<string,mixed> */
-    protected function budgetSummary(Budget $b): array
+    protected function budgetSummary(Budget $b, ?array $adjustmentsByBudget = null): array
     {
+        $adj = $adjustmentsByBudget !== null ? ($adjustmentsByBudget[$b->id] ?? '0.00') : $this->adjustmentsByBudget([$b->id])[$b->id] ?? '0.00';
         $b->loadMissing(['fiscalYear:id,year_label', 'cycle', 'costCentre:id,code,name', 'legalEntity:id,code,name', 'owner:id,name']);
 
         return [
@@ -47,10 +49,28 @@ trait PresentsBudgets
             'legal_entity' => $b->legalEntity ? ['id' => $b->legalEntity->id, 'code' => $b->legalEntity->code, 'name' => $b->legalEntity->name] : null,
             'owner' => $this->userMini($b->owner),
             'total_capex' => (string) $b->total_capex, 'total_opex' => (string) $b->total_opex, 'total_base_amount' => (string) $b->total_base_amount,
+            'adjustments_base' => $adj, 'current_base_amount' => bcadd((string) $b->total_base_amount, $adj, 2),
             'amount_band' => $b->amount_band, 'amount_band_label' => $b->amount_band_label,
             'submitted_at' => $b->submitted_at?->toIso8601String(), 'approved_at' => $b->approved_at?->toIso8601String(), 'baselined_at' => $b->baselined_at?->toIso8601String(),
             'is_locked' => $b->is_locked, 'updated_at' => $b->updated_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Sum of applied adjustments (base currency) per budget, in one grouped query.
+     *
+     * @param  array<int, int>  $budgetIds
+     * @return array<int, string> budget_id => adjustments_base
+     */
+    protected function adjustmentsByBudget(array $budgetIds): array
+    {
+        if (! $budgetIds) {
+            return [];
+        }
+        $rows = BudgetAdjustment::query()->join('fin_budget_lines as l', 'l.id', '=', 'fin_budget_adjustments.budget_line_id')
+            ->whereIn('l.budget_id', $budgetIds)->selectRaw('l.budget_id as budget_id, sum(fin_budget_adjustments.base_amount) as total')->groupBy('l.budget_id')->get();
+
+        return $rows->mapWithKeys(fn ($r) => [(int) $r->budget_id => bcadd((string) $r->total, '0', 2)])->all();
     }
 
     /** @return Collection<int, Period> */
@@ -76,14 +96,17 @@ trait PresentsBudgets
         $ids = $lines->pluck('id');
         $periods = BudgetLinePeriod::query()->whereIn('budget_line_id', $ids)->get()->groupBy('budget_line_id');
         $adj = BudgetAdjustment::query()->whereIn('budget_line_id', $ids)->selectRaw('budget_line_id, sum(base_amount) as total')->groupBy('budget_line_id')->pluck('total', 'budget_line_id');
+        $adjPeriods = BudgetAdjustment::query()->whereIn('budget_line_id', $ids)->selectRaw('budget_line_id, period_id, sum(base_amount) as total')
+            ->groupBy('budget_line_id', 'period_id')->get()->groupBy('budget_line_id');
         $cats = Category::query()->whereIn('id', $lines->pluck('cost_pool_id')->merge($lines->pluck('tower_id'))->merge($lines->pluck('category_id'))->filter()->unique())->get()->keyBy('id');
         $gls = GlAccount::query()->whereIn('id', $lines->pluck('gl_account_id')->filter()->unique())->get()->keyBy('id');
         $vendors = Vendor::query()->whereIn('id', $lines->pluck('vendor_id')->filter()->unique())->get()->keyBy('id');
         $label = fn ($c) => $c ? $c->code.' '.$c->name : null;
 
-        return $lines->map(function (BudgetLine $l) use ($periods, $adj, $cats, $gls, $vendors, $overIds, $label) {
+        return $lines->map(function (BudgetLine $l) use ($periods, $adj, $adjPeriods, $cats, $gls, $vendors, $overIds, $label) {
             $rows = $periods->get($l->id, collect());
             $adjBase = bcadd((string) ($adj[$l->id] ?? '0'), '0', 2);
+            $adjByPeriod = ($adjPeriods->get($l->id) ?? collect())->mapWithKeys(fn ($r) => [$r->period_id => (string) $r->total]);
             $py = $l->py_budget === null ? null : (string) $l->py_budget;
 
             return [
@@ -99,6 +122,7 @@ trait PresentsBudgets
                 'annual_amount' => (string) $l->annual_amount, 'base_annual_amount' => (string) $l->base_annual_amount, 'phasing_method' => $l->phasing_method,
                 'amounts' => $rows->mapWithKeys(fn ($p) => [$p->period_id => (string) $p->amount])->all(),
                 'base_amounts' => $rows->mapWithKeys(fn ($p) => [$p->period_id => (string) $p->base_amount])->all(),
+                'current_base_amounts' => $rows->mapWithKeys(fn ($p) => [$p->period_id => bcadd((string) $p->base_amount, (string) ($adjByPeriod[$p->period_id] ?? '0'), 2)])->all(),
                 'justification' => $l->justification,
                 'variance_amber_pct' => $l->variance_amber_pct === null ? null : (string) $l->variance_amber_pct,
                 'variance_red_pct' => $l->variance_red_pct === null ? null : (string) $l->variance_red_pct,
@@ -122,16 +146,20 @@ trait PresentsBudgets
     {
         $sum = fn (array $vals) => array_reduce($vals, fn ($c, $v) => bcadd($c, (string) $v, 2), '0');
         $byPeriod = [];
+        $byPeriodOriginal = [];
         $byPriority = [];
         $byRgt = [];
         $py = '0';
         $hasPy = false;
         foreach ($lines as $l) {
             foreach ($l['base_amounts'] as $pid => $v) {
+                $byPeriodOriginal[$pid] = bcadd($byPeriodOriginal[$pid] ?? '0', $v, 2);
+            }
+            foreach ($l['current_base_amounts'] as $pid => $v) {
                 $byPeriod[$pid] = bcadd($byPeriod[$pid] ?? '0', $v, 2);
             }
-            $byPriority[$l['priority']] = bcadd($byPriority[$l['priority']] ?? '0', $l['base_annual_amount'], 2);
-            $byRgt[$l['rgt']] = bcadd($byRgt[$l['rgt']] ?? '0', $l['base_annual_amount'], 2);
+            $byPriority[$l['priority']] = bcadd($byPriority[$l['priority']] ?? '0', $l['current_base_amount'], 2);
+            $byRgt[$l['rgt']] = bcadd($byRgt[$l['rgt']] ?? '0', $l['current_base_amount'], 2);
             if ($l['py_budget'] !== null) {
                 $hasPy = true;
                 $py = bcadd($py, $l['py_budget'], 2);
@@ -140,11 +168,14 @@ trait PresentsBudgets
         $capex = $sum(array_column(array_filter($lines, fn ($l) => $l['is_capex']), 'base_annual_amount'));
         $opex = $sum(array_column(array_filter($lines, fn ($l) => ! $l['is_capex']), 'base_annual_amount'));
         $base = bcadd($capex, $opex, 2);
+        $capexCurrent = $sum(array_column(array_filter($lines, fn ($l) => $l['is_capex']), 'current_base_amount'));
+        $opexCurrent = $sum(array_column(array_filter($lines, fn ($l) => ! $l['is_capex']), 'current_base_amount'));
 
         return [
             'capex' => $capex, 'opex' => $opex, 'base' => $base, 'py_budget' => $hasPy ? $py : null,
             'yoy_pct' => $hasPy && bccomp($py, '0', 2) !== 0 ? bcmul(bcdiv(bcsub($base, $py, 6), $py, 8), '100', 2) : null,
             'adjustments_base' => $sum(array_column($lines, 'adjustments_base')), 'current_base' => $sum(array_column($lines, 'current_base_amount')),
+            'capex_current' => $capexCurrent, 'opex_current' => $opexCurrent, 'by_period_original' => $byPeriodOriginal,
             'by_period' => $byPeriod, 'by_priority' => $byPriority, 'by_rgt' => $byRgt,
         ];
     }
@@ -168,7 +199,9 @@ trait PresentsBudgets
             'drivers' => Driver::query()->where('is_active', true)->orderBy('code')->get()->map(fn ($d) => ['id' => $d->id, 'code' => $d->code, 'name' => $d->name, 'unit' => $d->unit])->values()->all(),
             'currencies' => Currency::query()->where('is_active', true)->orderByDesc('is_base')->orderBy('code')->get()->map(fn ($c) => ['code' => $c->code, 'decimals' => $c->decimals, 'is_base' => $c->is_base])->values()->all(),
             'legalEntities' => LegalEntity::query()->orderBy('code')->get(['id', 'code', 'name'])->map(fn ($e) => ['id' => $e->id, 'code' => $e->code, 'name' => $e->name])->values()->all(),
-            'contracts' => [], 'investments' => [],
+            'contracts' => Contract::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', array_merge(['draft'], Contract::LIVE))
+                ->orderBy('contract_code')->get(['id', 'contract_code', 'title'])->map(fn ($c) => ['id' => $c->id, 'contract_code' => $c->contract_code, 'title' => $c->title])->values()->all(),
+            'investments' => [],
             'priorities' => BudgetLine::PRIORITIES, 'rgt' => BudgetLine::RGT, 'phasingMethods' => BudgetLine::PHASING, 'fxRateTypes' => FxRate::RATE_TYPES,
         ];
     }
@@ -197,10 +230,12 @@ trait PresentsBudgets
         'total_capex', 'total_opex', 'total_base_amount', 'annual_amount', 'base_annual_amount', 'unit_cost', 'py_budget', 'py_actual', 'yoy_pct',
         'adjustments_base', 'current_base_amount', 'capex', 'opex', 'base', 'current_base', 'capex_ceiling', 'opex_ceiling', 'capex_requested',
         'opex_requested', 'capex_pct', 'opex_pct', 'amount', 'base_amount', 'total_base', 'requested_base', 'ceiling_total', 'total_baseline_base',
-        'total_in_flight_base', 'applied_base', 'capex_delta', 'opex_delta', 'base_delta', 'amount_band', 'amount_band_label', 'driver_rate',
+        'total_in_flight_base', 'applied_base', 'capex_delta', 'opex_delta', 'base_delta',
+        'total_baseline_adjustments_base', 'total_baseline_current_base', 'capex_current', 'opex_current',
+        'original_delta', 'revision_delta', 'current_delta', 'original_base', 'amount_band', 'amount_band_label', 'driver_rate',
     ];
 
-    private const MONEY_MAPS = ['amounts', 'base_amounts', 'by_period', 'by_priority', 'by_rgt', 'available_by_period'];
+    private const MONEY_MAPS = ['amounts', 'base_amounts', 'by_period', 'by_priority', 'by_rgt', 'available_by_period', 'current_base_amounts', 'by_period_original', 'adjustments'];
 
     /** Renders a budget page; without `view it-finance-amounts` every amount is removed server-side. */
     protected function renderMasked(string $component, array $props)

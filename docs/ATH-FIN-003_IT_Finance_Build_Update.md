@@ -197,3 +197,114 @@ Both reviews were run on Opus. The first verdict from each was no-go.
 ### Review verdicts
 - Security (Opus): NO-GO on H1. H1 is fixed, plus M1, M2 and M4, so the branch is GO.
 - Domain (Opus): NO-GO on H1–H5. All five are fixed with regression tests, which clears the no-go. M1–M4 must land before P3.
+
+## Phase P2 — Contracts, subscriptions, renewals & calendar (2026-10-16, branch `feature/it-finance-p2`)
+
+Plan: [docs/build/ATH-FIN-PLAN-p2.md](build/ATH-FIN-PLAN-p2.md), work packages WP-A to WP-E. Spec FIN-06 (contracts, renewals, T-minus notifications) and FIN-07 (unified finance calendar). The phase also lands the P1 domain-review items M1, M3 and M4, which had to land before P3, plus D5.
+
+### Shipped
+- **Schema:** 3 migrations, `2027_02_10_000001` to `000003`.
+  - Contracts, team, links, documents, events, renewals and calendar feeds.
+  - An idempotency key on `fin_notification_logs`, with a unique index.
+  - The `approve it-finance-contracts` grant on existing databases.
+- **Models:** `Contract`, `ContractTeamMember`, `ContractLink`, `ContractDocument`, `ContractEvent` (immutable), `Renewal`, `CalendarFeed`.
+- **Services:**
+  - ContractService, RenewalService (open → recommend → submit → approve/reject → execute), ContractStatusDeriver (pure).
+  - `FinanceClock`, a testable "today".
+  - ContractSweeper (roll, derive, T-minus, escalation, passed) and FinanceCalendarService (events, timeline, passed, ICS, CSV and PDF).
+  - FinanceDigest.
+- **Workflow Studio:** a fourth finance process, `finance.contract_renewal`: Head of IT, then CFO when `requires_cfo` (C49/C50). There are now 15 processes in total.
+- **Notifications:** 5 new ones (renewal due, escalation, deadline passed, renewed, daily digest). They carry no amounts.
+- **Scheduled commands:**
+  - `fin:contracts-sweep`, daily at 06:30 Lagos time.
+  - `fin:digest`, hourly, sent at each bank's `digest_hour`.
+- **Routes:** 27 `finance.contracts.*`, `finance.renewals.*` and `finance.calendar.*` routes inside auth. Outside auth there is the signed `finance.calendar.ics` feed (C55), versioned per user and rotatable.
+- **UI:**
+  - Pages: `Finance/Contracts/{Index,Create,Show}`, `Finance/Renewals/{Index,Show}` and `Finance/Calendar` (month, quarter, year, timeline and passed views).
+  - About 20 components.
+  - Nav entries "Contracts & Renewals" and "Calendar".
+  - A digest toggle in Settings › Notifications.
+  - Contract picker on budget lines (D5).
+  - VersionsDiff shows original, adjustments and current amounts (M3).
+- **Demo data, `FinanceContractDemoSeeder`, both banks:**
+  - Kano has 31 contracts and First Bank 37, covering all eight statuses.
+  - 9 renewals per bank cover submitted, pending CFO, approved, executed and rejected.
+  - Seeded past T-minus logs (Q1).
+  - Gaps are kept deliberately: an unowned contract, over-licensing, a pending DPA and drafts.
+
+### Tests
+- New:
+  - `ContractBackendSmokeTest`, `ContractRenewalLifecycleTest` (16), `ContractNotificationSweepTest` (13), `CalendarTest` (12), `ContractWorkflowIntegrationTest` (6), `ContractReviewRegressionTest` (11), `BudgetDomainReviewRegressionTest`.
+  - The contract-estate check in `RouteSmokeTest`.
+  - The Playwright specs `finance-contract-renewal.spec.js` and `finance-calendar.spec.js`.
+- **Gate on PostgreSQL, after the review fixes:**
+  - Full suite: 535 tests, 8,044 assertions, OK. The 4 skipped are the opt-in smoke tests. It ran in 40 minutes.
+  - `migrate:fresh --seed` on scratch: clean.
+  - `SMOKE=1 RouteSmokeTest`: 4 tests, 2,999 assertions, OK.
+  - `npm run build`: OK.
+  - Pint: clean on the files touched.
+  - Playwright `finance-*.spec.js` on chromium-desktop: 4 of 4 pass.
+- **The first gate run** gave 46 errors. Most were contract classes, run while the review fixer was editing the same services. One was a real regression: `ReportsIntegrationsSettingsModuleTest` did not send the new `finance_daily_digest` preference.
+- **Changed after the full run** (re-run with `ContractReviewRegressionTest|WorkflowStudioModuleTest|FinanceWorkflowStudioTest`, 33 tests OK):
+  - The renewal process now declares `view_permission`.
+  - The Playwright renewal step follows the row's link by its href.
+
+### Fixes during the build
+- **Six forms never submitted.** In Inertia 2.3 `form.transform()` returns `undefined`, so chaining `.put()` or `.post()` onto it threw and no request was sent. The six were five new contract forms and the P0 `RenewalPolicyTab`. The calls are now split into two statements. `Pages/Ea/Surveys.jsx` has the same bug but is outside this module, so it is logged and not fixed.
+- **Missing props:** `currencies` added to `Contracts/Show` and `can.edit` to `Renewals/Index`.
+- **SupplementaryBudgetService** now calls `FinanceClock::today()` directly.
+- **The renewal approval trail returned 403 to everyone but Super Admin.** `WorkflowStudioController::trail` built the view permission from the approve permission, which gave `view it-finance-contracts`, and that permission doesn't exist. Process definitions can now set `view_permission`, and `finance.contract_renewal` uses `view it-finance`. A regression test covers it.
+
+### Review fixes applied
+Both reviews were run on Opus. The first verdict from each was no-go.
+- **Contract documents leaked through the evidence vault (security H1).** EvidenceController now hides Contract-subject evidence from the vault list, download, review and delete.
+- **Renewal window (domain H1).** The window opened on the notice-deadline day with the 90/90 defaults. It now opens at the notice deadline minus the lead days.
+- **Recommender could approve (domain H3, security M2).** `recommended_by_id` is now recorded. `sod_excluded_ids` (requester, recommender, opener and owner) is snapshotted into the approval context, and both ApprovalEngine and the default approver path enforce it.
+- **Owner swapped mid-approval (security M1, domain M2).** Material contract fields are frozen while a renewal is submitted or approved. Users who can't see amounts can no longer blank money fields through the masked form.
+- **Unilateral termination (domain H2, security M3), partial fix.** Termination now refuses the owner, the creator, and the requester or recommender of an open renewal. The date must fall between `commenced_on` (and today minus `terminate_backdate_days`, 30) and `ends_on`, and a reason is required. Routing termination through the full approval workflow is deferred.
+- **Reminders went silent after a date edit (domain H4).** The idempotency keys now include the target date. A date change resets `escalated_at` and `last_notified_offset` and records a `dates_changed` event.
+- **Execution could re-date the term (security M4, domain M3).** `commenced_on` must equal the approved start, and the proposed start can't overlap the old term.
+- **Cost-centre visibility (security M5).** `cost_centre_id` and `budget_line_id` are validated against the user's visible cost centres.
+- **Masking (security M6, domain L2).** `value_band`, `uplift_pct`, `uplift_band`, `requires_cfo` and `price_escalation_pct` are masked. The band filter and options are hidden from users who can't see amounts.
+- **CSV formula injection (security M7).** The calendar CSV now prefixes `'` on cells starting with `= + - @ \t \r`.
+- **Finance missing from T-minus recipients (domain M7).** Added, per FIN-06.04.
+
+### Deferred / logged (not fixed)
+- **P2.1, before UAT:**
+  - Early termination through a full approval workflow (domain H2 remainder).
+  - An approved but never-executed renewal goes silent (domain M1).
+  - Terminating an auto-renewing contract after its notice deadline is accepted as effective (domain M4).
+  - The CFO threshold is a hard-coded NGN config value; it should be per tenant (domain M5).
+  - Uplift mixes in FX movement (domain M6).
+- **Low:**
+  - Domain L1: `fixed_term` and `evergreen` have no distinct semantics.
+  - Domain L3: digest gaps. The passed count ignores lapsed contracts, and the digest tells users about approvals they cannot decide.
+  - Domain L4: no IFRS 16 lease indicator. Feed it to P3.
+  - Domain L5: documents are not encrypted at rest.
+  - Domain L6: the budget-line contract picker ignores visibility and terminal status.
+  - Domain L7: single-approver stages can deadlock with no fallback.
+  - Security L1: N+1 queries in the sweep and digest.
+  - Security L2: uploads keep the client's extension and MIME type.
+  - Security L3: ICS polling writes an activity row on every poll.
+  - Security L4: an `owner` stage type would let the owner approve.
+  - Security L5: contract amounts appear unmasked in the audit trail.
+  - `ComplianceController` evidence counts still include contract documents.
+- **Environment:**
+  - `php artisan serve` drops `DB_*` environment overrides. Serve Playwright runs against a non-default DB with `DB_CONNECTION=… DB_DATABASE=… SESSION_DRIVER=file CACHE_STORE=file php -S 127.0.0.1:8000 -t public`.
+  - One QA run hit the dev DB this way. It made logins only, which may have left session and cache rows.
+
+### Decisions
+| # | decision | reason |
+|---|---|---|
+| P2-1 | Accept C49: renewal stages are Head of IT, then CFO, with no owner stage | The owner is the maker; SoD |
+| P2-2 | Accept C50: `requires_cfo` is derived from value and uplift | Keeps the DoA in data, not in UI choices |
+| P2-3 | Accept C51: Finance Approver gets `approve it-finance-contracts` | The renewal decision sits with Finance |
+| P2-4 | Accept C55: signed `.ics` URLs with a per-user version and rotation | Calendar clients cannot send session auth |
+| P2-5 | Accept C52–C73 as plan §10 recommends | Architect's recommendations reviewed and accepted |
+| P2-6 | Q1 yes: seed past T-minus notification logs | The demo shows the reminder history |
+| P2-7 | Keep `approve it-finance-contracts` on IT Finance Controller and enforce exclusions instead (recommender, requester, opener, owner, creator for terminate) | Keeps the role useful at banks without configured stages, while closing the maker/checker gap |
+| P2-8 | Contract documents are reachable only through the finance route, never through the evidence vault | Signed contracts carry commercial terms; `view evidence` is too broad |
+
+### Review verdicts
+- Security (Opus): NO-GO on H1 and M1–M3. H1, M1, M2 and M4–M7 are fixed, and M3 is partly fixed: termination now has SoD, with the workflow deferred. The branch is GO.
+- Domain (Opus): NO-GO on H1–H4. H1, H3 and H4 are fixed with regression tests. H2 is fixed as far as SoD and date bounds go; the full approval workflow is deferred to P2.1. M2, M3 and M7 are fixed too.

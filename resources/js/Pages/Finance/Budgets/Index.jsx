@@ -50,7 +50,7 @@ export default function Index({ filters, budgets, summary, fiscalYears, cycles, 
                 <StatCard label="Budgets" value={summary.count} sublabel={`${summary.approved ?? 0} approved, ${summary.baseline ?? 0} baselined`} icon="account_balance_wallet" tint="bg-[#EAF0FB] text-[#1D4ED8]" />
                 <StatCard label="Drafts" value={summary.draft} sublabel="Still being planned" icon="edit_note" tint="bg-[#F0F1F4] text-[#43474E]" onClick={() => apply({ ...f, status: 'draft' })} />
                 <StatCard label="In approval" value={summary.in_approval} sublabel="Submitted or under review" icon="hourglass_top" tint="bg-[#FFF6E0] text-[#8A6400]" />
-                <StatCard label="Baseline total" value={fmt(summary.total_baseline_base)} sublabel="Locked baselines" icon="verified" tint="bg-[#E7F4EC] text-[#2D7D46]" />
+                <StatCard label="Baseline total" value={fmt(summary.total_baseline_current_base ?? summary.total_baseline_base)} sublabel={summary.total_baseline_current_base !== undefined && summary.total_baseline_current_base !== null ? `Current, after adjustments (original ${fmt(summary.total_baseline_base)})` : 'Locked baselines'} icon="verified" tint="bg-[#E7F4EC] text-[#2D7D46]" />
                 <StatCard label="In flight total" value={fmt(summary.total_in_flight_base)} sublabel="Draft to approved" icon="trending_up" tint="bg-[#F7F1E6] text-[#8A6A2E]" />
             </div>
 

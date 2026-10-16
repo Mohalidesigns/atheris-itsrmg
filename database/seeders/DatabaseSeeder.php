@@ -128,11 +128,18 @@ class DatabaseSeeder extends Seeder
         // revision, Workflow Studio default stages, transfers, supplementary requests, ceilings and next-year budgets
         $this->call(FinanceDemoSeeder::class);
 
+        // IT Financial Management P2 (contracts): the contract register of each bank with every status, a contract in every
+        // calendar lane, renewals in every stage with workflow approvals, team, links, documents and T-minus history
+        $this->call(FinanceContractDemoSeeder::class);
+
         // Asset Management: coherent owners and departments, provenance from real sandbox connector
         // runs and a CSV import, business services and dependency chains per bank, asset → service
         // links, inherited criticality, and First Bank's EA applications tied to their assets
         // (ATH-VAL-007; after EA stewardship, written without model events so seals are untouched)
         $this->call(AssetManagementDemoSeeder::class);
+
+        // IT Financial Management P2, second pass: First Bank's contracts link the business services created just above
+        $this->call(FinanceContractDemoSeeder::class);
 
         // Vendor Management: NDPA processor and CBN outsourcing facts, owners, computed tiers and
         // review clocks, Shared Directory links, six months of sandbox ratings and a triaged breach

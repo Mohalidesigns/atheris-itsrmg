@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 
 const blank = (dims, baseCurrency) => ({
     description: '', cost_pool_id: '', tower_id: '', category_id: '', gl_account_id: '', legal_entity_id: '', is_capex: false, is_recurring: true,
-    priority: dims.priorities[0] ?? 'committed', rgt: 'run', vendor_id: '', asset_id: '', ea_application_id: '', business_service_id: '', risk_id: '',
+    priority: dims.priorities[0] ?? 'committed', rgt: 'run', vendor_id: '', asset_id: '', ea_application_id: '', business_service_id: '', risk_id: '', contract_id: '',
     driver_id: '', driver_rate: '', quantity: '1', unit_cost: '', currency: baseCurrency, annual_amount: '', phasing_method: 'equal', justification: '',
     variance_amber_pct: '', variance_red_pct: '',
 });
@@ -109,6 +109,7 @@ export default function LineFormModal({ show, onClose, budget, line, dims, baseC
                     {dims.eaApplications.length > 0 && <Select label="Application" value={form.data.ea_application_id} onChange={set('ea_application_id')} options={pairs(dims.eaApplications, (c) => c.name)} error={e.ea_application_id} />}
                     {dims.businessServices.length > 0 && <Select label="Business service" value={form.data.business_service_id} onChange={set('business_service_id')} options={pairs(dims.businessServices, (c) => c.name)} error={e.business_service_id} />}
                     {dims.risks.length > 0 && <Select label="Risk" value={form.data.risk_id} onChange={set('risk_id')} options={pairs(dims.risks, (c) => c.title)} error={e.risk_id} />}
+                    {(dims.contracts ?? []).length > 0 && <Select label="Contract" value={form.data.contract_id} onChange={set('contract_id')} options={pairs(dims.contracts, (c) => `${c.contract_code} ${c.title}`)} error={e.contract_id} />}
                     <div><label className={LABEL}>Amber variance %</label><input type="number" step="any" min="0" value={form.data.variance_amber_pct} onChange={(ev) => set('variance_amber_pct')(ev.target.value)} className={FIELD} /><InputError message={e.variance_amber_pct} /></div>
                     <div><label className={LABEL}>Red variance %</label><input type="number" step="any" min="0" value={form.data.variance_red_pct} onChange={(ev) => set('variance_red_pct')(ev.target.value)} className={FIELD} /><InputError message={e.variance_red_pct} /></div>
                 </div>

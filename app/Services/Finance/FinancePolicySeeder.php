@@ -30,6 +30,10 @@ class FinancePolicySeeder
                 self::stage(20, 'CFO approval', 'job_title', 'Chief Financial Officer', 72),
                 self::stage(30, 'CIO approval', 'job_title', 'Chief Information Officer', 72, 'amount_band', self::bandsFrom($orgId, $cfg['supplementary_cio_from'])),
             ],
+            'finance.contract_renewal' => [
+                self::stage(10, 'Head of IT review', 'job_title', 'Head of IT', 72),
+                self::stage(20, 'CFO approval (high value or uplift)', 'job_title', 'Chief Financial Officer', 72, 'requires_cfo', ['yes']),
+            ],
         ];
 
         foreach ($plans as $process => $stages) {

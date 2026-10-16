@@ -34,7 +34,7 @@ class FinanceApprovals
     /** @return array<string, mixed> */
     public function snapshot(string $process, Model $subject): array
     {
-        $amount = (string) ($subject->base_amount ?? $subject->total_base_amount ?? '0');
+        $amount = method_exists($subject, 'approvalBaseAmount') ? (string) $subject->approvalBaseAmount() : (string) ($subject->base_amount ?? $subject->total_base_amount ?? '0');
         $band = $this->bands->bandFor((int) $subject->organization_id, $amount);
         $conditions = [];
         foreach (array_keys(ApprovalProcesses::get($process)['conditions'] ?? []) as $field) {
@@ -46,7 +46,7 @@ class FinanceApprovals
             'band' => ['label' => $band['label'], 'min' => $band['min'], 'max' => $band['max']],
             'doa_band_version_id' => $band['version_id'], 'doa_band_version_no' => $band['version_no'],
             'conditions' => $conditions,
-        ];
+        ] + (method_exists($subject, 'sodExcludedIds') ? ['sod_excluded_ids' => $subject->sodExcludedIds(), 'contract_owner_id' => $subject->contract_owner_id] : []);
     }
 
     /** Records the approval; a message means stages remain (the record stays in review), null means final. */
@@ -79,6 +79,12 @@ class FinanceApprovals
         event(new FinanceApprovalDecided($process, $subject, 'withdrawn', $actor, null));
     }
 
+    /** Cancels a pending request with no acting user (sweeps closing a contract renewal). */
+    public function cancelQuietly(string $process, Model $subject, string $reason): void
+    {
+        $this->engine->cancel($process, $subject, $reason);
+    }
+
     public function configured(string $process, int $orgId): bool
     {
         return $this->engine->workflow($orgId, $process) !== null;
@@ -99,28 +105,32 @@ class FinanceApprovals
      * which would leave nobody to enforce segregation of duties. For such a request apply the default rule,
      * and also exclude whoever created the record.
      */
-    public function assertZeroStepSoD(string $process, Model $subject, User $actor, string $initiatorAttr, ?string $ownerAttr = null): void
+    public function assertZeroStepSoD(string $process, Model $subject, User $actor, string $initiatorAttr, ?string $ownerAttr = null, string $permission = 'approve it-finance'): void
     {
         $request = ApprovalRequest::withoutGlobalScopes()->where('process', $process)->where('subject_type', $subject::class)
             ->where('subject_id', $subject->getKey())->latest('id')->withCount('steps')->first();
         if (! $request || $request->steps_count > 0) {
             return;
         }
-        $this->assertDefaultApprover($subject, $actor, $initiatorAttr, $ownerAttr);
+        $this->assertDefaultApprover($subject, $actor, $initiatorAttr, $ownerAttr, $permission);
         if ($subject->getAttribute('created_by_id') && (int) $subject->getAttribute('created_by_id') === (int) $actor->id) {
             throw ValidationException::withMessages(['approval' => 'You created this, so you cannot approve it (segregation of duties).']);
         }
     }
 
-    /** Unconfigured default: not the initiator, not the owner, and holding "approve it-finance". */
-    public function assertDefaultApprover(Model $subject, User $actor, string $initiatorAttr, ?string $ownerAttr = null): void
+    /** Unconfigured default: not the initiator, not the owner, and holding the process permission (default "approve it-finance"). */
+    public function assertDefaultApprover(Model $subject, User $actor, string $initiatorAttr, ?string $ownerAttr = null, string $permission = 'approve it-finance'): void
     {
         $fail = fn (string $m) => throw ValidationException::withMessages(['approval' => $m]);
         (int) $actor->organization_id === (int) $subject->organization_id || $fail('This record belongs to another bank.');
-        $actor->can('approve it-finance') || $fail('You need the "approve it-finance" permission to approve.');
+        $actor->can($permission) || $fail("You need the \"{$permission}\" permission to approve.");
         $subject->{$initiatorAttr} && (int) $subject->{$initiatorAttr} === (int) $actor->id
             && $fail('You submitted this, so you cannot approve it (segregation of duties).');
         $ownerAttr && $subject->{$ownerAttr} && (int) $subject->{$ownerAttr} === (int) $actor->id
-            && $fail('You own this budget, so you cannot be its sole approver (segregation of duties).');
+            && $fail($ownerAttr === 'owner_id'
+                ? 'You own this budget, so you cannot be its sole approver (segregation of duties).'
+                : 'You own this record, so you cannot approve it (segregation of duties).');
+        method_exists($subject, 'sodExcludedIds') && in_array((int) $actor->id, $subject->sodExcludedIds(), true)
+            && $fail('You took part in this record (owner, recommender, opener or requester), so you cannot approve it (segregation of duties).');
     }
 }

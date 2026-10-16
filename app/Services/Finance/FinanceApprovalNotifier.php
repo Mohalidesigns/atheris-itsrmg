@@ -24,6 +24,7 @@ class FinanceApprovalNotifier
         return match ($process) {
             'finance.budget_approval' => route('finance.budgets.show', [$subject->getKey(), 'tab' => 'approvals']),
             'finance.budget_transfer' => route('finance.transfers.index', ['highlight' => $subject->getKey()]),
+            'finance.contract_renewal' => route('finance.renewals.show', $subject),
             default => route('finance.supplementary.index', ['highlight' => $subject->getKey()]),
         };
     }
@@ -82,7 +83,7 @@ class FinanceApprovalNotifier
 
     private function amountText(Model $subject, ?ApprovalRequest $request): string
     {
-        $amount = $request?->context['base_amount'] ?? $subject->base_amount ?? $subject->total_base_amount ?? null;
+        $amount = $request?->context['base_amount'] ?? (method_exists($subject, 'approvalBaseAmount') ? $subject->approvalBaseAmount() : null) ?? $subject->base_amount ?? $subject->total_base_amount ?? null;
         if ($amount === null) {
             return 'amount n/a';
         }

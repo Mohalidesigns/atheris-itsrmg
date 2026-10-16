@@ -148,6 +148,8 @@ const navigation = [
         permission: 'view it-finance',
         children: [
             { name: 'Budgets', href: 'finance.budgets.index', permission: 'view it-finance' },
+            { name: 'Contracts & Renewals', href: 'finance.contracts.index', permission: 'view it-finance' },
+            { name: 'Calendar', href: 'finance.calendar', permission: 'view it-finance' },
             { name: 'Settings', href: 'finance.settings', permission: 'view it-finance' },
         ],
     },

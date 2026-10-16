@@ -36,6 +36,9 @@ class Budget extends Model
     /** The only columns that may change on a locked version (status moves, supersession, baseline bookkeeping). */
     public const LOCKED_WRITABLE = ['status', 'superseded_by_id', 'baseline_slot', 'baselined_at', 'baselined_by_id', 'updated_at'];
 
+    /** Legal status moves out of a locked status (FIN-07.06): a locked version never goes back to draft. */
+    public const LOCKED_STATUS_MOVES = ['approved' => ['baseline', 'revised'], 'baseline' => ['revised'], 'revised' => []];
+
     protected $table = 'fin_budgets';
 
     protected $guarded = [];
@@ -49,10 +52,34 @@ class Budget extends Model
     protected static function booted(): void
     {
         static::updating(function (Budget $b) {
-            if (in_array($b->getOriginal('status'), self::LOCKED, true)) {
-                $illegal = array_diff(array_keys($b->getDirty()), self::LOCKED_WRITABLE);
-                if ($illegal) {
-                    throw ValidationException::withMessages(['workflow' => "Version {$b->version_no} is {$b->getOriginal('status')} and immutable; create a revision."]);
+            $orig = $b->getOriginal('status');
+            if (in_array($orig, self::LOCKED, true)) {
+                $dirty = array_keys($b->getDirty());
+                if (array_diff($dirty, self::LOCKED_WRITABLE)) {
+                    throw ValidationException::withMessages(['workflow' => "Version {$b->version_no} is {$orig} and immutable; create a revision."]);
+                }
+                $new = $b->status;
+                $moved = in_array('status', $dirty, true);
+                if ($moved && ! in_array($new, self::LOCKED_STATUS_MOVES[$orig] ?? [], true)) {
+                    throw ValidationException::withMessages(['workflow' => "A {$orig} version cannot move to {$new}."]);
+                }
+                if ($moved && $new === 'revised' && ! $b->superseded_by_id) {
+                    throw ValidationException::withMessages(['workflow' => "A {$orig} version can only be revised by superseding it with a newer version."]);
+                }
+                $bad = null;
+                if (in_array('superseded_by_id', $dirty, true) && (! $moved || $new !== 'revised')) {
+                    $bad = 'superseded_by_id';
+                }
+                foreach (['baselined_at', 'baselined_by_id'] as $col) {
+                    if (in_array($col, $dirty, true) && (! $moved || $new !== 'baseline')) {
+                        $bad = $col;
+                    }
+                }
+                if (in_array('baseline_slot', $dirty, true) && ! ($moved && ($new === 'baseline' || ($new === 'revised' && $b->baseline_slot === null)))) {
+                    $bad = 'baseline_slot';
+                }
+                if ($bad) {
+                    throw ValidationException::withMessages(['workflow' => "Version {$b->version_no} is {$orig} and immutable; {$bad} cannot change here."]);
                 }
             }
         });

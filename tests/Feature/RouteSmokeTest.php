@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Http\Controllers\Finance\BudgetController;
 use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalWorkflow;
+use App\Models\Ea\BusinessService;
+use App\Models\Ea\EaApplication;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetAdjustment;
 use App\Models\Finance\BudgetComment;
@@ -13,19 +15,30 @@ use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetScenario;
 use App\Models\Finance\BudgetTarget;
 use App\Models\Finance\BudgetTransfer;
+use App\Models\Finance\Contract;
+use App\Models\Finance\ContractDocument;
+use App\Models\Finance\ContractEvent;
+use App\Models\Finance\ContractLink;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\FxRate;
+use App\Models\Finance\Renewal;
 use App\Models\Finance\Setting;
 use App\Models\Finance\SupplementaryRequest;
+use App\Models\Risk;
 use App\Models\User;
 use App\Policies\Finance\FinancePolicy;
 use App\Services\Approvals\ApprovalEngine;
 use App\Services\Finance\BudgetCycleService;
 use App\Services\Finance\BudgetService;
+use Carbon\Carbon;
 use Illuminate\Routing\Route as RouteDefinition;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Activitylog\Models\Activity;
 use Tests\TestCase;
@@ -93,7 +106,7 @@ class RouteSmokeTest extends TestCase
         }
 
         $urls = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && in_array('GET', $r->methods(), true) && ! str_contains($r->uri(), '{'))
+            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && $r->getName() !== 'finance.calendar.ics' && in_array('GET', $r->methods(), true) && ! str_contains($r->uri(), '{'))
             ->map(fn (RouteDefinition $r) => route($r->getName()))->values()->all();
         $this->assertNotEmpty($urls);
 
@@ -227,7 +240,7 @@ class RouteSmokeTest extends TestCase
                     $this->assertGreaterThan(0, $deciders->count(), "{$slug}: nobody can decide \"{$step->name}\" of {$request->subject_label}");
                 }
             }
-            $this->assertSame(3, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
+            $this->assertSame(4, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
 
             // DoA versions: the bank's own bands are active and each step is audited
             $active = DoaBandVersion::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'active')->firstOrFail();
@@ -264,5 +277,126 @@ class RouteSmokeTest extends TestCase
         $this->actingAs($acme)->get(route('finance.budgets.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('budgets', 0));
         $this->get(route('finance.transfers.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('transfers', 0));
         $this->get(route('finance.budgets.create'))->assertOk();
+    }
+
+    /**
+     * IT Financial Management P2 (plan §6.2): each demo bank's contract register is seeded with every status, a contract in
+     * every calendar lane and renewals in every stage; every page and tab renders; no pending approval step is stranded.
+     */
+    public function test_finance_contracts_estate_is_seeded_and_renders_for_every_demo_tenant(): void
+    {
+        if (env('SMOKE') !== '1') {
+            $this->markTestSkipped('Set SMOKE=1 and use a seeded database to run the route smoke test.');
+        }
+
+        $engine = app(ApprovalEngine::class);
+        foreach (['kano-heritage-bank' => 'admin@kanoheritage.ng', 'first-bank-nigeria' => 'admin@firstbanknigeria.ng'] as $slug => $email) {
+            $admin = User::where('email', $email)->firstOrFail();
+            $org = $admin->organization_id;
+            $this->actingAs($admin);
+            $contracts = Contract::withoutGlobalScopes()->where('organization_id', $org)->get();
+
+            // 25 to 40 contracts, every status, and the deliberate gaps
+            $this->assertGreaterThanOrEqual(25, $contracts->count(), "{$slug} contracts");
+            $this->assertLessThanOrEqual(40, $contracts->count(), "{$slug} contracts");
+            foreach (Contract::STATUSES as $status) {
+                $this->assertTrue($contracts->contains('status', $status), "{$slug} has a {$status} contract");
+            }
+            $this->assertTrue($contracts->contains(fn ($c) => $c->owner_id === null && ! $c->is_terminal), "{$slug} an unowned contract");
+            $this->assertTrue($contracts->contains(fn ($c) => $c->licence_position === 'over'), "{$slug} an over-licensed contract");
+            $this->assertTrue($contracts->contains(fn ($c) => $c->data_processing_role === 'processor' && $c->dpa_status === 'pending'), "{$slug} a pending DPA");
+            $this->assertTrue($contracts->contains(fn ($c) => $c->is_auto && $c->status === 'active'), "{$slug} an auto-renewing contract");
+            $this->assertTrue($contracts->contains(fn ($c) => $c->renewed_from_id && Renewal::withoutGlobalScopes()->where('new_contract_id', $c->id)->where('is_auto', true)->exists()), "{$slug} an auto-rolled contract");
+            $this->assertTrue($contracts->contains(fn ($c) => $c->status === 'in_renewal_window' && ! Renewal::withoutGlobalScopes()->where('contract_id', $c->id)->whereIn('status', Renewal::ACTIVE)->exists()), "{$slug} a window contract with no renewal yet");
+            $this->assertTrue($contracts->contains(fn ($c) => $c->status === 'in_renewal_window' && Renewal::withoutGlobalScopes()->where('contract_id', $c->id)->where('status', 'open')->whereNotNull('recommendation')->exists()), "{$slug} a window contract with a draft recommendation");
+            $spread = $contracts->map(fn ($c) => Carbon::parse($c->ends_on)->diffInDays(today(), false))->all();
+            $this->assertGreaterThanOrEqual(40, max($spread), 'ends in the past');
+            $this->assertLessThanOrEqual(-400, min($spread), 'ends far ahead');
+
+            // team of 2 to 4, links, documents with a hash and a stored file
+            foreach ($contracts as $c) {
+                $team = $c->team()->count();
+                $this->assertTrue($team >= 2 && $team <= 4, "{$slug} {$c->contract_code} team of {$team}");
+                $this->assertGreaterThanOrEqual(1, $c->links()->count(), "{$slug} {$c->contract_code} is linked");
+            }
+            $docs = ContractDocument::withoutGlobalScopes()->where('organization_id', $org)->get();
+            $this->assertGreaterThanOrEqual(3, $docs->count());
+            foreach ($docs as $d) {
+                $this->assertSame(64, strlen((string) $d->sha256));
+                $this->assertTrue(Storage::disk('local')->exists($d->evidence->file_path), "{$slug} document file {$d->evidence->file_path}");
+            }
+            if ($slug === 'first-bank-nigeria') {
+                $this->assertTrue(ContractLink::withoutGlobalScopes()->where('organization_id', $org)->where('linkable_type', EaApplication::class)->exists(), 'First Bank links EA applications');
+                $this->assertTrue(ContractLink::withoutGlobalScopes()->where('organization_id', $org)->where('linkable_type', BusinessService::class)->exists(), 'First Bank links business services');
+                $this->assertEqualsCanonicalizing(['GBP', 'GHS', 'NGN', 'USD'], $contracts->pluck('currency')->unique()->sort()->values()->all());
+            } else {
+                $this->assertTrue(ContractLink::withoutGlobalScopes()->where('organization_id', $org)->where('linkable_type', Risk::class)->exists(), 'Kano links risks');
+            }
+
+            // every page and every tab renders
+            $this->get(route('finance.contracts.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Contracts/Index')->has('contracts', $contracts->count()));
+            $this->get(route('finance.contracts.create'))->assertOk();
+            foreach (Contract::STATUSES as $status) {
+                $c = $contracts->firstWhere('status', $status);
+                foreach (['overview', 'team', 'links', 'documents', 'renewal', 'timeline', 'spend'] as $tab) {
+                    $this->get(route('finance.contracts.show', [$c, 'tab' => $tab]))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Contracts/Show')->where('tab', $tab));
+                }
+                $this->get(route('finance.contracts.edit', $c))->assertStatus(in_array($status, Contract::TERMINAL, true) ? 403 : 200); // renewed, terminated and replaced contracts are read-only
+            }
+            $renewals = Renewal::withoutGlobalScopes()->where('organization_id', $org)->get();
+            foreach (['open', 'submitted', 'approved', 'rejected', 'executed'] as $status) {
+                $this->assertTrue($renewals->contains('status', $status), "{$slug} a {$status} renewal");
+            }
+            $this->get(route('finance.renewals.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Renewals/Index')->has('renewals', $renewals->count()));
+            foreach ($renewals as $r) {
+                $this->get(route('finance.renewals.show', $r))->assertOk();
+            }
+            $doc = $docs->first();
+            $this->get(route('finance.contracts.documents.download', [$doc->contract_id, $doc->id]))->assertOk();
+            foreach (['month', 'quarter', 'year', 'timeline'] as $view) {
+                $this->get(route('finance.calendar', ['view' => $view]))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Calendar')->where('view', $view));
+            }
+
+            // Passed: at least one notice and one end entry, and every contract in it has no decision
+            $passed = collect($this->get(route('finance.calendar'))->viewData('page')['props']['passed']);
+            $this->assertTrue($passed->contains('which', 'notice'), "{$slug} a passed notice deadline");
+            $this->assertTrue($passed->contains('which', 'end'), "{$slug} a lapsed contract");
+            $this->assertTrue($passed->every(fn ($p) => Contract::withoutGlobalScopes()->find($p['id'])->decision === null));
+
+            // every pending renewal step has someone who can decide it
+            $pending = ApprovalRequest::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'finance.contract_renewal')->where('status', 'pending')->get();
+            $this->assertGreaterThanOrEqual(2, $pending->count(), "{$slug} pending renewals");
+            foreach ($pending as $request) {
+                $step = $request->currentStep();
+                $subject = $request->subject_type::withoutGlobalScopes()->find($request->subject_id);
+                $deciders = $engine->eligibleUsers($step, $request)->filter(fn (User $u) => $u->can('approve it-finance-contracts') && $engine->canDecide($step, $request, $subject, $u));
+                $this->assertGreaterThan(0, $deciders->count(), "{$slug}: nobody can decide \"{$step->name}\" of {$request->subject_label}");
+            }
+            $this->assertTrue($pending->contains(fn ($r) => $r->currentStep()->name === 'Head of IT review'), "{$slug} one waits at the Head of IT");
+            $this->assertTrue($pending->contains(fn ($r) => str_starts_with($r->currentStep()->name, 'CFO approval')), "{$slug} one waits at the CFO");
+
+            // T-minus history is seeded, and a sweep on a later day sends the next offset once
+            $this->assertTrue(ContractEvent::withoutGlobalScopes()->where('organization_id', $org)->where('type', 'notified')->exists());
+            $this->assertTrue(DB::table('fin_notification_logs')->where('organization_id', $org)->where('notification_key', 'like', 'renewal_due.end.%')->exists());
+            $target = $contracts->first(fn ($c) => str_contains($c->title, 'Globacom') || str_contains($c->title, 'Rack Centre'));
+            $day = Carbon::parse($target->ends_on)->subDays(90)->toDateString();
+            $before = DB::table('fin_notification_logs')->where('notifiable_id', $target->id)->where('notification_key', 'like', 'renewal_due.end.%')->where('offset_days', 90)->count();
+            Notification::fake();
+            DB::beginTransaction();
+            try {
+                Artisan::call('fin:contracts-sweep', ['--date' => $day]);
+                $after = DB::table('fin_notification_logs')->where('notifiable_id', $target->id)->where('notification_key', 'like', 'renewal_due.end.%')->where('offset_days', 90)->count();
+            } finally {
+                DB::rollBack();
+            }
+            $this->assertSame(0, $before);
+            $this->assertGreaterThan(0, $after, "{$slug}: the sweep on {$day} logs a renewal_due notice");
+        }
+
+        // a bank with no contracts renders empty pages, not errors
+        $acme = User::where('email', 'admin@acme.ng')->first();
+        $this->actingAs($acme)->get(route('finance.contracts.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('contracts', 0));
+        $this->get(route('finance.renewals.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('renewals', 0));
+        $this->get(route('finance.calendar'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('events', 0)->has('passed', 0));
     }
 }

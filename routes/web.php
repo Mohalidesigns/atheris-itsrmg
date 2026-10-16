@@ -40,11 +40,15 @@ use App\Http\Controllers\Finance\BudgetScenarioController;
 use App\Http\Controllers\Finance\BudgetTargetController;
 use App\Http\Controllers\Finance\BudgetTransferController;
 use App\Http\Controllers\Finance\BudgetWorkbookController;
+use App\Http\Controllers\Finance\ContractController;
+use App\Http\Controllers\Finance\ContractRelationsController;
 use App\Http\Controllers\Finance\DoaBandController;
+use App\Http\Controllers\Finance\FinanceCalendarController;
 use App\Http\Controllers\Finance\FinanceCurrencyController;
 use App\Http\Controllers\Finance\FinanceDimensionsController;
 use App\Http\Controllers\Finance\FinanceSettingsController;
 use App\Http\Controllers\Finance\FiscalCalendarController;
+use App\Http\Controllers\Finance\RenewalController;
 use App\Http\Controllers\Finance\SupplementaryRequestController;
 use App\Http\Controllers\GapController;
 use App\Http\Controllers\IdentityController;
@@ -796,6 +800,48 @@ Route::middleware('auth')->group(function () {
             Route::post('/doa-bands/{doaBandVersion}/reject', [DoaBandController::class, 'reject'])->whereNumber('doaBandVersion')->name('doa-bands.reject');
         });
 
+        // P2 contracts, subscriptions, renewals and calendar (ATH-FIN-001 §3.6, §9)
+        Route::middleware('permission:create it-finance')->group(function () {
+            Route::get('/contracts/create', [ContractController::class, 'create'])->name('contracts.create');
+            Route::post('/contracts', [ContractController::class, 'store'])->name('contracts.store');
+        });
+        Route::get('/contracts', [ContractController::class, 'index'])->name('contracts.index');
+        Route::scopeBindings()->group(function () {
+            Route::get('/contracts/{contract}', [ContractController::class, 'show'])->whereNumber('contract')->name('contracts.show');
+            Route::get('/contracts/{contract}/documents/{document}/download', [ContractRelationsController::class, 'documentDownload'])->whereNumber(['contract', 'document'])->name('contracts.documents.download');
+        });
+        Route::get('/renewals', [RenewalController::class, 'index'])->name('renewals.index');
+        Route::get('/renewals/{renewal}', [RenewalController::class, 'show'])->whereNumber('renewal')->name('renewals.show');
+        Route::get('/calendar', [FinanceCalendarController::class, 'index'])->name('calendar');
+        Route::post('/calendar/feed/rotate', [FinanceCalendarController::class, 'rotateFeed'])->name('calendar.feed.rotate');
+        Route::get('/calendar/export', [FinanceCalendarController::class, 'export'])->middleware('permission:export it-finance')->name('calendar.export');
+
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::get('/contracts/{contract}/edit', [ContractController::class, 'edit'])->whereNumber('contract')->name('contracts.edit');
+            Route::put('/contracts/{contract}', [ContractController::class, 'update'])->whereNumber('contract')->name('contracts.update');
+            Route::delete('/contracts/{contract}', [ContractController::class, 'destroy'])->whereNumber('contract')->name('contracts.destroy');
+            Route::post('/contracts/{contract}/activate', [ContractController::class, 'activate'])->whereNumber('contract')->name('contracts.activate');
+            Route::post('/contracts/{contract}/recompute', [ContractController::class, 'recompute'])->whereNumber('contract')->name('contracts.recompute');
+            Route::scopeBindings()->group(function () {
+                Route::post('/contracts/{contract}/team', [ContractRelationsController::class, 'teamStore'])->whereNumber('contract')->name('contracts.team.store');
+                Route::delete('/contracts/{contract}/team/{member}', [ContractRelationsController::class, 'teamDestroy'])->whereNumber(['contract', 'member'])->name('contracts.team.destroy');
+                Route::post('/contracts/{contract}/links', [ContractRelationsController::class, 'linkStore'])->whereNumber('contract')->name('contracts.links.store');
+                Route::delete('/contracts/{contract}/links/{link}', [ContractRelationsController::class, 'linkDestroy'])->whereNumber(['contract', 'link'])->name('contracts.links.destroy');
+                Route::post('/contracts/{contract}/documents', [ContractRelationsController::class, 'documentStore'])->whereNumber('contract')->name('contracts.documents.store');
+            });
+            Route::post('/contracts/{contract}/renewals', [RenewalController::class, 'open'])->whereNumber('contract')->name('renewals.open');
+            Route::put('/renewals/{renewal}', [RenewalController::class, 'recommend'])->whereNumber('renewal')->name('renewals.recommend');
+            foreach (['submit', 'withdraw', 'execute'] as $action) {
+                Route::post("/renewals/{renewal}/{$action}", [RenewalController::class, $action])->whereNumber('renewal')->name("renewals.{$action}");
+            }
+        });
+        Route::middleware('permission:approve it-finance-contracts')->group(function () {
+            foreach (['approve', 'reject'] as $action) {
+                Route::post("/renewals/{renewal}/{$action}", [RenewalController::class, $action])->whereNumber('renewal')->name("renewals.{$action}");
+            }
+            Route::post('/contracts/{contract}/terminate', [ContractController::class, 'terminate'])->whereNumber('contract')->name('contracts.terminate');
+        });
+
         Route::middleware('permission:close it-finance-periods')->group(function () {
             Route::post('/periods/{period}/close', [FiscalCalendarController::class, 'closePeriod'])->whereNumber('period')->name('periods.close');
             Route::post('/periods/{period}/lock', [FiscalCalendarController::class, 'lockPeriod'])->whereNumber('period')->name('periods.lock');
@@ -1276,6 +1322,10 @@ Route::middleware('auth')->group(function () {
  |      so a token holder cannot write arbitrary columns;
  |    · stops working once submitted, declined, or the campaign closes.
  |========================================================*/
+// IT Finance calendar feed: outside auth by design; signed per-user URL (plan C55), tenant resolved from the signed user in the controller.
+Route::get('/it-finance/calendar.ics', [FinanceCalendarController::class, 'ics'])
+    ->middleware(['signed', 'throttle:30,1'])->name('finance.calendar.ics');
+
 Route::prefix('ea/respond')->name('ea.portal.')->group(function () {
     Route::get('/{token}', [PortalController::class, 'respond'])->name('respond');
     Route::post('/{token}', [PortalController::class, 'submit'])->name('submit');

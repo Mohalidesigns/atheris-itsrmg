@@ -62,7 +62,10 @@ class SupplementaryBudgetService
         $this->assertBaselineFor($r);
 
         return DB::transaction(function () use ($r, $by) {
-            $r->forceFill(['status' => 'submitted', 'submitted_at' => now(), 'rejection_reason' => null])->save();
+            // Re-quote at submit so the DoA band snapshot uses today's planning rate, not the drafting-day rate (M1a).
+            $conv = $this->fx->convert((int) $r->organization_id, (string) $r->amount, (string) $r->currency, FinanceClock::today(), config('finance.fx.planning_rate_type'));
+            $r->forceFill(['fx_rate' => $conv['fx_rate'], 'fx_rate_type' => $conv['rate_type'], 'fx_rate_date' => $conv['rate_date'], 'base_amount' => $conv['base_amount'],
+                'status' => 'submitted', 'submitted_at' => now(), 'rejection_reason' => null])->save();
             $this->approvals->start(self::PROCESS, $r, $by);
             $this->audit($r, $by, 'submitted', "Supplementary request {$r->request_code} submitted", ['base_amount' => (string) $r->base_amount]);
 
@@ -148,7 +151,7 @@ class SupplementaryBudgetService
                     $line = $this->budgets->saveLine($budget, null, [
                         'description' => $r->title, 'cost_pool_id' => $r->cost_pool_id, 'tower_id' => $r->tower_id, 'category_id' => $r->category_id,
                         'is_capex' => (bool) $r->is_capex, 'priority' => 'regulatory', 'rgt' => 'run', 'annual_amount' => '0',
-                        'currency' => $this->settings->baseCurrency($orgId), 'phasing_method' => 'equal', 'origin' => 'supplementary',
+                        'currency' => $r->currency, 'phasing_method' => 'equal', 'origin' => 'supplementary',
                         'justification' => $r->justification,
                     ], $by);
                 } finally {
@@ -157,9 +160,11 @@ class SupplementaryBudgetService
                 $weights = array_fill(0, $open->count(), '1');
             }
             $spread = $this->phasing->spread((string) $r->base_amount, $weights, 2);
+            // Same currency as the line: book the exact request amount instead of base / line rate (M1b).
+            $lineSpread = $line->currency === $r->currency ? $this->phasing->spread((string) $r->amount, $weights, 2) : null;
             foreach ($open->values() as $i => $p) {
-                if (bccomp($spread[$i], '0', 2) !== 0) {
-                    $this->ledger->post($line, $p, $spread[$i], 'supplementary', $r->id, $by);
+                if (bccomp($spread[$i], '0', 2) !== 0 || ($lineSpread && bccomp($lineSpread[$i], '0', 2) !== 0)) {
+                    $this->ledger->post($line, $p, $spread[$i], 'supplementary', $r->id, $by, $lineSpread[$i] ?? null);
                 }
             }
             $r->forceFill(['status' => 'applied', 'applied_by_id' => $by->id, 'applied_at' => now(), 'resulting_line_id' => $line->id])->save();
@@ -208,7 +213,7 @@ class SupplementaryBudgetService
             $this->fail('The amount must be greater than 0 (up to 2 decimals).', 'amount');
         }
         $currency = strtoupper((string) ($d['currency'] ?? $this->settings->baseCurrency($orgId)));
-        $conv = $this->fx->convert($orgId, $amount, $currency, now(), 'spot');
+        $conv = $this->fx->convert($orgId, $amount, $currency, FinanceClock::today(), config('finance.fx.planning_rate_type'));
 
         return [
             'fiscal_year_id' => $fy->id, 'cost_centre_id' => $cc->id, 'cost_pool_id' => $d['cost_pool_id'], 'tower_id' => $d['tower_id'], 'category_id' => $d['category_id'],

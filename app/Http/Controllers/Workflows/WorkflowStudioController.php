@@ -241,7 +241,7 @@ class WorkflowStudioController extends Controller
         $data = $request->validate(['process' => ['required', Rule::in(array_keys(ApprovalProcesses::generic()))], 'id' => 'required|integer']);
         $def = ApprovalProcesses::get($data['process']);
         $subject = $def['model']::findOrFail($data['id']);
-        abort_unless($request->user()->can(str_replace('approve ', 'view ', $def['permission'])), 403);
+        abort_unless($request->user()->can($def['view_permission'] ?? str_replace('approve ', 'view ', $def['permission'])), 403);
 
         return response()->json($this->engine->trail($data['process'], $subject, $request->user()));
     }

@@ -23,14 +23,24 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 5. Fix only Critical and High findings. Log Medium and Low findings in ATH-FIN-003.
 6. At each milestone: commit, update the memory file `project_it_finance_build.md`, overwrite "Next session" below, then start a new session.
 
+## State (2026-10-16, P2 done)
+
+- P2 Contracts, renewals & calendar is committed on `feature/it-finance-p2` (branched from 723ffbd on P1). ATH-FIN-003 §P2 records what shipped, the review fixes, decisions P2-1 to P2-8 and what's deferred.
+- **P2.1 before UAT** (ATH-FIN-003 §P2 Deferred):
+  - Termination through a full approval workflow.
+  - An alert for approved but unexecuted renewals.
+  - Post-deadline termination of auto-renewing contracts.
+  - The per-tenant CFO threshold.
+  - Uplift computed excluding FX.
+- **Playwright against a non-default DB:** `php artisan serve` drops `DB_*` env overrides and falls back to `.env`, which is the dev DB. Serve instead with `PHP_CLI_SERVER_WORKERS=4 DB_CONNECTION=pgsql DB_DATABASE=it_security_risk_scratch SESSION_DRIVER=file CACHE_STORE=file QUEUE_CONNECTION=sync php -S 127.0.0.1:8000 -t public`. Kill the worker PIDs afterwards: `lsof -ti tcp:8000`. Don't run Playwright while the full suite is running, because 5 s waits time out under the load.
+- **Playwright cache:** version 1.62 needs the symlinks `~/Library/Caches/ms-playwright/chromium_headless_shell-1234 -> -1248` and `ffmpeg-1011 -> ffmpeg-1009`.
+- **Inertia 2.3:** `form.transform()` returns undefined, so never chain `.put()` or `.post()` onto it. `Pages/Ea/Surveys.jsx` still does.
+
 ## Next session — paste this
 
 ```
-P2 (Contracts, renewals & calendar) of IT Financial Management. P1 is committed on feature/it-finance-p1; branch feature/it-finance-p2 from it.
-Read docs/build/ATH-FIN-HANDOVER.md (state + token rules) and run the P2 kick-off prompt in docs/ATH-FIN-002 §4, with these overrides:
-- Gate = Postgres: full suite in background on it_security_risk_test; seed + SMOKE on it_security_risk_scratch. Agents get their own DBs (builders it_security_risk_fin_test, QA it_security_risk_fin_qa, reviewers a throwaway one) and run --filter only. npm run build; pint on touched files.
-- P2 reviewers run on opus. Playwright runs this phase (contract-renewal + calendar specs) on the seeded scratch DB.
-- Fold in the P1 domain-review M1–M4 fixes listed in ATH-FIN-003 §P1, as a small backend task before QA.
-- Don't read the spec yourself; fin-architect plans to docs/build/ATH-FIN-PLAN-p2.md.
-At the end: append Phase P2 to docs/ATH-FIN-003, commit on feature/it-finance-p2, update memory and this handover for P3.
+Start P3 of IT Financial Management (see ATH-FIN-002 for the phase scope), branching feature/it-finance-p3 from feature/it-finance-p2.
+Read docs/build/ATH-FIN-HANDOVER.md (token rules + P2 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p3.md, and include the P2 deferrals that touch P3 (IFRS 16 lease indicator, domain L4; current-budget figure from P1 M3 is now in place).
+Then: builders (sonnet) on their own DBs → QA on it_security_risk_fin_qa → gate (suite on it_security_risk_test, seed + SMOKE on it_security_risk_scratch, npm run build, Playwright served via php -S) → opus reviewers on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P3, commit, memory, handover.
+Check disk first (df -h).
 ```

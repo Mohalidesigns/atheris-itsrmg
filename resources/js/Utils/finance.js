@@ -69,3 +69,55 @@ export function pctOf(a, b) {
     return (Number(a) / d) * 100;
 }
 export const sentence = (v) => humanize(String(v ?? ''));
+
+/* ---------------------------------------------------------------- contracts, renewals, calendar (P2) */
+
+export const CONTRACT_TONES = { draft: 'neutral', active: 'success', in_renewal_window: 'warning', notice_deadline_passed: 'error', expired: 'error', renewed: 'muted', terminated: 'muted', replaced: 'muted' };
+export const RENEWAL_TONES = { open: 'info', submitted: 'warning', approved: 'success', executed: 'success', rejected: 'error', withdrawn: 'muted' };
+
+/** Calendar colour semantics: green active, amber renewal window, red notice passed / overdue, grey closed, blue milestones. */
+export const CAL_COLORS = {
+    green: { chip: 'bg-[#DCEFE1] border-[#2D7D46] text-[#1B5530]', dot: 'bg-[#2D7D46]', bar: '#2D7D46', hex: '#2D7D46' },
+    amber: { chip: 'bg-[#FCEBC4] border-[#E5A100] text-[#5F4300]', dot: 'bg-[#E5A100]', bar: '#E5A100', hex: '#E5A100' },
+    red: { chip: 'bg-[#F9DEDC] border-[#B3261E] text-[#8C1D18]', dot: 'bg-[#B3261E]', bar: '#B3261E', hex: '#B3261E' },
+    grey: { chip: 'bg-[#F1F2F4] border-[#A0A4AB] text-[#43474E]', dot: 'bg-[#A0A4AB]', bar: '#A0A4AB', hex: '#A0A4AB' },
+    blue: { chip: 'bg-[#DFE6FB] border-[#1D4ED8] text-[#1E3A8A]', dot: 'bg-[#1D4ED8]', bar: '#1D4ED8', hex: '#1D4ED8' },
+};
+
+export const DECISION_LABELS = { renew_as_is: 'Renew as is', renew_renegotiated: 'Renew (renegotiated)', replace: 'Replace', terminate: 'Terminate', extend_short_term: 'Short-term extension' };
+export const DECISION_ICONS = { renew_as_is: 'autorenew', renew_renegotiated: 'handshake', replace: 'swap_horiz', terminate: 'cancel', extend_short_term: 'more_time' };
+export const CONTRACT_TYPE_LABELS = {
+    licence: 'Licence', subscription: 'Subscription', saas: 'SaaS', support_maintenance: 'Support and maintenance', managed_service: 'Managed service',
+    professional_services: 'Professional services', lease: 'Lease', telecom: 'Telecom', cloud_commitment: 'Cloud commitment', hardware_warranty: 'Hardware warranty', other: 'Other',
+};
+
+export const MASK = '•••';
+
+/** Money that honours masking: server-nulled amounts render as ••• (never 0), absent values as a dash. */
+export function moneyOrMask(value, currency, viewAmounts = true, opts = {}) {
+    if (viewAmounts === false) return MASK;
+    return formatMoney(value, currency, opts);
+}
+
+/** "in 12 days" / "today" / "3 days ago" / "tomorrow" from a signed day count. */
+export function daysLabel(n) {
+    if (n === null || n === undefined || Number.isNaN(Number(n))) return '';
+    const d = Number(n);
+    if (d === 0) return 'today';
+    if (d === 1) return 'tomorrow';
+    if (d === -1) return 'yesterday';
+    return d > 0 ? `in ${d} days` : `${Math.abs(d)} days ago`;
+}
+
+/** ISO date (Y-m-d) in the viewer's locale; time-zone safe (no UTC shift). */
+export function localDate(value, opts = { day: '2-digit', month: 'short', year: 'numeric' }) {
+    if (!value) return '—';
+    const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return String(value);
+    return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString(undefined, opts);
+}
+
+export const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+export const parseIso = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
+export const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+export const diffDays = (a, b) => Math.round((parseIso(a) - parseIso(b)) / 86400000);

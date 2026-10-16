@@ -231,7 +231,7 @@ class RolesAndPermissionsSeeder extends Seeder
             'Procurement Officer' => ['view it-finance', 'create it-finance', 'edit it-finance', 'import it-finance', 'view it-finance-amounts', 'view vendors'],
             'Investment Sponsor' => ['view it-finance', 'approve it-finance-investments', 'view it-finance-amounts'],
             'IT Steering Committee' => ['view it-finance', 'approve it-finance-investments', 'view it-finance-amounts'],
-            'Finance Approver' => ['view it-finance', 'export it-finance', 'approve it-finance', 'approve it-finance-invoices', 'view it-finance-amounts'],
+            'Finance Approver' => ['view it-finance', 'export it-finance', 'approve it-finance', 'approve it-finance-invoices', 'approve it-finance-contracts', 'view it-finance-amounts'],
         ];
         foreach ($grants as $role => $permissions) {
             Role::firstOrCreate(['name' => $role])->givePermissionTo($permissions);

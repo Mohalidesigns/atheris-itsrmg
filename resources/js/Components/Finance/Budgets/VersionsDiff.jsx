@@ -20,6 +20,8 @@ export default function VersionsDiff({ budget, versions, periods, baseCurrency }
             .catch((e) => { setDiff(null); setErr(e.response?.data?.errors?.against?.[0] || e.response?.data?.message || 'Could not compare these versions.'); });
     };
     const period = (id) => periods.find((p) => String(p.id) === String(id))?.name ?? id;
+    const hasRevision = !!diff && diff.totals?.revision_delta !== undefined;
+    const trio = (m) => (m && m.original_base !== undefined ? `${formatMoney(m.original_base, baseCurrency, { decimals: 0 })} / ${formatMoney(m.adjustments_base, baseCurrency, { decimals: 0 })} / ${formatMoney(m.current_base, baseCurrency, { decimals: 0 })}` : '—');
     const rows = diff ? diff.lines.filter((r) => showSame || r.change !== 'unchanged') : [];
 
     return (
@@ -42,17 +44,25 @@ export default function VersionsDiff({ budget, versions, periods, baseCurrency }
             {err && <p className="text-sm text-[#B3261E]">{err}</p>}
             {diff && (
                 <Card title={`v${diff.a.version_no} to v${diff.b.version_no}`} right={<label className="flex items-center gap-1 text-xs"><input type="checkbox" checked={showSame} onChange={(e) => setShowSame(e.target.checked)} /> Show unchanged</label>}>
-                    <div className="grid grid-cols-3 gap-3 px-5 py-3 text-xs">
-                        {[['CapEx', diff.totals.capex_delta], ['OpEx', diff.totals.opex_delta], ['Total', diff.totals.base_delta]].map(([l, v]) => (
-                            <div key={l}><p className="text-[#718096]">{l} change</p><p className={`text-sm font-semibold ${Number(v) > 0 ? 'text-[#B3261E]' : Number(v) < 0 ? 'text-[#1B5530]' : 'text-[#4A5568]'}`}>{formatMoney(v, baseCurrency, { decimals: 0 })}</p></div>
+                    <div className="grid grid-cols-2 gap-3 px-5 py-3 text-xs sm:grid-cols-3 lg:grid-cols-6">
+                        {[['CapEx (current)', diff.totals.capex_delta], ['OpEx (current)', diff.totals.opex_delta],
+                            ...(hasRevision ? [['Revision change', diff.totals.revision_delta], ['Current change', diff.totals.current_delta], ['Original change', diff.totals.original_delta]] : [['Total', diff.totals.base_delta]])].map(([l, v]) => (
+                            <div key={l}><p className="text-[#718096]">{l}</p><p className={`text-sm font-semibold ${Number(v) > 0 ? 'text-[#B3261E]' : Number(v) < 0 ? 'text-[#1B5530]' : 'text-[#4A5568]'}`}>{formatMoney(v, baseCurrency, { decimals: 0 })}</p></div>
                         ))}
+                        {hasRevision && diff.totals.adjustments && (
+                            <div className="col-span-2 sm:col-span-3 lg:col-span-6 text-[#718096]">Adjustments carried (virements and top-ups): v{diff.a.version_no} {formatMoney(diff.totals.adjustments.a, baseCurrency, { decimals: 0 })}, v{diff.b.version_no} {formatMoney(diff.totals.adjustments.b, baseCurrency, { decimals: 0 })}. Revision change excludes them.</div>
+                        )}
                     </div>
-                    <Table head={['Change', 'Line', 'Δ base', 'Field changes', 'Period changes']} empty={rows.length === 0 && <Empty>No differences.</Empty>}>
+                    <Table head={hasRevision ? ['Change', 'Line', 'Original / Adj. / Current (older)', 'Original / Adj. / Current (newer)', 'Revision change', 'Field changes', 'Period changes'] : ['Change', 'Line', 'Δ base', 'Field changes', 'Period changes']} empty={rows.length === 0 && <Empty>No differences.</Empty>}>
                         {rows.map((r) => (
                             <tr key={r.key} className="align-top">
                                 <td className="px-4 py-2"><Chip size="xs" tone={CHANGE_TONE[r.change]}>{humanize(r.change)}</Chip></td>
                                 <td className="px-4 py-2 text-[#2D3748]">#{(r.b || r.a).line_no} {(r.b || r.a).description}</td>
-                                <td className="px-4 py-2 text-right text-xs">{formatMoney(r.base_delta, baseCurrency, { decimals: 0 })}</td>
+                                {hasRevision ? <>
+                                    <td className="px-4 py-2 text-xs">{trio(r.a)}</td>
+                                    <td className="px-4 py-2 text-xs">{trio(r.b)}</td>
+                                    <td className="px-4 py-2 text-right text-xs">{formatMoney(r.revision_delta, baseCurrency, { decimals: 0 })}</td>
+                                </> : <td className="px-4 py-2 text-right text-xs">{formatMoney(r.base_delta, baseCurrency, { decimals: 0 })}</td>}
                                 <td className="px-4 py-2 text-xs">{Object.entries(r.fields).map(([f, [x, y]]) => <p key={f}><span className="text-[#718096]">{humanize(f)}:</span> {String(x ?? '—')} → {String(y ?? '—')}</p>)}</td>
                                 <td className="px-4 py-2 text-xs">{Object.entries(r.periods).map(([p, d]) => <p key={p}><span className="text-[#718096]">{period(p)}:</span> {Number(d) > 0 ? '+' : ''}{Number(d).toLocaleString()}</p>)}</td>
                             </tr>
