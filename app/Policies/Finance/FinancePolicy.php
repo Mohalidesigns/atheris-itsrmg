@@ -2,6 +2,8 @@
 
 namespace App\Policies\Finance;
 
+use App\Models\Finance\Accrual;
+use App\Models\Finance\Actual;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetComment;
 use App\Models\Finance\BudgetLine;
@@ -14,11 +16,18 @@ use App\Models\Finance\ContractLink;
 use App\Models\Finance\ContractTeamMember;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\DoaBandVersion;
+use App\Models\Finance\ExpenseRequest;
+use App\Models\Finance\FinanceDocument;
+use App\Models\Finance\GoodsReceipt;
+use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
+use App\Models\Finance\PurchaseOrder;
+use App\Models\Finance\RecurringExpense;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\SupplementaryRequest;
 use App\Models\Finance\Termination;
 use App\Models\User;
+use App\Services\Finance\FinanceApprovals;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -102,6 +111,55 @@ class FinancePolicy
         return $user->can('approve it-finance-contracts') && $this->sameOrg($user, $contract) && $this->costCentreVisible($user, $contract);
     }
 
+    /* Expenses, procurement, invoices and actuals (P3). */
+
+    public function createExpense(User $user): bool
+    {
+        return $user->can('create it-finance');
+    }
+
+    public function updateExpense(User $user, Model $model): bool
+    {
+        return $user->can('edit it-finance') && $this->sameOrg($user, $model) && $this->costCentreVisible($user, $model)
+            && ! ($model instanceof ExpenseRequest && in_array($model->status, ExpenseRequest::TERMINAL, true));
+    }
+
+    /** The approve permission, or being the named cost-centre owner of the stage now awaiting a decision (plan P3-6). */
+    public function decideExpense(User $user, ExpenseRequest $expense): bool
+    {
+        return $this->sameOrg($user, $expense) && ($user->can('approve it-finance') || app(FinanceApprovals::class)->isCurrentOwnerApprover('finance.expense_approval', $expense, $user));
+    }
+
+    public function procure(User $user, Model $model): bool
+    {
+        return $user->can('create it-finance') && $this->sameOrg($user, $model);
+    }
+
+    public function captureInvoice(User $user): bool
+    {
+        return $user->can('create it-finance');
+    }
+
+    public function decideInvoice(User $user, Invoice $invoice): bool
+    {
+        return $this->sameOrg($user, $invoice) && ($user->can('approve it-finance-invoices') || app(FinanceApprovals::class)->isCurrentOwnerApprover('finance.invoice_approval', $invoice, $user));
+    }
+
+    public function payInvoice(User $user, Invoice $invoice): bool
+    {
+        return $user->can('approve it-finance-invoices') && $this->sameOrg($user, $invoice);
+    }
+
+    public function importActuals(User $user): bool
+    {
+        return $user->can('import it-finance') && $user->can('view it-finance-amounts');
+    }
+
+    public function manageAccruals(User $user): bool
+    {
+        return $user->can('close it-finance-periods');
+    }
+
     public function create(User $user): bool
     {
         return $user->can('manage it-finance-settings');
@@ -160,6 +218,9 @@ class FinancePolicy
             || $model instanceof ContractEvent || $model instanceof Renewal || $model instanceof Termination) {
             return $this->contractVisible($user, $model);
         }
+        if ($this->isTransactional($model)) {
+            return $this->transactionVisible($user, $model);
+        }
         $planning = [Budget::class, BudgetLine::class, BudgetScenario::class, BudgetComment::class, BudgetTransfer::class, SupplementaryRequest::class];
         if (! in_array($model::class, $planning, true)) {
             return true;
@@ -180,6 +241,36 @@ class FinancePolicy
         }
 
         return (bool) array_intersect(array_map('intval', array_filter($cc)), $ids);
+    }
+
+    private function isTransactional(Model $m): bool
+    {
+        return $m instanceof ExpenseRequest || $m instanceof PurchaseOrder || $m instanceof GoodsReceipt || $m instanceof Invoice || $m instanceof Actual
+            || $m instanceof RecurringExpense || $m instanceof Accrual || $m instanceof FinanceDocument;
+    }
+
+    /** P3 records follow their cost centre; the requester and submitter always see their own; Procurement sees all procurement records (as contracts, C70). */
+    private function transactionVisible(User $user, Model $model): bool
+    {
+        if ($model instanceof FinanceDocument) {
+            $subject = $model->documentable()->withoutGlobalScopes()->first();
+
+            return $subject !== null && $this->costCentreVisible($user, $subject);
+        }
+        $ids = self::visibleCostCentreIds($user);
+        if ($ids === null) {
+            return true;
+        }
+        if ($user->hasRole('Procurement Officer') && ($model instanceof ExpenseRequest || $model instanceof PurchaseOrder || $model instanceof GoodsReceipt || $model instanceof Invoice)) {
+            return true;
+        }
+        $own = $model instanceof ExpenseRequest ? $model->requested_by_id : ($model instanceof Invoice ? $model->submitted_by_id : null);
+        if ($own && (int) $own === (int) $user->id || (int) $model->created_by_id === (int) $user->id) {
+            return true;
+        }
+        $cc = $model instanceof GoodsReceipt ? PurchaseOrder::withoutGlobalScopes()->whereKey($model->po_id)->value('cost_centre_id') : $model->cost_centre_id;
+
+        return $cc && in_array((int) $cc, $ids, true);
     }
 
     /** Plan C70: every cost centre, Procurement, the contract's own people, its team, or its cost centre in the user's tree. */

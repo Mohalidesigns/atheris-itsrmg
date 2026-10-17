@@ -39,6 +39,7 @@ function Overview({ c, baseCurrency, money }) {
                     <Fact label="Technical owner">{c.technical_owner?.name}</Fact>
                     <Fact label="Procurement contact">{c.procurement_contact?.name}</Fact>
                     <Fact label="External reference">{c.external_reference}</Fact>
+                    <Fact label="Lease assessment">{c.needs_lease_assessment ? <Chip size="xs" tone="warning" icon="warning">Assessment needed</Chip> : c.lease_assessment ? <span>{humanize(c.lease_assessment)}{c.is_ifrs16_lease && <> <Chip size="xs" tone="info">IFRS 16</Chip></>}{c.lease_assessment_note && <span className="block text-xs text-[#718096]">{c.lease_assessment_note}</span>}</span> : null}</Fact>
                     <Fact label="Budget line">{c.budget_line && <Link className="text-[#0A1F44] underline" href={route('finance.budgets.show', { budget: c.budget_line.budget_id, tab: 'lines' })}>{c.budget_line.label}</Link>}</Fact>
                     {c.description && <div className="col-span-2 lg:col-span-4"><dt className="text-xs text-[#718096]">Description</dt><dd className="whitespace-pre-line text-sm text-[#2D3748]">{c.description}</dd></div>}
                 </dl>

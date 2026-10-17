@@ -81,9 +81,6 @@ class BudgetService
         if (! in_array($mode, Budget::MODES, true)) {
             $this->fail('Unknown budgeting mode.', 'mode');
         }
-        if ($mode === 'from_actuals') {
-            $this->fail('Needs posted actuals (available from Phase P3).', 'mode');
-        }
         $open = Budget::withoutGlobalScopes()->where('organization_id', $orgId)->where('cycle_id', $cycle->id)->where('cost_centre_id', $cc->id)
             ->whereIn('status', ['draft', 'submitted', 'under_review', 'approved'])->exists();
         if ($open) {
@@ -97,6 +94,17 @@ class BudgetService
 
         $source = null;
         $pct = null;
+        if ($mode === 'from_actuals') { // C26: the prior year's baseline lines re-budgeted at their posted actuals
+            $source = isset($attrs['source_budget_id'])
+                ? Budget::withoutGlobalScopes()->where('organization_id', $orgId)->whereKey($attrs['source_budget_id'])->first()
+                : $this->priorBaseline($cc->id, $fy, $orgId);
+            if (! $source || $source->status !== 'baseline' || (int) $source->cost_centre_id !== (int) $cc->id || (int) $source->fiscal_year_id === (int) $fy->id) {
+                $this->fail('Budgeting from actuals needs the prior year\'s baseline for this cost centre.', 'source_budget_id');
+            }
+            $actuals = app(ActualsService::class);
+            $has = $source->lines()->get()->contains(fn (BudgetLine $old) => $actuals->priorYearActual($old) !== null);
+            $has || $this->fail('The prior fiscal year has no posted actuals for this cost centre to budget from.', 'mode');
+        }
         if ($mode === 'incremental') {
             $pct = $attrs['increment_pct'] ?? null;
             if ($pct === null || ! is_numeric($pct) || $pct < -100 || $pct > 100) {
@@ -122,7 +130,9 @@ class BudgetService
                 'title' => $attrs['title'] ?? "{$fy->year_label} IT budget: {$cc->name}", 'mode' => $mode, 'status' => 'draft', 'owner_id' => $owner,
                 'executive_summary' => $attrs['executive_summary'] ?? null,
             ]);
-            if ($source) {
+            if ($source && $mode === 'from_actuals') {
+                $this->cloneFromActuals($budget, $source, $fy, $by);
+            } elseif ($source) {
                 $this->cloneIncremental($budget, $source, (string) $pct, $fy, $by);
             }
             $this->recalculate($budget);
@@ -157,6 +167,31 @@ class BudgetService
             $attrs['phasing_method'] = $old->phasing_method === 'custom' ? 'custom' : $old->phasing_method;
             $line = $this->saveLine($budget, null, $attrs + ['source_line_id' => $old->id, 'amounts' => $old->phasing_method === 'custom' ? $this->scaleAmounts($periods, $weights, $annual) : null], $by, false);
             $line->forceFill(['py_budget' => $old->current_base_amount, 'source_line_id' => $old->id, 'origin' => 'planned'])->save();
+        }
+    }
+
+    /** C26: one line per prior-year line that has posted actuals, budgeted at the (annualised) actual and phased like the prior line. */
+    private function cloneFromActuals(Budget $budget, Budget $source, FiscalYear $fy, User $by): void
+    {
+        $actuals = app(ActualsService::class);
+        $periods = $this->phasing->periodsFor($fy);
+        $n = $periods->count();
+        foreach ($source->lines()->get() as $old) {
+            $actual = $actuals->priorYearActual($old);
+            if ($actual === null) {
+                continue;
+            }
+            $oldAmounts = BudgetLinePeriod::withoutGlobalScopes()->where('budget_line_id', $old->id)->orderBy('period_id')->get();
+            $weights = array_slice(array_pad($oldAmounts->pluck('amount')->map(fn ($a) => (string) $a)->all(), $n, '0'), 0, $n);
+            $annual = $this->phasing->round(bcdiv($actual, (string) ($old->fx_rate ?: 1), 12), 2);
+            $attrs = Arr::only($old->getAttributes(), self::LINE_FIELDS);
+            $attrs['annual_amount'] = $annual;
+            $attrs['unit_cost'] = null;
+            $attrs['driver_id'] = null;
+            $attrs['driver_rate'] = null;
+            $attrs['phasing_method'] = 'custom';
+            $line = $this->saveLine($budget, null, $attrs + ['source_line_id' => $old->id, 'amounts' => $this->scaleAmounts($periods, $weights, $annual)], $by, false);
+            $line->forceFill(['py_budget' => $old->current_base_amount, 'py_actual' => $actual, 'source_line_id' => $old->id, 'origin' => 'planned'])->save();
         }
     }
 
@@ -780,8 +815,9 @@ class BudgetService
             $match = $priorLines->firstWhere('id', $line->source_line_id)
                 ?? $priorLines->first(fn ($p) => (int) $p->tower_id === (int) $line->tower_id && (int) $p->cost_pool_id === (int) $line->cost_pool_id && $p->description === $line->description);
             $py = $match ? $match->current_base_amount : null;
-            if ($py !== ($line->py_budget === null ? null : (string) $line->py_budget)) {
-                BudgetLine::withoutEvents(fn () => $line->forceFill(['py_budget' => $py])->save());
+            $pyActual = $match ? app(ActualsService::class)->priorYearActual($match) : null;
+            if ($py !== ($line->py_budget === null ? null : (string) $line->py_budget) || $pyActual !== ($line->py_actual === null ? null : (string) $line->py_actual)) {
+                BudgetLine::withoutEvents(fn () => $line->forceFill(['py_budget' => $py, 'py_actual' => $pyActual])->save());
             }
         }
     }

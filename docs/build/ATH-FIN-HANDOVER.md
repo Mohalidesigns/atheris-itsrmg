@@ -36,11 +36,19 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 - **Playwright cache:** version 1.62 needs the symlinks `~/Library/Caches/ms-playwright/chromium_headless_shell-1234 -> -1248` and `ffmpeg-1011 -> ffmpeg-1009`.
 - **Inertia 2.3:** `form.transform()` returns undefined, so never chain `.put()` or `.post()` onto it. `Pages/Ea/Surveys.jsx` was fixed in P2.1, and `InertiaTransformChainTest` guards against it.
 
+## State (2026-10-17, P3 done)
+
+- P3 Expense management is committed and pushed on `feature/it-finance-p3` (branched from P2.1 e1c6ca8). ATH-FIN-003 §P3 records what shipped, decisions P3-1 to P3-18, the review fixes and what's deferred.
+- Gate: 624 tests green on Postgres (22 min), seed + SMOKE pass, build passes.
+- **Logged for P3.1 / before UAT:** domain M7–M12 (accrual VAT and cut-off, period close vs pending accruals, prepayments into a planning FY, GL duplicate keying, direct-invoice cap) and security L1, L2, L4. L13 (emergency spend escalation) needs a decision.
+- **Seeder gotcha:** `FinanceExpenseDemoSeeder` swallows exceptions in `attempt()`, `advance()` and `first()`. After any SoD change, a demo record can silently go missing. Only SMOKE catches it ("has a X invoice" / "nobody can decide"). Debug by logging the swallowed exceptions temporarily.
+- **The full suite does not cover `finance.imports.show` with batch actuals.** SMOKE caught a missing import there.
+
 ## Next session — paste this
 
 ```
-Start P3 of IT Financial Management (see ATH-FIN-002 for the phase scope), branching feature/it-finance-p3 from feature/it-finance-p2.
-Read docs/build/ATH-FIN-HANDOVER.md (token rules + P2 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p3.md, and include the P2 deferrals that touch P3 (IFRS 16 lease indicator, domain L4; current-budget figure from P1 M3 is now in place).
-Then: builders (sonnet) on their own DBs → QA on it_security_risk_fin_qa → gate (suite on it_security_risk_test, seed + SMOKE on it_security_risk_scratch, npm run build, Playwright served via php -S) → opus reviewers on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P3, commit, memory, handover.
+Start P4 of IT Financial Management (see ATH-FIN-002 §4 P4), branching feature/it-finance-p4 from feature/it-finance-p3.
+Read docs/build/ATH-FIN-HANDOVER.md (token rules + P3 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p4.md, and include the P3 deferrals that touch monitoring and period close (domain M9 period close vs pending accruals/prepayment releases, M8 accrual cut-off).
+Then: builders (sonnet) on their own DBs → QA on it_security_risk_fin_qa → gate (suite on it_security_risk_test, seed + SMOKE on it_security_risk_scratch, npm run build) → reviewers (sonnet, be exhaustive) on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P4, commit AND push, memory, handover.
 Check disk first (df -h).
 ```

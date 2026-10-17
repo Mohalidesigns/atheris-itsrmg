@@ -22,6 +22,8 @@ use App\Services\Finance\ContractSweeper;
 use App\Services\Finance\DoaBandService;
 use App\Services\Finance\FinanceApprovalSweeper;
 use App\Services\Finance\FinanceDigest;
+use App\Services\Finance\InvoiceSweeper;
+use App\Services\Finance\RecurringExpenseService;
 use App\Services\Issues\IssueWorkflow;
 use App\Services\Kri\KriService;
 use App\Services\Monitoring\CcmRunner;
@@ -106,6 +108,14 @@ Schedule::command('fin:contracts-sweep')->dailyAt('06:30')->timezone(config('fin
 Artisan::command('fin:digest', function (FinanceDigest $d) {
     $this->info($d->send().' finance digest(s) sent.');
 })->purpose("Send the IT finance daily digest to opted-in users at their bank's digest hour");
+Artisan::command('fin:recurring-generate {--date= : Y-m-d, run as if today}', function (RecurringExpenseService $s) {
+    $this->info($s->generateDue($this->option('date') ? CarbonImmutable::parse($this->option('date'), config('finance.timezone'))->startOfDay() : null).' generated');
+})->purpose('Generate recurring expected invoices and expense requests that are due (ATH-FIN-001 §5.4)');
+Schedule::command('fin:recurring-generate')->dailyAt('00:30')->timezone(config('finance.timezone'))->name('finance.recurring-generate')->withoutOverlapping();
+Artisan::command('fin:invoices-sweep {--date= : Y-m-d, run as if today}', function (InvoiceSweeper $s) {
+    $this->info($s->sweep($this->option('date') ? CarbonImmutable::parse($this->option('date'), config('finance.timezone'))->startOfDay() : null).' invoice notice(s) sent.');
+})->purpose('Send invoice due and overdue notices (ATH-FIN-001 §7)');
+Schedule::command('fin:invoices-sweep')->dailyAt('07:30')->timezone(config('finance.timezone'))->name('finance.invoices-sweep')->withoutOverlapping();
 Schedule::command('fin:digest')->hourly()->name('finance.digest')->withoutOverlapping();
 
 /* =====================  Policy Management ===================== */

@@ -46,12 +46,17 @@ class FinanceApprovals
             'band' => ['label' => $band['label'], 'min' => $band['min'], 'max' => $band['max']],
             'doa_band_version_id' => $band['version_id'], 'doa_band_version_no' => $band['version_no'],
             'conditions' => $conditions,
-        ] + (method_exists($subject, 'sodExcludedIds') ? ['sod_excluded_ids' => $subject->sodExcludedIds(), 'contract_owner_id' => $subject->contract_owner_id] : []);
+        ] + (method_exists($subject, 'sodExcludedIds') ? ['sod_excluded_ids' => $subject->sodExcludedIds()] + (array_key_exists('contract_owner_id', $subject->getAttributes()) || method_exists($subject, 'getContractOwnerIdAttribute') ? ['contract_owner_id' => $subject->contract_owner_id] : []) : []);
     }
 
     /** Records the approval; a message means stages remain (the record stays in review), null means final. */
     public function approve(string $process, Model $subject, User $actor, ?string $note = null): ?string
     {
+        if (! $this->engine->current($process, $subject) && $this->engine->workflow((int) $subject->organization_id, $process)) {
+            // Workflow switched on after submit: start it here so the SoD snapshot is written before anyone decides.
+            $late = $this->engine->start($process, $subject);
+            $late && $late->forceFill(['context' => $this->snapshot($process, $subject)])->save();
+        }
         $message = $this->engine->gate($process, $subject, $actor, $note);
         if ($message !== null) {
             event(new FinanceApprovalRequested($process, $subject, $this->engine->current($process, $subject), $actor));
@@ -85,6 +90,15 @@ class FinanceApprovals
         $this->engine->cancel($process, $subject, $reason);
     }
 
+    /** True when the record is awaiting a stage of the "owner" type whose named owner is $u (plan P3-6, C74). */
+    public function isCurrentOwnerApprover(string $process, Model $subject, User $u): bool
+    {
+        $request = $this->engine->current($process, $subject);
+        $step = $request?->currentStep();
+
+        return $step !== null && $step->approver_type === 'owner' && (int) $step->approver_ref === (int) $u->id;
+    }
+
     public function configured(string $process, int $orgId): bool
     {
         return $this->engine->workflow($orgId, $process) !== null;
@@ -109,7 +123,7 @@ class FinanceApprovals
     {
         $request = ApprovalRequest::withoutGlobalScopes()->where('process', $process)->where('subject_type', $subject::class)
             ->where('subject_id', $subject->getKey())->latest('id')->withCount('steps')->first();
-        if (! $request || $request->steps_count > 0) {
+        if ($request && $request->steps_count > 0) {
             return;
         }
         $this->assertDefaultApprover($subject, $actor, $initiatorAttr, $ownerAttr, $permission);

@@ -223,7 +223,7 @@ class RolesAndPermissionsSeeder extends Seeder
     private function seedFinanceRoles(array $actions): void
     {
         $grants = [
-            'IT Budget Owner' => ['view it-finance', 'create it-finance', 'edit it-finance', 'export it-finance', 'view it-finance-amounts'],
+            'IT Budget Owner' => ['view it-finance', 'create it-finance', 'edit it-finance', 'export it-finance', 'view it-finance-amounts', 'view workflows'],
             'IT Finance Controller' => array_merge(
                 array_map(fn ($a) => "{$a} it-finance", $actions),
                 self::FINANCE_EXTRA_PERMISSIONS,

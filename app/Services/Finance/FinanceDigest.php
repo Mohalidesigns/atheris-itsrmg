@@ -4,6 +4,8 @@ namespace App\Services\Finance;
 
 use App\Models\Approvals\ApprovalRequest;
 use App\Models\Finance\Contract;
+use App\Models\Finance\CostCentre;
+use App\Models\Finance\Invoice;
 use App\Models\User;
 use App\Notifications\Finance\FinanceDailyDigestNotification;
 use App\Services\Approvals\ApprovalEngine;
@@ -48,7 +50,7 @@ class FinanceDigest
         if ($taken) {
             return 0;
         }
-        $sections = array_values(array_filter([$this->renewalsSection($user, $orgId), $this->approvalsSection($user, $orgId)]));
+        $sections = array_values(array_filter([$this->renewalsSection($user, $orgId), $this->approvalsSection($user, $orgId), $this->invoicesSection($user, $orgId)]));
         if (! $sections) {
             return 0;
         }
@@ -107,5 +109,31 @@ class FinanceDigest
         }
 
         return $lines ? ['title' => 'Approvals waiting for you', 'lines' => $lines] : null;
+    }
+
+    /** Finance users and cost-centre owners: invoices due within 7 days and overdue. No amounts. @return array{title:string,lines:array<int,string>}|null */
+    private function invoicesSection(User $user, int $orgId): ?array
+    {
+        $today = FinanceClock::today();
+        $isFinance = $this->contracts->financeUsers($orgId)->contains('id', $user->id);
+        $owned = CostCentre::withoutGlobalScopes()->where('organization_id', $orgId)->where('owner_id', $user->id)->pluck('id')->all();
+        if (! $isFinance && ! $owned) {
+            return null;
+        }
+        $q = Invoice::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->whereIn('status', Invoice::UNPAID)->where('status', '!=', 'disputed')
+            ->whereDate('due_on', '<=', $today->addDays(7)->toDateString())->with('vendor:id,name')->orderBy('due_on');
+        $isFinance || $q->whereIn('cost_centre_id', $owned);
+        $rows = $q->get();
+        if ($rows->isEmpty()) {
+            return null;
+        }
+        $overdue = $rows->filter(fn (Invoice $i) => FinanceClock::daysUntil($i->due_on, $today) < 0);
+        $soon = $rows->diff($overdue);
+        $fmt = fn ($c) => $c->take(10)->map(fn (Invoice $i) => $i->invoice_code.' ('.($i->vendor?->name ?? 'no vendor').')')->implode(', ');
+        $lines = [];
+        $overdue->isNotEmpty() && $lines[] = $overdue->count().' overdue: '.$fmt($overdue);
+        $soon->isNotEmpty() && $lines[] = $soon->count().' due within 7 days: '.$fmt($soon);
+
+        return ['title' => 'Invoices due and overdue', 'lines' => $lines];
     }
 }

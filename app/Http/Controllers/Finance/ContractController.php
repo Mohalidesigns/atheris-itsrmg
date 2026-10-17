@@ -9,6 +9,7 @@ use App\Http\Requests\Finance\UpdateContractRequest;
 use App\Models\Asset;
 use App\Models\Ea\BusinessService;
 use App\Models\Ea\EaApplication;
+use App\Models\Finance\Actual;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\Category;
@@ -87,8 +88,12 @@ class ContractController extends Controller
         $sum = fn ($items, callable $f) => $items->reduce(fn ($carry, $c) => bcadd($carry, (string) $f($c), 2), '0');
 
         $vendors = Vendor::query()->whereIn('id', $live->pluck('vendor_id')->filter()->unique())->pluck('name', 'id');
+        $fyId = FiscalYear::query()->where('is_current', true)->value('id');
+        $visibleCc = FinancePolicy::visibleCostCentreIds($user);
+        $actualByVendor = $fyId ? Actual::query()->when($visibleCc !== null && ! $user->hasRole('Procurement Officer'), fn ($q) => $q->whereIn('cost_centre_id', $visibleCc ?: [0]))->where('fiscal_year_id', $fyId)->where('match_status', '!=', 'duplicate')->whereIn('vendor_id', $live->pluck('vendor_id')->filter()->unique())
+            ->selectRaw('vendor_id, sum(base_amount) as total')->groupBy('vendor_id')->pluck('total', 'vendor_id') : collect();
         $spend = $live->filter(fn ($c) => $c->vendor_id)->groupBy('vendor_id')->map(fn ($g, $vid) => [
-            'vendor' => ['id' => (int) $vid, 'name' => $vendors[$vid] ?? 'Unknown'], 'contracts' => $g->count(),
+            'vendor' => ['id' => (int) $vid, 'name' => $vendors[$vid] ?? 'Unknown'], 'contracts' => $g->count(), 'expense_actual_base' => bcadd((string) ($actualByVendor[$vid] ?? '0'), '0', 2),
             'base_contract_value' => $sum($g, fn ($c) => $c->base_contract_value), 'annualised_base_value' => $sum($g, fn ($c) => $c->annualised_base_value),
         ])->sortByDesc(fn ($r) => (float) $r['base_contract_value'])->take(10)->values();
 
@@ -161,7 +166,7 @@ class ContractController extends Controller
                 'annualised_base_value' => $contract->annualised_base_value, 'next_term_forecast' => $contract->next_term_forecast,
                 'billing' => $this->contracts->billingSchedule($contract),
                 'budget_line' => $line ? ['id' => $line->id, 'budget_id' => $line->budget_id, 'label' => "#{$line->line_no} {$line->description}", 'current_base_amount' => (string) $line->current_base_amount] : null,
-                'actual_to_date' => null,
+                'actual_to_date' => bcadd((string) Actual::query()->where('contract_id', $contract->id)->where('match_status', '!=', 'duplicate')->sum('base_amount'), '0', 2),
             ],
             'daysToEnd' => $contract->days_to_end, 'daysToNotice' => $contract->days_to_notice, 'daysToWindow' => $contract->days_to_window,
             'linkOptions' => [

@@ -148,6 +148,11 @@ const navigation = [
         permission: 'view it-finance',
         children: [
             { name: 'Budgets', href: 'finance.budgets.index', permission: 'view it-finance' },
+            { name: 'Expenses', href: 'finance.expenses.index', permission: 'view it-finance' },
+            { name: 'Purchase Orders', href: 'finance.purchase-orders.index', permission: 'view it-finance' },
+            { name: 'Invoices', href: 'finance.invoices.index', permission: 'view it-finance' },
+            { name: 'Actuals & Reconciliation', href: 'finance.actuals.index', permission: 'view it-finance' },
+            { name: 'Recurring & Accruals', href: 'finance.recurring.index', permission: 'view it-finance' },
             { name: 'Contracts & Renewals', href: 'finance.contracts.index', permission: 'view it-finance' },
             { name: 'Calendar', href: 'finance.calendar', permission: 'view it-finance' },
             { name: 'Settings', href: 'finance.settings', permission: 'view it-finance' },

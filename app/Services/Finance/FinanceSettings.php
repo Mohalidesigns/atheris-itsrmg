@@ -21,6 +21,7 @@ class FinanceSettings
     /** Keys each settings section may write. */
     public const SECTION_KEYS = [
         'general' => ['fiscal_year_start_month', 'period_scheme', 'overbudget_mode', 'match_tolerance_pct', 'match_tolerance_abs', 'eac_method', 'showback_enabled', 'digest_hour'],
+        'doa' => ['invoice_sod_from'],
         'variance' => ['variance_amber_pct', 'variance_red_pct', 'variance_abs_floor'],
         'renewal' => ['renewal_lead_days', 'renewal_notice_offsets', 'escalation_role', 'renewal_cfo_from', 'renewal_cfo_uplift_pct'],
     ];
@@ -53,7 +54,7 @@ class FinanceSettings
 
     public function update(Setting $setting, string $section, array $validated): Setting
     {
-        if ($section === 'doa') {
+        if ($section === 'doa' && array_key_exists('doa_bands', $validated)) {
             throw ValidationException::withMessages(['workflow' => 'DoA bands change through a proposal and a second approver (maker-checker).']);
         }
         $keys = self::SECTION_KEYS[$section] ?? throw ValidationException::withMessages(['section' => 'Unknown settings section.']);
@@ -85,6 +86,12 @@ class FinanceSettings
             (string) ($s->renewal_cfo_from ?? config('finance.approval_defaults.renewal_cfo_from')),
             (string) ($s->renewal_cfo_uplift_pct ?? config('finance.approval_defaults.renewal_cfo_uplift_pct')),
         ];
+    }
+
+    /** Base-currency value from which the final invoice approver may not be a purchase-order approver (plan P3-9). */
+    public function invoiceSodFrom(int $orgId): string
+    {
+        return (string) ($this->for($orgId)->invoice_sod_from ?? config('finance.approval_defaults.invoice_sod_from'));
     }
 
     /** Key of the DoA band an amount (in base currency) falls in: min <= amount < max. */

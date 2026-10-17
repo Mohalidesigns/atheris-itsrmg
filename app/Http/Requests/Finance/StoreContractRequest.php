@@ -64,6 +64,8 @@ class StoreContractRequest extends FormRequest
             'key_clauses.*.label' => ['required', 'string', 'max:80'],
             'key_clauses.*.value' => ['nullable', 'string', 'max:500'],
             'external_reference' => ['nullable', 'string', 'max:100'],
+            'lease_assessment' => ['nullable', Rule::in(Contract::LEASE_ASSESSMENTS)],
+            'lease_assessment_note' => ['nullable', 'string', 'max:2000'],
             'activate' => ['sometimes', 'boolean'],
         ];
     }

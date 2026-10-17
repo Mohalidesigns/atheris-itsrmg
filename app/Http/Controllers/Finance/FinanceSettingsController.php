@@ -126,8 +126,8 @@ class FinanceSettingsController extends Controller
         Gate::authorize('update', $setting);
 
         $section = $request->validate(['section' => ['required', Rule::in(Setting::SECTIONS)]])['section'];
-        if ($section === 'doa') {
-            $this->settings->update($setting, 'doa', []); // refuses: bands change through a proposal and a second approver
+        if ($section === 'doa' && $request->has('doa_bands')) {
+            $this->settings->update($setting, 'doa', ['doa_bands' => []]); // refuses: bands change through a proposal and a second approver
         }
         $rules = match ($section) {
             'general' => [
@@ -140,12 +140,7 @@ class FinanceSettingsController extends Controller
                 'showback_enabled' => ['required', 'boolean'],
                 'digest_hour' => ['required', 'integer', 'between:0,23'],
             ],
-            'doa' => [
-                'doa_bands' => ['required', 'array', 'min:1', 'max:8'],
-                'doa_bands.*.label' => ['required', 'string', 'max:40'],
-                'doa_bands.*.min' => ['required', 'regex:'.FinanceSettings::DOA_AMOUNT],
-                'doa_bands.*.max' => ['nullable', 'regex:'.FinanceSettings::DOA_AMOUNT],
-            ],
+            'doa' => ['invoice_sod_from' => ['nullable', 'regex:'.FinanceSettings::DOA_AMOUNT]],
             'variance' => [
                 'variance_amber_pct' => ['required', 'numeric', 'between:0.01,100'],
                 'variance_red_pct' => ['required', 'numeric', 'gt:variance_amber_pct', 'max:1000'],
@@ -175,6 +170,8 @@ class FinanceSettingsController extends Controller
             'renewal_cfo_from' => $s->renewal_cfo_from === null ? null : (string) $s->renewal_cfo_from,
             'renewal_cfo_uplift_pct' => $s->renewal_cfo_uplift_pct === null ? null : (string) $s->renewal_cfo_uplift_pct,
             'renewal_cfo_defaults' => ['from' => (string) config('finance.approval_defaults.renewal_cfo_from'), 'uplift_pct' => (string) config('finance.approval_defaults.renewal_cfo_uplift_pct')],
+            'invoice_sod_from' => $s->invoice_sod_from === null ? null : (string) $s->invoice_sod_from,
+            'invoice_sod_default' => (string) config('finance.approval_defaults.invoice_sod_from'),
             'overbudget_mode' => $s->overbudget_mode, 'match_tolerance_pct' => (string) $s->match_tolerance_pct, 'match_tolerance_abs' => (string) $s->match_tolerance_abs,
             'eac_method' => $s->eac_method, 'showback_enabled' => $s->showback_enabled, 'digest_hour' => $s->digest_hour,
             'doa_bands' => $s->doa_bands ?? [], 'investment_score_weights' => $s->investment_score_weights ?? [],

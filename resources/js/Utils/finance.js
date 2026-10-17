@@ -121,3 +121,15 @@ export const isoDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).pad
 export const parseIso = (s) => { const [y, m, d] = String(s).slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
 export const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 export const diffDays = (a, b) => Math.round((parseIso(a) - parseIso(b)) / 86400000);
+
+/* ---------------------------------------------------------------- expenses, procurement, invoices, actuals (P3) */
+
+export const EXPENSE_TONES = { draft: 'neutral', submitted: 'warning', approved: 'info', rejected: 'error', committed: 'success', partially_received: 'info', received: 'success', invoiced: 'success', closed: 'muted', cancelled: 'muted', withdrawn: 'muted' };
+export const PO_TONES = { open: 'info', partially_received: 'warning', received: 'success', closed: 'muted', cancelled: 'muted' };
+export const INVOICE_TONES = { draft: 'neutral', submitted: 'warning', approved: 'info', rejected: 'error', scheduled: 'info', paid: 'success', disputed: 'error', cancelled: 'muted' };
+export const MATCH_TONES = { unmatched: 'neutral', matched: 'success', variance: 'warning', override: 'tertiary' };
+export const ACTUAL_TONES = { matched: 'success', unmatched: 'warning', unbudgeted: 'error', duplicate: 'muted' };
+export const ACCRUAL_TONES = { proposed: 'warning', posted: 'success', reversed: 'muted', cancelled: 'muted' };
+export const BATCH_TONES = { completed: 'success', completed_with_errors: 'warning', failed: 'error' };
+export const toneOf = (map, v) => map[v] || 'neutral';
+export const DOC_KINDS = ['quote', 'purchase_order', 'goods_receipt', 'invoice', 'delivery_note', 'approval', 'other'].map((v) => ({ value: v, label: humanize(v) }));

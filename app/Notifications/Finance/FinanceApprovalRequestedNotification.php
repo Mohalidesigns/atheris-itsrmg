@@ -26,6 +26,6 @@ class FinanceApprovalRequestedNotification extends BaseNotification
     {
         $label = ApprovalProcesses::PROCESSES[$this->process]['label'] ?? $this->process;
 
-        return "{$label} {$this->subjectLabel} ({$this->amountText}) is awaiting ".($this->stepName ?: 'your approval').'.';
+        return "{$label} {$this->subjectLabel}".($this->amountText !== '' ? " ({$this->amountText})" : '').' is awaiting '.($this->stepName ?: 'your approval').'.';
     }
 }

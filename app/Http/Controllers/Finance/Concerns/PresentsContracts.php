@@ -25,7 +25,7 @@ trait PresentsContracts
         'contract_value', 'base_contract_value', 'amount_per_billing', 'annualised_base_value', 'next_term_forecast', 'proposed_value',
         'proposed_base_value', 'base_value', 'amount', 'base_amount', 'current_base_amount', 'amount_band', 'amount_band_label',
         'value_base_total', 'annualised_base_total', 'fx_rate', 'proposed_fx_rate',
-        'value_band', 'uplift_pct', 'uplift_base_pct', 'fx_effect_pct', 'uplift_band', 'requires_cfo', 'price_escalation_pct',
+        'expense_actual_base', 'actual_to_date', 'value_band', 'uplift_pct', 'uplift_base_pct', 'fx_effect_pct', 'uplift_band', 'requires_cfo', 'price_escalation_pct',
     ];
 
     private const CONTRACT_MONEY_LISTS = ['billing', 'vendorSpend'];
@@ -115,6 +115,7 @@ trait PresentsContracts
             'price_escalation_pct' => $c->price_escalation_pct === null ? null : (string) $c->price_escalation_pct, 'next_term_forecast' => $c->next_term_forecast,
             'data_processing_role' => $c->data_processing_role, 'dpa_status' => $c->dpa_status, 'sla_summary' => $c->sla_summary, 'exit_terms' => $c->exit_terms,
             'key_clauses' => $c->key_clauses ?? [], 'external_reference' => $c->external_reference,
+            'lease_assessment' => $c->lease_assessment, 'lease_assessment_note' => $c->lease_assessment_note, 'is_ifrs16_lease' => $c->is_ifrs16_lease, 'needs_lease_assessment' => $c->needs_lease_assessment,
             'renewed_from' => $cm($c->renewedFrom), 'renewed_to' => $cm($c->renewedTo),
             'decision_at' => $c->decision_at?->toIso8601String(), 'decision_by' => $this->userMini($c->decisionBy),
             'terminated_on' => $c->terminated_on?->toDateString(), 'termination_reason' => $c->termination_reason,
@@ -231,6 +232,7 @@ trait PresentsContracts
             'documentKinds' => $opts(ContractDocument::KINDS, ['dpa' => 'DPA', 'sla' => 'SLA']),
             'linkTypes' => $opts(array_keys(ContractLink::TYPES), ['ea_application' => 'EA application']),
             'renewalStatuses' => $opts(Renewal::STATUSES),
+            'leaseAssessments' => $opts(Contract::LEASE_ASSESSMENTS, ['not_lease' => 'Not a lease', 'ifrs16_lease' => 'IFRS 16 lease', 'short_term_exempt' => 'Short-term exempt', 'low_value_exempt' => 'Low-value exempt']),
         ];
     }
 }

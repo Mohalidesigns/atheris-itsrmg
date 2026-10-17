@@ -12,6 +12,8 @@ use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetTransfer;
 use App\Models\Finance\Category;
 use App\Models\Finance\CostCentre;
+use App\Models\Finance\ExpenseRequest;
+use App\Models\Finance\Invoice;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\SupplementaryRequest;
 use App\Models\Finance\Termination;
@@ -181,6 +183,39 @@ class ApprovalProcesses
                 'requires_cfo' => ['label' => 'Needs CFO (high value or after the notice deadline)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
             ],
             'default' => 'One approval by anyone with "approve it-finance-contracts" other than the requester, the contract owner and its creator.',
+        ],
+        'finance.expense_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Expense request', 'engine' => 'generic', 'owner_cannot_approve' => true, 'owner_stage_without_permission' => true,
+            'description' => 'An expense request is approved against the delegation of authority before it is committed (FIN-03.02).',
+            'permission' => 'approve it-finance', 'view_permission' => 'view it-finance', 'model' => ExpenseRequest::class, 'initiator' => 'requested_by_id', 'owner' => 'endorser_id',
+            'title' => ['request_code', 'title'], 'route' => 'finance.expenses.show', 'initiate' => 'Submitting an expense request',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'effective_band' => ['label' => 'DoA band after unbudgeted / over-budget escalation', 'values' => 'finance.doa_bands'],
+                'capex_opex' => ['label' => 'CapEx / OpEx', 'values' => ['capex' => 'CapEx', 'opex' => 'OpEx']],
+                'is_unbudgeted' => ['label' => 'Unbudgeted (no budget line)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'emergency' => ['label' => 'Emergency', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'overspend' => ['label' => 'Over the available budget', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'has_endorser' => ['label' => 'Has a cost-centre endorser', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'category_id' => ['label' => 'TBM category', 'values' => 'finance.categories'],
+                'cost_centre_id' => ['label' => 'Cost centre', 'values' => 'finance.cost_centres'],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the requester and whoever created the request.',
+        ],
+        'finance.invoice_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Invoice approval', 'engine' => 'generic', 'owner_cannot_approve' => true, 'owner_stage_without_permission' => true,
+            'description' => 'A vendor invoice is approved, after the three-way match, before the actual is posted (FIN-03.04).',
+            'permission' => 'approve it-finance-invoices', 'view_permission' => 'view it-finance', 'model' => Invoice::class, 'initiator' => 'submitted_by_id', 'owner' => 'endorser_id',
+            'title' => ['invoice_code', 'vendor_invoice_no'], 'route' => 'finance.invoices.show', 'initiate' => 'Submitting an invoice',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'match_status' => ['label' => 'Three-way match', 'values' => ['matched' => 'Matched', 'variance' => 'Variance', 'override' => 'Variance overridden', 'unmatched' => 'No PO (not matched)']],
+                'has_po' => ['label' => 'Has a purchase order', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'high_value' => ['label' => 'High value (invoice SoD band)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'has_endorser' => ['label' => 'Has a cost-centre endorser', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'cost_centre_id' => ['label' => 'Cost centre', 'values' => 'finance.cost_centres'],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance-invoices" other than the submitter, and above the SoD band not an approver of the purchase order.',
         ],
     ];
 

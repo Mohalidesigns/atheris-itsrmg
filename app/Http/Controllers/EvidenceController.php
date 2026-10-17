@@ -7,6 +7,7 @@ use App\Models\ComplianceResult;
 use App\Models\Control;
 use App\Models\Evidence;
 use App\Models\Finance\Contract;
+use App\Models\Finance\FinanceDocument;
 use App\Models\Gap;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
@@ -183,12 +184,18 @@ class EvidenceController extends Controller
     /** Contract documents sit in the vault but are served only through the finance module's own gated route. */
     private function hideFinanceDocument(Evidence $evidence): void
     {
-        abort_if($evidence->evidenceable_type === Contract::class, 404);
+        abort_if(in_array($evidence->evidenceable_type, $this->financeSubjectTypes(), true), 404);
+    }
+
+    /** Contracts and the P3 expense, PO, goods-receipt and invoice records: their documents are served by the finance routes only. @return list<class-string> */
+    private function financeSubjectTypes(): array
+    {
+        return array_merge([Contract::class], array_values(FinanceDocument::subjects()));
     }
 
     private function notFinanceDocument(): \Closure
     {
-        return fn ($q) => $q->whereNull('evidenceable_type')->orWhere('evidenceable_type', '!=', Contract::class);
+        return fn ($q) => $q->whereNull('evidenceable_type')->orWhereNotIn('evidenceable_type', $this->financeSubjectTypes());
     }
 
     /** Only whitelisted subject types, and only records in the user's organisation. */

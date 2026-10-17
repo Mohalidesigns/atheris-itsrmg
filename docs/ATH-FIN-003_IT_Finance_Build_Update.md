@@ -349,3 +349,46 @@ This phase resolves the five items that P2 deferred to "P2.1, before UAT". It al
 - `PresentsContracts::optionsPayload()` has no termination status list.
 - The renewals index and show pages don't list terminations. Terminations are shown on the contract's renewal tab only.
 - The "Approved, not executed" badge on the contract renewal tab is inferred from `days_to_end <= 0`. The calendar uses the backend flag.
+
+## Phase P3 — Expense management (2026-10-17, branch `feature/it-finance-p3`)
+
+Plan: `docs/build/ATH-FIN-PLAN-p3.md`. Built by fin-architect (opus) → fin-backend-engineer → fin-workflow-integrator ∥ fin-frontend-engineer → fin-qa-engineer (sonnet) → fin-security-reviewer + fin-domain-reviewer (opus) → fixes → gate.
+
+### Shipped
+- **Schema:** 3 migrations (`2027_03_01_000001..3`): expense requests, POs + lines, goods receipts + lines, invoices + lines, recurring expenses, accruals; actuals, import batches, import mappings, match rules; contract `lease_assessment` and `fin_settings.invoice_sod_from`. 14 models.
+- **Services:** `BudgetAvailability`, `ExpenseService`, `ProcurementService`, `ThreeWayMatcher`, `InvoiceService`, `ActualsService`, `ReconciliationService`, `RecurringExpenseService`, `AccrualService`, `FinanceTax`, `FinanceDocuments`, `FinanceTransactionImporter`.
+- **Workflow:** `finance.expense_approval` (owner → Head of IT → CFO → MD/CEO) and `finance.invoice_approval` (owner → Finance Controller → Finance Approver for high value) with default stages; the processes now total 18 (7 for finance). The Workflow Studio inbox honours `owner_stage_without_permission`. Notifications: UnbudgetedSpend, InvoiceDue, ImportCompleted. Commands: `fin:recurring-generate` (00:30) and `fin:invoices-sweep` (07:30). Invoice due dates appear in the finance calendar, `.ics` feed and digest. Renewals create a draft expense request.
+- **HTTP/UI:** 70 routes, 8 controllers, 13 pages (Expenses, Purchase Orders, Invoices, Actuals & Reconciliation with GL import/mapping/unmatched queue/rules, Recurring, Accruals, Imports), 24 components, nav entries, the contract lease field, `from_actuals` on Budgets/Create, and the invoice SoD threshold in Settings.
+- **Demo data:** `FinanceExpenseDemoSeeder` seeds orgs 2 and 3 with all expense, PO and invoice statuses, an overdue invoice, an unbudgeted emergency expense, variance/override/lease/prepaid invoices, recurring items, accruals, Jan–Aug actuals and a September GL batch with unmatched, duplicate and unbudgeted rows.
+
+### Tests
+New: `ExpenseBackendSmokeTest` (7), `ExpenseServicesSmokeTest` (10), `ExpenseWorkflowIntegrationTest` (11), `ExpenseApprovalAndAvailabilityTest` (14), `ProcurementThreeWayMatchTest` (16), `ActualsImportAndReconciliationTest` (13), `ExpenseReviewRegressionTest` (11), and a `RouteSmokeTest` expense-estate test that also checks every pending demo approval step has a seeded user who can decide it. Process counts were updated in `WorkflowStudioModuleTest` and `FinanceWorkflowStudioTest`.
+
+### Decisions
+P3-1 … P3-16 as written in the plan §0 (availability formula, over-budget warn/block, unbudgeted one-band escalation, cost-centre owner stage, CFO-only 10m–50m stage, string condition keys, invoice SoD on the final step, match tolerance, one line and one PO per request, GL import, open-period postings, minimal accruals/prepayments, IFRS 16 indicator, renewal → draft expense). Additionally:
+- **P3-6a:** IT Budget Owner gets `view workflows`, so owner-stage approvers can open the Studio inbox.
+- **P3-17:** system-created renewal drafts skip the unbudgeted-category check; it is enforced at submit.
+- **P3-18:** availability lineage stops at the fiscal-year boundary (prior-year copies no longer inherit commitments).
+
+### Fixes during the build
+- `fin_actuals.source` widened to 24 characters (`prepayment_release` was rejected by Postgres).
+- `ActualsService::unmatch`/`acknowledgeUnbudgeted` now refuse another bank's actual.
+
+### Review fixes applied
+- **Security H1:** the variance overrider is excluded from deciding the invoice. **H2:** a workflow switched on after submission now starts with the SoD snapshot, and final approval re-checks the exclusions, so a requester can't approve their own request.
+- **Security M1–M5, L3:** the capturer, overrider and step deciders can't pay; notifications drop amounts for users without `view it-finance-amounts`; document upload has a file-type whitelist and needs edit rights on the record; import batch actuals are filtered by visible cost centres; the requester can't receive goods or confirm their own invoice; the import delimiter must be one character.
+- **Domain H1–H4, M6:** no cross-year commitment leak; proposed prepayment releases count as committed; posted accruals reduce the PO commitment; actual re-matching respects period locks and only applies to GL/manual rows; the final-approval availability re-check locks the baseline line.
+
+### Deferred / logged (not fixed)
+- **Security L1** (line `category_id`/`asset_id` not bank-checked), **L2** (recurring cost-centre access check), **L4** (reject/return can skip SoD when no request is pending).
+- **Domain M7** (accruals exclude VAT), **M8** (accrual cut-off counts submitted invoices), **M9** (period close ignores pending accruals/releases), **M10** (prepayment releases cross into a planning FY), **M11** (GL duplicate detection keys on reference only), **M12** (direct invoices have no cap against the approved request), **L13** (emergency spend not escalated a band — per P3-5; needs a decision), **L14** (recurring dates skipped silently), **L15** (in-file GL duplicates).
+- Webhook-channel delivery for the new notifications; column-mapping UI for the expense CSV import; tax rates still unverified against the Nigeria Tax Act 2025; seeder dates drift if reseeded after December.
+
+### Review verdicts
+Both reviewers returned NO-GO before the fixes (security: H1, H2; domain: H1–H4). All of those are fixed and covered by `ExpenseReviewRegressionTest`.
+
+### Gate (PostgreSQL)
+- Full suite on `it_security_risk_test`: 624 passed, 5 skipped (8637 assertions, 22 min).
+- `migrate:fresh --seed` on `it_security_risk_scratch`: clean, no seeder warnings. `SMOKE=1 RouteSmokeTest`: 5 passed (3444 assertions).
+- `npm run build` passes. Playwright not run in P3 (per the token rules: P2 and P7 only).
+- After the suite run: added a missing `FinancePolicy` import in `FinanceImportController` (the import page 500'd, caught by SMOKE) and changed the seeder so procurement, not the Finance Controller, overrides the demo variance (H1 had left that review stage with no eligible decider in org 3). `ExpenseReviewRegressionTest` and `ActualsImportAndReconciliationTest` were re-run green after the change.

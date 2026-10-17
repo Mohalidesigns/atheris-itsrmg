@@ -249,7 +249,7 @@ class BudgetLifecycleTest extends TestCase
         $this->assertRefused(fn () => $svc->createVersion($c2, $this->cc, 'incremental', $this->owner), 'increment_pct');
         $this->assertRefused(fn () => $svc->createVersion($c2, $this->cc, 'incremental', $this->owner, ['increment_pct' => 150]), 'increment_pct');
         $this->assertRefused(fn () => $svc->createVersion($c2, $this->cc2, 'incremental', $this->owner2, ['increment_pct' => 5]), 'source_budget_id');
-        $this->assertRefused(fn () => $svc->createVersion($c2, $this->cc2, 'from_actuals', $this->owner2), 'mode', 'Phase P3');
+        $this->assertRefused(fn () => $svc->createVersion($c2, $this->cc2, 'from_actuals', $this->owner2), 'source_budget_id', 'prior year');
 
         $n = $svc->createVersion($c2, $this->cc, 'incremental', $this->owner, ['increment_pct' => 10]);
         $this->assertSame($b->id, $n->source_budget_id);

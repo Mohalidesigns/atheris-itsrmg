@@ -209,7 +209,7 @@ class WorkflowStudioController extends Controller
                     'step' => $step?->name, 'who' => $step ? $this->engine->describe($step) : null, 'due_at' => $step?->due_at,
                     'overdue' => $step?->due_at?->isPast() ?? false,
                     'progress' => $r->steps->where('status', 'approved')->count().'/'.$r->steps->count(),
-                    'mine' => $step && $this->engine->canDecide($step, $r, $r->subject, $user) && $user->can($def['permission'] ?? ''),
+                    'mine' => $step && $this->engine->canDecide($step, $r, $r->subject, $user) && ($user->can($def['permission'] ?? '') || (! empty($def['owner_stage_without_permission']) && $step->approver_type === 'owner')),
                 ];
             });
         $changes = ChangeApproval::query()->where('status', 'pending')->with('change:id,change_code,title,status,requester_id')->orderBy('sequence')->get()

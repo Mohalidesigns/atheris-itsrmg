@@ -91,13 +91,19 @@ class FinanceTenancyAndRoutesTest extends TestCase
         $names = collect(Route::getRoutes()->getRoutes())
             ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && in_array('GET', $r->methods(), true))
             ->map(fn (RouteDefinition $r) => $r->getName())->sort()->values()->all();
-        $this->assertSame([
+        $expected = [
             'finance.budgets.create', 'finance.budgets.diff', 'finance.budgets.edit', 'finance.budgets.index', 'finance.budgets.show', 'finance.budgets.workbook',
             'finance.calendar', 'finance.calendar.export', 'finance.calendar.ics',
             'finance.contracts.create', 'finance.contracts.documents.download', 'finance.contracts.edit', 'finance.contracts.index', 'finance.contracts.show',
             'finance.cycles.index', 'finance.renewals.index', 'finance.renewals.show',
             'finance.settings', 'finance.supplementary.index', 'finance.targets.index', 'finance.terminations.show', 'finance.transfers.index',
-        ], $names);
+            // P3: expenses, procurement, invoices, actuals, recurring, accruals, imports and documents
+            'finance.accruals.index', 'finance.actuals.candidates', 'finance.actuals.index', 'finance.documents.download', 'finance.expenses.availability', 'finance.expenses.create',
+            'finance.expenses.edit', 'finance.expenses.index', 'finance.expenses.show', 'finance.imports.index', 'finance.imports.show', 'finance.invoices.create', 'finance.invoices.edit',
+            'finance.invoices.index', 'finance.invoices.show', 'finance.purchase-orders.index', 'finance.purchase-orders.show', 'finance.recurring.index',
+        ];
+        sort($expected);
+        $this->assertSame($expected, $names);
 
         $components = [
             'finance.settings' => 'Finance/Settings', 'finance.budgets.index' => 'Finance/Budgets/Index', 'finance.budgets.create' => 'Finance/Budgets/Create',

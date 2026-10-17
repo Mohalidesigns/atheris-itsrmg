@@ -7,6 +7,8 @@ use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalWorkflow;
 use App\Models\Ea\BusinessService;
 use App\Models\Ea\EaApplication;
+use App\Models\Finance\Accrual;
+use App\Models\Finance\Actual;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetAdjustment;
 use App\Models\Finance\BudgetComment;
@@ -21,8 +23,14 @@ use App\Models\Finance\ContractEvent;
 use App\Models\Finance\ContractLink;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\DoaBandVersion;
+use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\FxRate;
+use App\Models\Finance\GoodsReceiptLine;
+use App\Models\Finance\ImportBatch;
+use App\Models\Finance\Invoice;
+use App\Models\Finance\PurchaseOrder;
+use App\Models\Finance\RecurringExpense;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\Setting;
 use App\Models\Finance\SupplementaryRequest;
@@ -106,7 +114,7 @@ class RouteSmokeTest extends TestCase
         }
 
         $urls = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && $r->getName() !== 'finance.calendar.ics' && in_array('GET', $r->methods(), true) && ! str_contains($r->uri(), '{'))
+            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && ! in_array($r->getName(), ['finance.calendar.ics', 'finance.expenses.availability'], true) && in_array('GET', $r->methods(), true) && ! str_contains($r->uri(), '{'))
             ->map(fn (RouteDefinition $r) => route($r->getName()))->values()->all();
         $this->assertNotEmpty($urls);
 
@@ -240,7 +248,7 @@ class RouteSmokeTest extends TestCase
                     $this->assertGreaterThan(0, $deciders->count(), "{$slug}: nobody can decide \"{$step->name}\" of {$request->subject_label}");
                 }
             }
-            $this->assertSame(5, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
+            $this->assertSame(7, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
 
             // DoA versions: the bank's own bands are active and each step is audited
             $active = DoaBandVersion::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'active')->firstOrFail();
@@ -398,5 +406,119 @@ class RouteSmokeTest extends TestCase
         $this->actingAs($acme)->get(route('finance.contracts.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('contracts', 0));
         $this->get(route('finance.renewals.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('renewals', 0));
         $this->get(route('finance.calendar'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('events', 0)->has('passed', 0));
+    }
+
+    /**
+     * IT Financial Management P3 (expenses): every status has a record, every detail page and tab renders, the overdue invoice, the
+     * unbudgeted emergency and the September reconciliation queue exist, and every pending expense and invoice step (owner-type steps
+     * included, so no permission filter) has a seeded person who can decide it.
+     */
+    public function test_finance_expense_estate_is_seeded_and_renders_for_every_demo_tenant(): void
+    {
+        if (env('SMOKE') !== '1') {
+            $this->markTestSkipped('Set SMOKE=1 and use a seeded database to run the route smoke test.');
+        }
+
+        $engine = app(ApprovalEngine::class);
+        foreach (['kano-heritage-bank' => 'admin@kanoheritage.ng', 'first-bank-nigeria' => 'admin@firstbanknigeria.ng'] as $slug => $email) {
+            $admin = User::where('email', $email)->firstOrFail();
+            $org = $admin->organization_id;
+            $this->actingAs($admin);
+
+            $expenses = ExpenseRequest::withoutGlobalScopes()->where('organization_id', $org)->get();
+            foreach (ExpenseRequest::STATUSES as $status) {
+                $this->assertTrue($expenses->contains('status', $status), "{$slug} has a {$status} expense request");
+            }
+            $emergency = $expenses->first(fn ($e) => $e->is_emergency && $e->budget_line_id === null);
+            $this->assertNotNull($emergency, "{$slug} an unbudgeted emergency request");
+            $this->assertSame('submitted', $emergency->status);
+            $this->assertTrue($expenses->contains(fn ($e) => $e->renewal_id !== null && $e->status === 'draft'), "{$slug} a draft raised from a renewal");
+
+            $pos = PurchaseOrder::withoutGlobalScopes()->where('organization_id', $org)->get();
+            foreach (['open', 'partially_received', 'received', 'closed'] as $status) {
+                $this->assertTrue($pos->contains('status', $status), "{$slug} has a {$status} purchase order");
+            }
+            $this->assertTrue(GoodsReceiptLine::withoutGlobalScopes()->where('organization_id', $org)->where('accepted', false)->exists(), "{$slug} a receipt with a rejected line");
+
+            $invoices = Invoice::withoutGlobalScopes()->where('organization_id', $org)->get();
+            foreach (Invoice::STATUSES as $status) {
+                $this->assertTrue($invoices->contains('status', $status), "{$slug} has a {$status} invoice");
+            }
+            $today = Carbon::parse(now(config('finance.timezone'))->toDateString());
+            $this->assertTrue($invoices->contains(fn ($i) => in_array($i->status, Invoice::UNPAID, true) && $i->due_on->lt($today)), "{$slug} an overdue invoice");
+            $this->assertTrue($invoices->contains('match_status', 'variance'), "{$slug} a variance invoice");
+            $this->assertTrue($invoices->contains('match_status', 'override'), "{$slug} an overridden invoice");
+            $this->assertTrue($invoices->contains(fn ($i) => $i->is_lease), "{$slug} a lease invoice");
+            $this->assertTrue($invoices->contains(fn ($i) => $i->prepayment_months !== null), "{$slug} a prepaid invoice");
+            $this->assertTrue($invoices->contains(fn ($i) => $i->is_expected), "{$slug} an expected invoice from a recurring expense");
+            $this->assertTrue($invoices->contains(fn ($i) => $i->po_id === null && $i->contract_id !== null), "{$slug} a contract invoice without a PO");
+
+            // actuals: nine months of ledger, a September batch with rows to reconcile, a duplicate and an unbudgeted acknowledgement
+            $actuals = Actual::withoutGlobalScopes()->where('organization_id', $org);
+            $this->assertGreaterThan(300, (clone $actuals)->where('source', 'gl_import')->count());
+            $this->assertGreaterThanOrEqual(9, (clone $actuals)->where('source', 'gl_import')->distinct()->count('period_id'), 'January to September');
+            $sept = ImportBatch::withoutGlobalScopes()->where('organization_id', $org)->where('type', 'actuals')->where('file_name', 'GL extract Sep')->firstOrFail();
+            $this->assertGreaterThanOrEqual(6, $sept->unmatched_count);
+            $this->assertLessThanOrEqual(8, $sept->unmatched_count);
+            $this->assertSame(2, (clone $actuals)->where('match_status', 'duplicate')->count());
+            $this->assertSame(1, (clone $actuals)->where('match_status', 'unbudgeted')->where('source', 'gl_import')->count());
+            $this->assertTrue(ImportBatch::withoutGlobalScopes()->where('organization_id', $org)->where('type', 'invoices')->where('rejected_count', '>', 0)->exists(), "{$slug} an invoices import with rejected rows");
+            $this->assertTrue(Accrual::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'reversed')->exists());
+            $this->assertTrue(Accrual::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'proposed')->exists());
+            $this->assertSame(6, RecurringExpense::withoutGlobalScopes()->where('organization_id', $org)->count());
+            $this->assertTrue(RecurringExpense::withoutGlobalScopes()->where('organization_id', $org)->where('is_active', false)->exists());
+            $this->assertTrue(DB::table('fin_notification_logs')->where('organization_id', $org)->where('notifiable_type', Invoice::class)->where('offset_days', '<', 0)->exists(), "{$slug} overdue notification history");
+
+            // every page renders: lists, one detail page per status, every tab
+            foreach (['finance.expenses.index', 'finance.purchase-orders.index', 'finance.invoices.index', 'finance.recurring.index', 'finance.accruals.index', 'finance.imports.index'] as $name) {
+                $this->get(route($name))->assertOk();
+            }
+            $this->get(route('finance.expenses.availability', ['budget_line_id' => $expenses->firstWhere('budget_line_id', '!=', null)->budget_line_id, 'amount' => '1000000']))->assertOk();
+            $this->get(route('finance.invoices.index', ['overdue' => 1]))->assertOk();
+            $this->get(route('finance.invoices.index', ['awaiting_me' => 1]))->assertOk();
+            foreach ($expenses->unique('status') as $e) {
+                $this->get(route('finance.expenses.show', $e))->assertOk();
+                $e->status === 'draft' && $this->get(route('finance.expenses.edit', $e))->assertOk();
+            }
+            foreach ($pos->unique('status') as $po) {
+                $this->get(route('finance.purchase-orders.show', $po))->assertOk();
+            }
+            foreach ($invoices->unique('status') as $i) {
+                $this->get(route('finance.invoices.show', $i))->assertOk();
+            }
+            foreach (['posted', 'queue', 'rules', 'mappings'] as $tab) {
+                $this->get(route('finance.actuals.index', ['tab' => $tab]))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Actuals/Index')->where('tab', $tab));
+            }
+            $this->get(route('finance.actuals.index', ['tab' => 'queue']))->assertInertia(fn (Assert $p) => $p->where('queue', fn ($q) => count($q) >= 6));
+            foreach (ImportBatch::withoutGlobalScopes()->where('organization_id', $org)->get() as $b) {
+                $this->get(route('finance.imports.show', $b))->assertOk()->assertInertia(fn (Assert $p) => $p->has('batch.report.rows')->has('batch.report.errors')->has('batch.report.sample'));
+            }
+            $queued = Actual::withoutGlobalScopes()->where('organization_id', $org)->where('match_status', 'unmatched')->first();
+            $this->get(route('finance.actuals.candidates', $queued))->assertOk();
+
+            // every pending expense and invoice step has someone who can decide it (an owner-type step needs no approve permission)
+            foreach (['finance.expense_approval', 'finance.invoice_approval'] as $process) {
+                $pending = ApprovalRequest::withoutGlobalScopes()->where('organization_id', $org)->where('process', $process)->where('status', 'pending')->get();
+                $this->assertGreaterThanOrEqual(2, $pending->count(), "{$slug} pending {$process}");
+                foreach ($pending as $request) {
+                    $step = $request->currentStep();
+                    $subject = $request->subject_type::withoutGlobalScopes()->find($request->subject_id);
+                    $deciders = $engine->eligibleUsers($step, $request)->filter(fn (User $u) => $engine->canDecide($step, $request, $subject, $u));
+                    $this->assertGreaterThan(0, $deciders->count(), "{$slug}: nobody can decide \"{$step->name}\" of {$request->subject_label}");
+                }
+            }
+            // the high-value invoice shows its excluded PO approvers
+            $high = $invoices->first(fn ($i) => $i->high_value === 'yes' && $i->status === 'submitted');
+            $this->assertNotNull($high, "{$slug} a high-value invoice pending at the Finance Approver stage");
+            $this->get(route('finance.invoices.show', $high))->assertInertia(fn (Assert $p) => $p->where('sod.applies', true)->has('sod.po_approvers'));
+        }
+
+        // a bank with no finance data renders empty expense pages, not errors
+        $acme = User::where('email', 'admin@acme.ng')->first();
+        $this->actingAs($acme);
+        $this->get(route('finance.expenses.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Expenses/Index'));
+        foreach (['finance.purchase-orders.index', 'finance.invoices.index', 'finance.actuals.index', 'finance.recurring.index', 'finance.accruals.index', 'finance.imports.index'] as $name) {
+            $this->get(route($name))->assertOk();
+        }
     }
 }

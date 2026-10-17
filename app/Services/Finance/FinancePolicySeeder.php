@@ -38,6 +38,17 @@ class FinancePolicySeeder
                 self::stage(10, 'Head of IT review', 'job_title', 'Head of IT', 72),
                 self::stage(20, 'CFO approval (high value or post-deadline)', 'job_title', 'Chief Financial Officer', 72, 'requires_cfo', ['yes']),
             ],
+            'finance.expense_approval' => [
+                self::stage(10, 'Cost-centre owner endorsement', 'owner', '', 48, 'has_endorser', ['yes']),
+                self::stage(20, 'Head of IT approval', 'job_title', 'Head of IT', 48, 'effective_band', self::bandsFrom($orgId, $cfg['expense_head_of_it_from'])),
+                self::stage(30, 'CFO approval', 'job_title', 'Chief Financial Officer', 48, 'effective_band', self::bandsFrom($orgId, $cfg['expense_cfo_from'])),
+                self::stage(40, 'MD/CEO approval', 'job_title', 'Managing Director', 72, 'effective_band', self::bandsFrom($orgId, $cfg['expense_md_ceo_from'])),
+            ],
+            'finance.invoice_approval' => [
+                self::stage(10, 'Cost-centre owner confirmation', 'owner', '', 48, 'has_endorser', ['yes']),
+                self::stage(20, 'Finance Controller review', 'role', 'IT Finance Controller', 48, 'match_status', ['variance', 'override', 'unmatched']),
+                self::stage(30, 'Finance Approver (high value)', 'role', 'Finance Approver', 48, 'high_value', ['yes']),
+            ],
         ];
 
         foreach ($plans as $process => $stages) {

@@ -42,7 +42,7 @@ export default function ContractForm({ contract, options, vendors, users, costCe
         amount_per_billing: c?.amount_per_billing ?? '', payment_terms_days: c?.payment_terms_days ?? '', price_escalation_pct: c?.price_escalation_pct ?? '',
         licence_metric: c?.licence_metric ?? '', licence_quantity: c?.licence_quantity ?? '', deployed_quantity: c?.deployed_quantity ?? '',
         data_processing_role: c?.data_processing_role ?? 'none', dpa_status: c?.dpa_status ?? 'not_required',
-        sla_summary: c?.sla_summary ?? '', exit_terms: c?.exit_terms ?? '', key_clauses: c?.key_clauses ?? [], external_reference: c?.external_reference ?? '',
+        sla_summary: c?.sla_summary ?? '', exit_terms: c?.exit_terms ?? '', key_clauses: c?.key_clauses ?? [], external_reference: c?.external_reference ?? '', lease_assessment: c?.lease_assessment ?? '', lease_assessment_note: c?.lease_assessment_note ?? '',
         activate: false,
     });
     const d = form.data;
@@ -168,6 +168,13 @@ export default function ContractForm({ contract, options, vendors, users, costCe
                 <Field id="k-lm" label="Metric" error={e.licence_metric}><select id="k-lm" value={d.licence_metric} onChange={set('licence_metric')} className={FIELD}><option value="">Not licence based</option>{options.licenceMetrics.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></Field>
                 <Field id="k-lq" label="Entitled quantity" error={e.licence_quantity}><input id="k-lq" type="number" min="0" step="0.01" value={d.licence_quantity} onChange={set('licence_quantity')} className={FIELD} /></Field>
                 <Field id="k-dq" label="Deployed quantity" error={e.deployed_quantity}><input id="k-dq" type="number" min="0" step="0.01" value={d.deployed_quantity} onChange={set('deployed_quantity')} className={FIELD} /></Field>
+            </Section>
+
+            <Section icon="real_estate_agent" title="Lease assessment (IFRS 16)">
+                <Field id="k-lease" label="Lease assessment" error={e.lease_assessment}>
+                    <select id="k-lease" value={d.lease_assessment ?? ''} onChange={set('lease_assessment')} className={FIELD}><option value="">Not assessed</option>{(options.leaseAssessments ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>
+                </Field>
+                <Field id="k-lease-note" label="Assessment note" error={e.lease_assessment_note} className="sm:col-span-2"><input id="k-lease-note" maxLength={2000} value={d.lease_assessment_note ?? ''} onChange={set('lease_assessment_note')} className={FIELD} /></Field>
             </Section>
 
             <Section icon="shield" title="Data protection">

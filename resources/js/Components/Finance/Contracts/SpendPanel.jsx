@@ -34,7 +34,7 @@ export default function SpendPanel({ contract, spend, baseCurrency, can }) {
                     </dl>
                 ) : <Empty>This contract is not linked to a budget line. Edit it to attach one.</Empty>}
             </Card>
-            <p className="flex items-center gap-2 rounded-lg border border-dashed border-gray-200 px-4 py-3 text-xs text-[#718096]">Actuals arrive with Expenses (P3). Until then spend is the contracted value only.</p>
+            <p className="flex items-center gap-2 rounded-lg border border-dashed border-gray-200 px-4 py-3 text-xs text-[#718096]">Posted spend and invoices for this contract appear under Invoices and Actuals.</p>
         </div>
     );
 }

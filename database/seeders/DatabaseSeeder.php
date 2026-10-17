@@ -132,6 +132,10 @@ class DatabaseSeeder extends Seeder
         // calendar lane, renewals in every stage with workflow approvals, team, links, documents and T-minus history
         $this->call(FinanceContractDemoSeeder::class);
 
+        // IT Financial Management P3 (expenses): requests, POs, receipts and invoices in every status, recurring expenses,
+        // accruals, nine months of GL actuals with a September batch to reconcile, and an invoices import with rejected rows
+        $this->call(FinanceExpenseDemoSeeder::class);
+
         // Asset Management: coherent owners and departments, provenance from real sandbox connector
         // runs and a CSV import, business services and dependency chains per bank, asset → service
         // links, inherited criticality, and First Bank's EA applications tied to their assets

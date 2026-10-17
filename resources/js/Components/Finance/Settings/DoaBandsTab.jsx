@@ -23,6 +23,28 @@ function BandsTable({ bands, baseCurrency }) {
     );
 }
 
+function SodCard({ settings, baseCurrency, can }) {
+    const form = useForm({ section: 'doa', invoice_sod_from: settings.invoice_sod_from ?? '' });
+    const submit = (e) => {
+        e.preventDefault();
+        form.transform((d) => ({ ...d, invoice_sod_from: d.invoice_sod_from === '' ? null : d.invoice_sod_from }));
+        form.put(route('finance.settings.update'), { preserveScroll: true });
+    };
+    return (
+        <Card title="Invoice segregation of duties">
+            <form onSubmit={submit}>
+                <div className="space-y-2 px-5 py-4">
+                    <label className={LABEL} htmlFor="sod-from">Final invoice approver may not have approved the purchase order from ({baseCurrency})</label>
+                    <input id="sod-from" type="number" min="0" step="0.01" disabled={!can.manage} value={form.data.invoice_sod_from} onChange={(e) => form.setData('invoice_sod_from', e.target.value)} className={FIELD} placeholder={settings.invoice_sod_default != null ? String(settings.invoice_sod_default) : ''} />
+                    <p className="text-xs text-[#718096]">Leave blank to use the bank default{settings.invoice_sod_default != null ? ` (${formatMoney(settings.invoice_sod_default, baseCurrency, { decimals: 0 })})` : ''}.</p>
+                    <InputError message={form.errors.invoice_sod_from} />
+                </div>
+                {can.manage && <div className="flex justify-end border-t border-gray-100 px-5 py-3"><button disabled={form.processing} className={BTN_PRIMARY}>Save</button></div>}
+            </form>
+        </Card>
+    );
+}
+
 export default function DoaBandsTab({ settings, doaVersions = [], baseCurrency, can }) {
     const { auth, errors: pageErrors } = usePage().props;
     const active = doaVersions.find((v) => v.status === 'active');
@@ -66,6 +88,8 @@ export default function DoaBandsTab({ settings, doaVersions = [], baseCurrency, 
             <Card title={active ? `Active bands: version ${active.version_no}` : 'Active bands'} right={active && <span className="text-xs text-[#718096]">Effective from {formatDate(active.effective_from)}. Amounts in {baseCurrency}</span>}>
                 <BandsTable bands={seed} baseCurrency={baseCurrency} />
             </Card>
+
+            <SodCard settings={settings} baseCurrency={baseCurrency} can={can} />
 
             <Card title="Versions">
                 <Table head={['Version', 'Status', 'Effective from', 'Proposed by', 'Decided by', 'Note', ...(can.approveBands || can.manage ? [''] : [])]} empty={doaVersions.length === 0 && <Empty>No versions yet.</Empty>}>

@@ -2,6 +2,7 @@
 
 namespace App\Services\Finance;
 
+use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetAdjustment;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetLinePeriod;
@@ -40,7 +41,30 @@ class BudgetLedger
         return $out;
     }
 
-    /** Current base amount available in a period, or the whole year. P3 subtracts committed and actual here. */
+    /**
+     * The line's id plus every earlier line in its `source_line_id` chain (a re-baseline re-creates lines), so commitments and
+     * actuals made against an earlier baseline still count against the current one (plan P3-1).
+     *
+     * @return list<int>
+     */
+    public function lineageIds(BudgetLine $line, bool $sameYear = false): array
+    {
+        $ids = [(int) $line->id];
+        $source = $line->source_line_id;
+        $fy = $sameYear ? Budget::withoutGlobalScopes()->whereKey($line->budget_id)->value('fiscal_year_id') : null;
+        for ($hops = 0; $source && $hops < 25 && ! in_array((int) $source, $ids, true); $hops++) {
+            $src = BudgetLine::withoutGlobalScopes()->whereKey($source)->first(['id', 'budget_id', 'source_line_id']);
+            if (! $src || ($sameYear && (int) Budget::withoutGlobalScopes()->whereKey($src->budget_id)->value('fiscal_year_id') !== (int) $fy)) {
+                break; // a prior fiscal year's copy never feeds this year's commitments
+            }
+            $ids[] = (int) $source;
+            $source = $src->source_line_id;
+        }
+
+        return $ids;
+    }
+
+    /** Current budget (baseline plus applied adjustments) of a period, or the whole year. Committed and actual spend are BudgetAvailability. */
     public function available(BudgetLine $line, ?Period $period = null): string
     {
         $by = $this->currentByPeriod($line);

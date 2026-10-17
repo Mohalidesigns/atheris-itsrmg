@@ -47,6 +47,7 @@ return [
         ['6203', 'Hardware maintenance', 'opex'], ['6301', 'Telecoms and connectivity', 'opex'], ['6302', 'Cloud services', 'opex'],
         ['6401', 'IT consultancy and outsourced services', 'opex'], ['6501', 'Data centre facilities and power', 'opex'],
         ['6601', 'IT training', 'opex'], ['6901', 'Other IT expenses', 'opex'],
+        ['1850', 'Right-of-use assets (IFRS 16)', 'balance_sheet'], ['2201', 'Lease liabilities (IFRS 16)', 'balance_sheet'],
     ],
 
     'import_max_rows' => 5000,
@@ -61,13 +62,16 @@ return [
     'phasing' => ['seasonal' => [6, 7, 8, 8, 8, 8, 8, 8, 9, 9, 10, 11]], // weights by period sequence 1..12
     'transfers' => ['allow_capex_opex' => false],
     // Tables that hold money; the base currency is frozen once any has a row (P3+ append).
-    'money_tables' => ['fin_budget_lines', 'fin_budget_transfers', 'fin_supplementary_requests', 'fin_contracts', 'fin_contract_renewals'],
+    'money_tables' => ['fin_budget_lines', 'fin_budget_transfers', 'fin_supplementary_requests', 'fin_contracts', 'fin_contract_renewals',
+        'fin_expense_requests', 'fin_purchase_orders', 'fin_invoices', 'fin_actuals', 'fin_recurring_expenses', 'fin_accruals'],
     'workbook' => ['max_rows' => 2000, 'max_kb' => 4096],
     'approval_defaults' => [ // base-currency thresholds that FinancePolicySeeder maps onto each bank's bands
         'budget_md_ceo_from' => 250000000,
         'supplementary_cio_from' => 50000000,
         'transfer_cio_from' => 50000000,
         'renewal_cfo_from' => 10000000, 'renewal_cfo_uplift_pct' => 10, // a contract renewal also needs the CFO above either threshold (plan C50)
+        'expense_head_of_it_from' => 1000000, 'expense_cfo_from' => 10000000, 'expense_md_ceo_from' => 50000000,
+        'invoice_sod_from' => 10000000, // fallback when fin_settings.invoice_sod_from is null
     ],
 
     // P2 contracts, subscriptions, renewals and calendar (ATH-FIN-001 §3.6, §5.4)
@@ -82,4 +86,10 @@ return [
         'calendar' => ['ics_past_days' => 90, 'ics_future_days' => 548, 'max_range_days' => 400],
         'document_max_kb' => 20480,
     ],
+
+    // P3 expenses, procurement, invoices and actuals (ATH-FIN-001 §3.3)
+    'expenses' => ['justification_min' => 20, 'unbudgeted_band_bump' => 1],
+    'invoices' => ['due_offsets' => [7, 0], 'overdue_offsets' => [1, 7, 14, 30], 'default_payment_days' => 30, 'override_reason_min' => 10],
+    'actuals' => ['max_kb' => 8192, 'date_formats' => ['Y-m-d', 'd/m/Y', 'm/d/Y', 'd-M-Y', 'd.m.Y']],
+    'recurring' => ['catch_up_max' => 12],
 ];

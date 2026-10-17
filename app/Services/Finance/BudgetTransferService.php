@@ -273,6 +273,11 @@ class BudgetTransferService
         if (bccomp($amount, $available, 2) > 0) {
             $this->fail("The amount exceeds the {$available} available on line {$from->line_no}.", 'amount');
         }
+        // Budget already committed to approved requests and purchase orders, or spent, cannot be moved away (plan C89).
+        $free = app(BudgetAvailability::class)->forLine($from)['available'];
+        if (bccomp($amount, $free, 2) > 0) {
+            $this->fail("Budget already committed or spent: only {$free} of line {$from->line_no} is still free to move.", 'amount');
+        }
     }
 
     private function baselineLine(int $orgId, int $id, FiscalYear $fy, string $key): BudgetLine

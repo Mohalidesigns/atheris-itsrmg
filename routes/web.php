@@ -33,6 +33,8 @@ use App\Http\Controllers\Ea\SurveyController;
 use App\Http\Controllers\Ea\WedgeController;
 use App\Http\Controllers\EaController;
 use App\Http\Controllers\EvidenceController;
+use App\Http\Controllers\Finance\AccrualController;
+use App\Http\Controllers\Finance\ActualsController;
 use App\Http\Controllers\Finance\BudgetController;
 use App\Http\Controllers\Finance\BudgetCycleController;
 use App\Http\Controllers\Finance\BudgetLineController;
@@ -43,11 +45,17 @@ use App\Http\Controllers\Finance\BudgetWorkbookController;
 use App\Http\Controllers\Finance\ContractController;
 use App\Http\Controllers\Finance\ContractRelationsController;
 use App\Http\Controllers\Finance\DoaBandController;
+use App\Http\Controllers\Finance\ExpenseController;
 use App\Http\Controllers\Finance\FinanceCalendarController;
 use App\Http\Controllers\Finance\FinanceCurrencyController;
 use App\Http\Controllers\Finance\FinanceDimensionsController;
+use App\Http\Controllers\Finance\FinanceDocumentController;
+use App\Http\Controllers\Finance\FinanceImportController;
 use App\Http\Controllers\Finance\FinanceSettingsController;
 use App\Http\Controllers\Finance\FiscalCalendarController;
+use App\Http\Controllers\Finance\InvoiceController;
+use App\Http\Controllers\Finance\PurchaseOrderController;
+use App\Http\Controllers\Finance\RecurringExpenseController;
 use App\Http\Controllers\Finance\RenewalController;
 use App\Http\Controllers\Finance\SupplementaryRequestController;
 use App\Http\Controllers\Finance\TerminationController;
@@ -844,6 +852,82 @@ Route::middleware('auth')->group(function () {
             Route::post('/contracts/{contract}/terminate', [ContractController::class, 'terminate'])->whereNumber('contract')->name('contracts.terminate');
             foreach (['approve', 'reject', 'withdraw'] as $action) {
                 Route::post("/terminations/{termination}/{$action}", [TerminationController::class, $action])->whereNumber('termination')->name("terminations.{$action}");
+            }
+        });
+
+        // P3 expenses, procurement, invoices, actuals, recurring, accruals and imports (ATH-FIN-001 §3.3, §9)
+        Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+        Route::get('/expenses/availability', [ExpenseController::class, 'availability'])->name('expenses.availability');
+        Route::middleware('permission:create it-finance')->group(function () {
+            Route::get('/expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
+            Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+            Route::post('/expenses/{expense}/commit', [ExpenseController::class, 'commit'])->whereNumber('expense')->name('expenses.commit');
+            Route::get('/invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+            Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+            Route::post('/recurring', [RecurringExpenseController::class, 'store'])->name('recurring.store');
+        });
+        Route::middleware('permission:import it-finance')->group(function () {
+            Route::post('/expenses/import', [ExpenseController::class, 'import'])->name('expenses.import');
+            Route::post('/invoices/import', [InvoiceController::class, 'import'])->name('invoices.import');
+            Route::post('/actuals/import', [ActualsController::class, 'import'])->name('actuals.import');
+            Route::post('/actuals/auto-match', [ActualsController::class, 'autoMatch'])->name('actuals.auto-match');
+            Route::post('/actuals/mappings', [ActualsController::class, 'mappingStore'])->name('actuals.mappings.store');
+            Route::delete('/actuals/mappings/{mapping}', [ActualsController::class, 'mappingDestroy'])->whereNumber('mapping')->name('actuals.mappings.destroy');
+            Route::post('/actuals/rules', [ActualsController::class, 'ruleStore'])->name('actuals.rules.store');
+            Route::delete('/actuals/rules/{rule}', [ActualsController::class, 'ruleDestroy'])->whereNumber('rule')->name('actuals.rules.destroy');
+            foreach (['match', 'unmatch', 'unbudgeted'] as $action) {
+                Route::post("/actuals/{actual}/{$action}", [ActualsController::class, $action])->whereNumber('actual')->name("actuals.{$action}");
+            }
+        });
+        Route::get('/expenses/{expense}', [ExpenseController::class, 'show'])->whereNumber('expense')->name('expenses.show');
+        Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
+        Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->whereNumber('purchaseOrder')->name('purchase-orders.show');
+        Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->whereNumber('invoice')->name('invoices.show');
+        Route::get('/actuals', [ActualsController::class, 'index'])->name('actuals.index');
+        Route::get('/actuals/{actual}/candidates', [ActualsController::class, 'candidates'])->whereNumber('actual')->name('actuals.candidates');
+        Route::get('/recurring', [RecurringExpenseController::class, 'index'])->name('recurring.index');
+        Route::get('/accruals', [AccrualController::class, 'index'])->name('accruals.index');
+        Route::get('/imports', [FinanceImportController::class, 'index'])->name('imports.index');
+        Route::get('/imports/{importBatch}', [FinanceImportController::class, 'show'])->whereNumber('importBatch')->name('imports.show');
+        Route::get('/documents/{document}/download', [FinanceDocumentController::class, 'download'])->whereNumber('document')->name('documents.download');
+        Route::post('/documents', [FinanceDocumentController::class, 'store'])->middleware('permission:create it-finance|edit it-finance')->name('documents.store');
+        foreach (['approve', 'return', 'reject'] as $action) { // gated by FinancePolicy::decideExpense / decideInvoice (the permission, or being the owner the stage awaits)
+            Route::post("/expenses/{expense}/{$action}", [ExpenseController::class, $action])->whereNumber('expense')->name("expenses.{$action}");
+            Route::post("/invoices/{invoice}/{$action}", [InvoiceController::class, $action])->whereNumber('invoice')->name("invoices.{$action}");
+        }
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::get('/expenses/{expense}/edit', [ExpenseController::class, 'edit'])->whereNumber('expense')->name('expenses.edit');
+            Route::put('/expenses/{expense}', [ExpenseController::class, 'update'])->whereNumber('expense')->name('expenses.update');
+            Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->whereNumber('expense')->name('expenses.destroy');
+            foreach (['submit', 'withdraw', 'cancel', 'close'] as $action) {
+                Route::post("/expenses/{expense}/{$action}", [ExpenseController::class, $action])->whereNumber('expense')->name("expenses.{$action}");
+            }
+            Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->whereNumber('purchaseOrder')->name('purchase-orders.update');
+            foreach (['receive', 'close', 'cancel'] as $action) {
+                Route::post("/purchase-orders/{purchaseOrder}/{$action}", [PurchaseOrderController::class, $action])->whereNumber('purchaseOrder')->name("purchase-orders.{$action}");
+            }
+            Route::get('/invoices/{invoice}/edit', [InvoiceController::class, 'edit'])->whereNumber('invoice')->name('invoices.edit');
+            Route::put('/invoices/{invoice}', [InvoiceController::class, 'update'])->whereNumber('invoice')->name('invoices.update');
+            Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy'])->whereNumber('invoice')->name('invoices.destroy');
+            foreach (['match', 'override', 'submit', 'withdraw', 'dispute', 'resolve', 'cancel'] as $action) {
+                Route::post("/invoices/{invoice}/{$action}", [InvoiceController::class, $action])->whereNumber('invoice')->name("invoices.{$action}");
+            }
+            Route::put('/recurring/{recurringExpense}', [RecurringExpenseController::class, 'update'])->whereNumber('recurringExpense')->name('recurring.update');
+            Route::delete('/recurring/{recurringExpense}', [RecurringExpenseController::class, 'destroy'])->whereNumber('recurringExpense')->name('recurring.destroy');
+            Route::post('/recurring/{recurringExpense}/generate', [RecurringExpenseController::class, 'generate'])->whereNumber('recurringExpense')->name('recurring.generate');
+        });
+        Route::middleware('permission:approve it-finance-invoices')->group(function () {
+            foreach (['schedule', 'pay'] as $action) {
+                Route::post("/invoices/{invoice}/{$action}", [InvoiceController::class, $action])->whereNumber('invoice')->name("invoices.{$action}");
+            }
+        });
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/accruals', [AccrualController::class, 'store'])->name('accruals.store');
+            Route::post('/accruals/propose', [AccrualController::class, 'propose'])->name('accruals.propose');
+            Route::post('/accruals/release-prepayments', [AccrualController::class, 'releasePrepayments'])->name('accruals.release-prepayments');
+            foreach (['post', 'reverse', 'cancel'] as $action) {
+                Route::post("/accruals/{accrual}/{$action}", [AccrualController::class, $action])->whereNumber('accrual')->name("accruals.{$action}");
             }
         });
 

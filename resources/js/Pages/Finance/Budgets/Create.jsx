@@ -8,7 +8,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 const MODE_HINT = {
     zero_based: 'Start empty and justify every line.',
     incremental: 'Copy a prior-year baseline and apply a percentage increment.',
-    from_actuals: 'Available once actuals are posted.',
+    from_actuals: 'Re-budget a prior-year baseline at its posted actuals.',
 };
 
 export default function Create({ cycles, costCentres, users, modes, priorBaselines, defaults, baseCurrency }) {
@@ -20,7 +20,7 @@ export default function Create({ cycles, costCentres, users, modes, priorBaselin
     const sources = priorBaselines.filter((b) => !form.data.cost_centre_id || String(b.cost_centre_id) === String(form.data.cost_centre_id));
     const submit = (ev) => {
         ev.preventDefault();
-        form.transform((d) => ({ ...d, source_budget_id: d.mode === 'incremental' ? d.source_budget_id || null : null, increment_pct: d.mode === 'incremental' ? d.increment_pct || null : null, owner_id: d.owner_id || null }));
+        form.transform((d) => ({ ...d, source_budget_id: d.mode !== 'zero_based' ? d.source_budget_id || null : null, increment_pct: d.mode !== 'zero_based' ? d.increment_pct || null : null, owner_id: d.owner_id || null }));
         form.post(route('finance.budgets.store'));
     };
 
@@ -42,7 +42,7 @@ export default function Create({ cycles, costCentres, users, modes, priorBaselin
                             <legend className={LABEL}>Basis</legend>
                             <div className="mt-1 space-y-1">
                                 {modes.map((m) => {
-                                    const disabled = m === 'from_actuals';
+                                    const disabled = false;
                                     return (
                                         <label key={m} className={`flex items-start gap-2 text-sm ${disabled ? 'text-[#A0A4AB]' : 'text-[#2D3748]'}`}>
                                             <input type="radio" name="mode" disabled={disabled} checked={form.data.mode === m} onChange={() => form.setData('mode', m)} className="mt-1" />
@@ -53,14 +53,14 @@ export default function Create({ cycles, costCentres, users, modes, priorBaselin
                             </div>
                             <InputError message={e.mode} />
                         </fieldset>
-                        {form.data.mode === 'incremental' && (
+                        {form.data.mode !== 'zero_based' && (
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                 <div className="sm:col-span-2"><label className={LABEL} htmlFor="b-src">Source baseline</label>
                                     <select id="b-src" value={form.data.source_budget_id} onChange={set('source_budget_id')} className={FIELD}>
                                         <option value="">Select…</option>{sources.map((b) => <option key={b.id} value={b.id}>{b.budget_code} v{b.version_no} · {b.fiscal_year_label} · {formatMoney(b.total_base_amount, baseCurrency, { decimals: 0 })}</option>)}
                                     </select><InputError message={e.source_budget_id} />
                                     {sources.length === 0 && <p className="mt-1 text-xs text-[#718096]">No prior baseline exists for this cost centre.</p>}</div>
-                                <div><label className={LABEL} htmlFor="b-inc">Increment %</label><input id="b-inc" type="number" step="any" min="-100" max="100" value={form.data.increment_pct} onChange={set('increment_pct')} className={FIELD} /><InputError message={e.increment_pct} /></div>
+                                <div><label className={LABEL} htmlFor="b-inc">{form.data.mode === 'from_actuals' ? 'Uplift % on actuals (optional)' : 'Increment %'}</label><input id="b-inc" type="number" step="any" min="-100" max="100" value={form.data.increment_pct} onChange={set('increment_pct')} className={FIELD} /><InputError message={e.increment_pct} /></div>
                             </div>
                         )}
                         <div><label className={LABEL} htmlFor="b-owner">Owner</label><select id="b-owner" value={form.data.owner_id} onChange={set('owner_id')} className={FIELD}><option value="">Me</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}{u.job_title ? ` · ${u.job_title}` : ''}</option>)}</select><InputError message={e.owner_id} /></div>

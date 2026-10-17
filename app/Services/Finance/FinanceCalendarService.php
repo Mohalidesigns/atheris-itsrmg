@@ -5,6 +5,7 @@ namespace App\Services\Finance;
 use App\Models\Finance\BudgetCycle;
 use App\Models\Finance\Contract;
 use App\Models\Finance\CostCentre;
+use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
 use App\Models\Finance\Renewal;
 use App\Models\Organization;
@@ -24,7 +25,7 @@ use Illuminate\Support\Collection;
  */
 class FinanceCalendarService
 {
-    public const SOURCES = ['contracts' => 'Contracts and renewals', 'budget' => 'Budget cycles', 'periods' => 'Fiscal periods'];
+    public const SOURCES = ['contracts' => 'Contracts and renewals', 'budget' => 'Budget cycles', 'periods' => 'Fiscal periods', 'invoices' => 'Invoice due dates'];
 
     private const EVENT_TYPES = [
         'contract_commencement' => ['Contract commences', 'blue'],
@@ -38,6 +39,7 @@ class FinanceCalendarService
         'period_end' => ['Period ends', 'blue'],
         'period_closed' => ['Period closed', 'blue'],
         'period_locked' => ['Period locked', 'blue'],
+        'invoice_due' => ['Invoice due', 'blue'],
     ];
 
     private const LEGEND = [
@@ -321,6 +323,30 @@ class FinanceCalendarService
         }
 
         return $out;
+    }
+
+    private function sourceInvoices(int $orgId, CarbonInterface $from, CarbonInterface $to, array $filters, User $viewer): Collection
+    {
+        $canAmounts = $viewer->can('view it-finance-amounts');
+        $today = FinanceClock::today();
+        $invoices = Invoice::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->whereNot('status', 'draft')
+            ->whereBetween('due_on', [$from->toDateString(), $to->toDateString()])->visibleTo($viewer)->with(['vendor:id,name', 'costCentre:id,code'])->get();
+
+        return $invoices->map(function (Invoice $i) use ($today, $canAmounts) {
+            $left = FinanceClock::daysUntil($i->due_on, $today);
+            $closed = in_array($i->status, ['paid', 'cancelled'], true);
+            $color = $closed ? 'grey' : ($left < 0 ? 'red' : ($left <= 7 ? 'amber' : 'blue'));
+
+            return [
+                'id' => "invoice-{$i->id}-invoice_due", 'type' => 'invoice_due', 'title' => "{$i->invoice_code} ".($i->vendor?->name ?? '').' due',
+                'start' => $i->due_on->toDateString(), 'end' => $i->due_on->toDateString(), 'color' => $color, 'status' => $i->status,
+                'href' => route('finance.invoices.show', $i->id),
+                'meta' => [
+                    'source' => 'invoices', 'invoice_code' => $i->invoice_code, 'vendor' => $i->vendor?->name, 'cost_centre' => $i->costCentre?->code,
+                    'days_left' => $left, 'base_value' => $canAmounts ? (string) $i->base_total_amount : null,
+                ],
+            ];
+        })->values();
     }
 
     // ---- helpers -------------------------------------------------------------------------------------------------

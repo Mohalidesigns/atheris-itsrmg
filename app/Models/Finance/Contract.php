@@ -48,6 +48,8 @@ class Contract extends Model
 
     public const DPA = ['not_required', 'pending', 'signed'];
 
+    public const LEASE_ASSESSMENTS = ['not_lease', 'ifrs16_lease', 'short_term_exempt', 'low_value_exempt', 'undetermined'];
+
     public const DECISIONS = ['renew_as_is', 'renew_renegotiated', 'replace', 'terminate', 'extend_short_term'];
 
     protected $table = 'fin_contracts';
@@ -283,6 +285,17 @@ class Contract extends Model
             bccomp($deployed, bcmul($entitled, '0.8', 2), 2) < 0 => 'under',
             default => 'ok',
         };
+    }
+
+    /** IFRS 16 indicator (plan P3-15): the contract was assessed as a lease that sits on the balance sheet. */
+    public function getIsIfrs16LeaseAttribute(): bool
+    {
+        return $this->lease_assessment === 'ifrs16_lease';
+    }
+
+    public function getNeedsLeaseAssessmentAttribute(): bool
+    {
+        return $this->type === 'lease' && $this->lease_assessment === null;
     }
 
     public function getLabelAttribute(): string

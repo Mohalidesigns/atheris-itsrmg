@@ -26,6 +26,8 @@ class FinanceApprovalNotifier
             'finance.budget_transfer' => route('finance.transfers.index', ['highlight' => $subject->getKey()]),
             'finance.contract_renewal' => route('finance.renewals.show', $subject),
             'finance.contract_termination' => route('finance.terminations.show', $subject),
+            'finance.expense_approval' => route('finance.expenses.show', $subject),
+            'finance.invoice_approval' => route('finance.invoices.show', $subject),
             default => route('finance.supplementary.index', ['highlight' => $subject->getKey()]),
         };
     }
@@ -37,7 +39,7 @@ class FinanceApprovalNotifier
         $orgId = (int) $subject->organization_id;
         $step = $request?->currentStep();
         if ($request && $step && $this->engine->workflow($orgId, $process)) {
-            return $this->engine->eligibleUsers($step, $request)->filter(fn (User $u) => $u->can($def['permission']))->values();
+            return $this->engine->eligibleUsers($step, $request)->filter(fn (User $u) => $u->can($def['permission']) || ($step->approver_type === 'owner' && ! empty($def['owner_stage_without_permission'])))->values();
         }
         $initiator = (int) ($subject->{$def['initiator']} ?? 0);
         $owner = isset($def['owner']) ? (int) ($subject->{$def['owner']} ?? 0) : 0;
@@ -64,8 +66,10 @@ class FinanceApprovalNotifier
             return;
         }
         $amount = $this->amountText($e->subject, $e->request);
-        Notification::send($recipients, new FinanceApprovalRequestedNotification(
-            $e->process, ApprovalProcesses::label($e->process, $e->subject), $e->request?->currentStep()?->name, $amount, $this->url($e->process, $e->subject)));
+        foreach ($recipients as $u) {
+            Notification::send($u, new FinanceApprovalRequestedNotification(
+                $e->process, ApprovalProcesses::label($e->process, $e->subject), $e->request?->currentStep()?->name, $u->can('view it-finance-amounts') ? $amount : '', $this->url($e->process, $e->subject)));
+        }
     }
 
     public function decided(FinanceApprovalDecided $e): void

@@ -40,7 +40,7 @@ class ContractService
         'procurement_contact_id', 'description', 'commenced_on', 'ends_on', 'term_months', 'notice_period_days', 'renewal_type', 'auto_renew',
         'renewal_lead_days', 'notification_offsets', 'currency', 'contract_value', 'billing_frequency', 'amount_per_billing', 'licence_metric',
         'licence_quantity', 'deployed_quantity', 'payment_terms_days', 'price_escalation_pct', 'data_processing_role', 'dpa_status',
-        'sla_summary', 'exit_terms', 'key_clauses', 'external_reference',
+        'sla_summary', 'exit_terms', 'key_clauses', 'external_reference', 'lease_assessment', 'lease_assessment_note',
     ];
 
     private const STEP_MONTHS = ['monthly' => 1, 'quarterly' => 3, 'semi_annual' => 6, 'annual' => 12];
@@ -401,6 +401,10 @@ class ContractService
             if (array_key_exists($col, $in) && ! in_array($in[$col], $allowed, true)) {
                 $this->fail("Unknown {$col}.", $col);
             }
+        }
+        if (array_key_exists('lease_assessment', $in)) {
+            $in['lease_assessment'] = $in['lease_assessment'] ?: null;
+            $in['lease_assessment'] !== null && ! in_array($in['lease_assessment'], Contract::LEASE_ASSESSMENTS, true) && $this->fail('Unknown lease assessment.', 'lease_assessment');
         }
         if (! empty($in['licence_metric']) && ! in_array($in['licence_metric'], Contract::LICENCE_METRICS, true)) {
             $this->fail('Unknown licence metric.', 'licence_metric');
