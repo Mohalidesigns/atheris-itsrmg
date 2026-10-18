@@ -133,3 +133,21 @@ export const ACCRUAL_TONES = { proposed: 'warning', posted: 'success', reversed:
 export const BATCH_TONES = { completed: 'success', completed_with_errors: 'warning', failed: 'error' };
 export const toneOf = (map, v) => map[v] || 'neutral';
 export const DOC_KINDS = ['quote', 'purchase_order', 'goods_receipt', 'invoice', 'delivery_note', 'approval', 'other'].map((v) => ({ value: v, label: humanize(v) }));
+
+/* ---------------------------------------------------------------- monitoring (P4) */
+
+export const SEVERITY_TONES = { red: 'error', amber: 'warning' };
+/** Chip tone for a variance severity (null = within tolerance). */
+export const severityTone = (s) => SEVERITY_TONES[s] || 'success';
+export const VARIANCE_STATUS_TONES = { open: 'warning', explained: 'info', acknowledged: 'success', cleared: 'muted' };
+
+/** Signed percentage with one decimal; null stays a dash. Masked pages should pass through MASK first. */
+export function fmtPct(value, { sign = false, decimals = 1 } = {}) {
+    if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
+    const n = Number(value);
+    return `${sign && n > 0 ? '+' : ''}${n.toFixed(decimals)}%`;
+}
+
+const CHECKLIST_ICONS = { pass: ['check_circle', 'success'], fail: ['cancel', 'error'], warn: ['warning', 'warning'], n_a: ['remove_circle', 'muted'] };
+/** [icon, tone] for a close-checklist item status. */
+export const checklistIcon = (status) => CHECKLIST_ICONS[status] || CHECKLIST_ICONS.n_a;

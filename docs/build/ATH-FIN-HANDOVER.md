@@ -44,11 +44,20 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 - **Seeder gotcha:** `FinanceExpenseDemoSeeder` swallows exceptions in `attempt()`, `advance()` and `first()`. After any SoD change, a demo record can silently go missing. Only SMOKE catches it ("has a X invoice" / "nobody can decide"). Debug by logging the swallowed exceptions temporarily.
 - **The full suite does not cover `finance.imports.show` with batch actuals.** SMOKE caught a missing import there.
 
+## State (2026-10-18, P4 done)
+
+- P4 Monitoring, variance, period close & reports is committed and pushed on `feature/it-finance-p4` (branched from P3 3add6af). ATH-FIN-003 §P4 has what shipped, decisions P4-1..P4-14 / C101..C125, review fixes and deferrals.
+- Gate: 692 tests green on Postgres (22 min), seed + SMOKE (6, 233 routes) pass, build passes.
+- **Logged for P4.1 / before UAT:** domain M1–M3, M5–M9 and security M2 (finance KRIs and stored board-pack content unmasked). Full list in ATH-FIN-003 §P4.
+- **Period immutability:** variance notes on closed or locked periods are frozen (explain, acknowledge, comment, raise-issue and evaluate are refused). The monitoring seeder therefore wraps its writes in `whilePeriodsOpen()` and passes `force` to evaluate. New seeders must do the same.
+- **Scheduled finance reports** run as the schedule's `created_by` and store no money in `summary`.
+- `FinanceConfigurationTest` FX import test was time-of-day flaky; now pinned to midday.
+
 ## Next session — paste this
 
 ```
-Start P4 of IT Financial Management (see ATH-FIN-002 §4 P4), branching feature/it-finance-p4 from feature/it-finance-p3.
-Read docs/build/ATH-FIN-HANDOVER.md (token rules + P3 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p4.md, and include the P3 deferrals that touch monitoring and period close (domain M9 period close vs pending accruals/prepayment releases, M8 accrual cut-off).
-Then: builders (sonnet) on their own DBs → QA on it_security_risk_fin_qa → gate (suite on it_security_risk_test, seed + SMOKE on it_security_risk_scratch, npm run build) → reviewers (sonnet, be exhaustive) on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P4, commit AND push, memory, handover.
+Start P5 of IT Financial Management (Investments & value realisation; see ATH-FIN-002 §4 P5), branching feature/it-finance-p5 from feature/it-finance-p4.
+Read docs/build/ATH-FIN-HANDOVER.md (token rules + P4 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p5.md. Ask it to say which P4 deferrals in ATH-FIN-003 §P4 belong in P5 (e.g. domain M5 forecast snapshots, security M2 KRI/board-pack masking).
+Then: builders (sonnet) on their own DBs → QA on it_security_risk_fin_qa → gate (suite on it_security_risk_test in background, about 22 min; seed + SMOKE on it_security_risk_scratch; npm run build; pint on touched files) → reviewers (sonnet, be exhaustive) on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P5, commit AND push, memory, handover.
 Check disk first (df -h).
 ```

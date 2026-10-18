@@ -44,6 +44,9 @@ class FinancePolicySeeder
                 self::stage(30, 'CFO approval', 'job_title', 'Chief Financial Officer', 48, 'effective_band', self::bandsFrom($orgId, $cfg['expense_cfo_from'])),
                 self::stage(40, 'MD/CEO approval', 'job_title', 'Managing Director', 72, 'effective_band', self::bandsFrom($orgId, $cfg['expense_md_ceo_from'])),
             ],
+            'finance.period_reopen' => [
+                self::stage(10, 'CFO approval', 'job_title', 'Chief Financial Officer', 48),
+            ],
             'finance.invoice_approval' => [
                 self::stage(10, 'Cost-centre owner confirmation', 'owner', '', 48, 'has_endorser', ['yes']),
                 self::stage(20, 'Finance Controller review', 'role', 'IT Finance Controller', 48, 'match_status', ['variance', 'override', 'unmatched']),

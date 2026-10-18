@@ -2,6 +2,7 @@
 
 namespace App\Services\Kri;
 
+use App\Services\Finance\FinanceKriSource;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -25,6 +26,10 @@ class KriMeasures
         'KRI-COMP-CBN' => 'openCircularActions',
         'KRI-BCP-RTO' => 'drExercisesOverdue',
         'KRI-OPS-CHG' => 'failedChanges',
+        'KRI-FIN-VAR' => 'financeBudgetVariance',
+        'KRI-FIN-UNB' => 'financeUnbudgetedSpend',
+        'KRI-FIN-INV' => 'financeOverdueInvoices',
+        'KRI-FIN-NOT' => 'financeContractsPastNotice',
     ];
 
     public function supports(string $code): bool
@@ -130,6 +135,26 @@ class KriMeasures
         $n = $runbooks->diff($recent)->count();
 
         return [$n, "{$n} of {$runbooks->count()} DR runbooks not exercised in the last quarter."];
+    }
+
+    private function financeBudgetVariance(int $orgId): array
+    {
+        return app(FinanceKriSource::class)->budgetVariancePct($orgId);
+    }
+
+    private function financeUnbudgetedSpend(int $orgId): array
+    {
+        return app(FinanceKriSource::class)->unbudgetedSpendPct($orgId);
+    }
+
+    private function financeOverdueInvoices(int $orgId): array
+    {
+        return app(FinanceKriSource::class)->overdueInvoices($orgId);
+    }
+
+    private function financeContractsPastNotice(int $orgId): array
+    {
+        return app(FinanceKriSource::class)->contractsPastNotice($orgId);
     }
 
     private function failedChanges(int $orgId): array

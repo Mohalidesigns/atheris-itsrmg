@@ -98,7 +98,8 @@ class AccrualController extends Controller
     public function cancel(Request $request, Accrual $accrual)
     {
         Gate::authorize('manageAccruals', Accrual::class);
-        $this->accruals->cancel($accrual, $request->user());
+        $data = $request->validate(['reason' => ['required', 'string', 'min:10', 'max:1000']]);
+        $this->accruals->cancel($accrual, $request->user(), $data['reason']);
 
         return back()->with('success', 'Accrual cancelled.');
     }

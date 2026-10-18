@@ -25,6 +25,10 @@ export default function Index(props) {
     const e = form.errors;
     const periodAction = (name, text) => () => period && confirm(text) && router.post(route(name), { period_id: period }, { preserveScroll: true });
     const row = (name, a, text) => () => confirm(text) && router.post(route(name, a.id), {}, { preserveScroll: true });
+    const cancel = (a) => () => {
+        const reason = window.prompt('Why is this accrual being cancelled? (at least 10 characters)');
+        if (reason !== null) router.post(route('finance.accruals.cancel', a.id), { reason }, { preserveScroll: true });
+    };
     const submit = () => {
         form.transform((d) => Object.fromEntries(Object.entries(d).map(([k, v]) => [k, v === '' ? null : v])));
         form.post(route('finance.accruals.store'), { preserveScroll: true, onSuccess: () => { form.reset(); setShow(false); } });
@@ -53,6 +57,7 @@ export default function Index(props) {
                     <button type="button" disabled={!period} onClick={periodAction('finance.accruals.release-prepayments', 'Post the due prepayment releases to this period?')} className={BTN_SECONDARY}>Release prepayments</button>
                     <div className="ml-auto"><AddButton onClick={() => setShow(true)}>Manual accrual</AddButton></div>
                     {errors?.period && <p role="alert" className="w-full text-sm text-[#B3261E]">{errors.period}</p>}
+                    {errors?.reason && <p role="alert" className="w-full text-sm text-[#B3261E]">{errors.reason}</p>}
                 </div>
             )}
             <Card>
@@ -69,7 +74,7 @@ export default function Index(props) {
                             <td className="whitespace-nowrap px-4 py-2 text-xs">{a.reversal_period?.name ?? '—'}</td>
                             <td className="whitespace-nowrap px-4 py-2 text-xs">{localDate(a.posted_at)}</td>
                             {can.manage && <td className="whitespace-nowrap px-4 py-2 text-right text-xs">
-                                {a.status === 'proposed' && <><button type="button" onClick={row('finance.accruals.post', a, 'Post this accrual?')} className="text-[#0A1F44] underline">Post</button><button type="button" onClick={row('finance.accruals.cancel', a, 'Cancel this accrual?')} className="ml-3 text-[#B3261E] underline">Cancel</button></>}
+                                {a.status === 'proposed' && <><button type="button" onClick={row('finance.accruals.post', a, 'Post this accrual?')} className="text-[#0A1F44] underline">Post</button><button type="button" onClick={cancel(a)} className="ml-3 text-[#B3261E] underline">Cancel</button></>}
                                 {a.status === 'posted' && a.type === 'accrual' && <button type="button" onClick={row('finance.accruals.reverse', a, 'Reverse this accrual?')} className="text-[#0A1F44] underline">Reverse</button>}
                             </td>}
                         </tr>

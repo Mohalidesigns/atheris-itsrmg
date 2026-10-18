@@ -48,12 +48,16 @@ use App\Http\Controllers\Finance\DoaBandController;
 use App\Http\Controllers\Finance\ExpenseController;
 use App\Http\Controllers\Finance\FinanceCalendarController;
 use App\Http\Controllers\Finance\FinanceCurrencyController;
+use App\Http\Controllers\Finance\FinanceDashboardController;
 use App\Http\Controllers\Finance\FinanceDimensionsController;
 use App\Http\Controllers\Finance\FinanceDocumentController;
 use App\Http\Controllers\Finance\FinanceImportController;
+use App\Http\Controllers\Finance\FinanceReportController;
 use App\Http\Controllers\Finance\FinanceSettingsController;
 use App\Http\Controllers\Finance\FiscalCalendarController;
 use App\Http\Controllers\Finance\InvoiceController;
+use App\Http\Controllers\Finance\MonitorController;
+use App\Http\Controllers\Finance\PeriodCloseController;
 use App\Http\Controllers\Finance\PurchaseOrderController;
 use App\Http\Controllers\Finance\RecurringExpenseController;
 use App\Http\Controllers\Finance\RenewalController;
@@ -97,6 +101,7 @@ use App\Http\Controllers\VulnerabilityController;
 use App\Http\Controllers\VulnerabilityTicketController;
 use App\Http\Controllers\Workflows\WorkflowStudioController;
 use App\Modules\CBNCSAT\Http\Controllers\CsatAssessmentController;
+use App\Services\Finance\Reports\FinanceReports;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -934,6 +939,37 @@ Route::middleware('auth')->group(function () {
         Route::middleware('permission:close it-finance-periods')->group(function () {
             Route::post('/periods/{period}/close', [FiscalCalendarController::class, 'closePeriod'])->whereNumber('period')->name('periods.close');
             Route::post('/periods/{period}/lock', [FiscalCalendarController::class, 'lockPeriod'])->whereNumber('period')->name('periods.lock');
+        });
+
+        // P4: monitoring, variance, period close and reports (ATH-FIN-001 §3.4, §9)
+        Route::get('/', [FinanceDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/monitor/bva', [MonitorController::class, 'bva'])->name('monitor.bva');
+        Route::get('/monitor/bva/export', [MonitorController::class, 'bvaExport'])->middleware('permission:export it-finance')->name('monitor.bva.export');
+        Route::get('/monitor/lines/{line}/transactions', [MonitorController::class, 'transactions'])->whereNumber('line')->name('monitor.transactions');
+        Route::get('/monitor/forecast', [MonitorController::class, 'forecast'])->name('monitor.forecast');
+        Route::get('/monitor/variances', [MonitorController::class, 'variances'])->name('monitor.variances');
+        Route::get('/monitor/period-close', [PeriodCloseController::class, 'index'])->name('monitor.period-close');
+        Route::get('/periods/{period}/close-checklist', [PeriodCloseController::class, 'checklist'])->whereNumber('period')->name('periods.close-checklist');
+        Route::get('/period-closes/{periodClose}', [PeriodCloseController::class, 'show'])->whereNumber('periodClose')->name('period-closes.show');
+        Route::get('/reports', [FinanceReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/{report}', [FinanceReportController::class, 'show'])->whereIn('report', array_keys(FinanceReports::DEFINITIONS))
+            ->middleware('permission:export it-finance')->name('reports.show');
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::post('/monitor/forecast/{line}', [MonitorController::class, 'forecastOverride'])->whereNumber('line')->name('monitor.forecast.override');
+            Route::delete('/monitor/forecast/{line}', [MonitorController::class, 'forecastClear'])->whereNumber('line')->name('monitor.forecast.clear');
+            Route::post('/monitor/variances/{note}/explain', [MonitorController::class, 'explain'])->whereNumber('note')->name('monitor.variances.explain');
+            Route::post('/monitor/variances/{note}/comment', [MonitorController::class, 'comment'])->whereNumber('note')->name('monitor.variances.comment');
+            Route::post('/monitor/variances/{note}/raise-issue', [MonitorController::class, 'raiseIssue'])->whereNumber('note')->name('monitor.variances.raise-issue');
+        });
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/monitor/variances/{note}/acknowledge', [MonitorController::class, 'acknowledge'])->whereNumber('note')->name('monitor.variances.acknowledge');
+            Route::post('/periods/{period}/evaluate-variances', [MonitorController::class, 'evaluate'])->whereNumber('period')->name('periods.evaluate-variances');
+            Route::post('/periods/{period}/reopen', [PeriodCloseController::class, 'requestReopen'])->whereNumber('period')->name('periods.reopen');
+            Route::post('/period-closes/{periodClose}/withdraw', [PeriodCloseController::class, 'withdraw'])->whereNumber('periodClose')->name('period-closes.withdraw');
+        });
+        Route::middleware('permission:approve it-finance')->group(function () {
+            Route::post('/period-closes/{periodClose}/approve', [PeriodCloseController::class, 'approve'])->whereNumber('periodClose')->name('period-closes.approve');
+            Route::post('/period-closes/{periodClose}/reject', [PeriodCloseController::class, 'reject'])->whereNumber('periodClose')->name('period-closes.reject');
         });
     });
 

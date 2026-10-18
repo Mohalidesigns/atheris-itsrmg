@@ -136,6 +136,11 @@ class DatabaseSeeder extends Seeder
         // accruals, nine months of GL actuals with a September batch to reconcile, and an invoices import with rejected rows
         $this->call(FinanceExpenseDemoSeeder::class);
 
+        // IT Financial Management P4 (monitoring): variance notes with commentary, forecasts and snapshots, close history, Kano's
+        // blocked re-opened September and First Bank's pending re-open, the finance KRIs and the finance board-pack section.
+        // Separate seeder: the P1-P3 ones skip a bank once seeded
+        $this->call(FinanceMonitoringDemoSeeder::class);
+
         // Asset Management: coherent owners and departments, provenance from real sandbox connector
         // runs and a CSV import, business services and dependency chains per bank, asset → service
         // links, inherited criticality, and First Bank's EA applications tied to their assets
@@ -197,6 +202,10 @@ class DatabaseSeeder extends Seeder
         // One test login per role (password: Password@123) — attached to
         // Kano Heritage Bank so every role sees populated modules
         $this->call(ReportsIntegrationsSettingsDemoSeeder::class);
+
+        // IT Financial Management P4, second pass: scheduled finance reports (the reports seeder above skips a bank that already
+        // has a schedule, so these can only be created after it)
+        $this->call(FinanceMonitoringDemoSeeder::class);
 
         $this->call(RoleDemoUsersSeeder::class);
 

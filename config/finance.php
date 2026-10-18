@@ -92,4 +92,14 @@ return [
     'invoices' => ['due_offsets' => [7, 0], 'overdue_offsets' => [1, 7, 14, 30], 'default_payment_days' => 30, 'override_reason_min' => 10],
     'actuals' => ['max_kb' => 8192, 'date_formats' => ['Y-m-d', 'd/m/Y', 'm/d/Y', 'd-M-Y', 'd.m.Y']],
     'recurring' => ['catch_up_max' => 12],
+    // P4 monitoring, variance, period close and reports (ATH-FIN-001 §3.4, §3.7)
+    'monitoring' => [
+        'explain_amber_at_close' => false, // amber notes only warn at close
+        'allow_early_close' => false, // D10: a period cannot close before its end date
+        'override_reason_min' => 10,
+        'close_reminder_working_days' => [5],
+        'close_overdue_working_days' => [3], // still open 3 working days after the end
+        'top_variances' => 10,
+    ],
+    'reports' => ['max_rows' => 20000, 'pdf_max_rows' => 1500, 'preview_rows' => 50],
 ];

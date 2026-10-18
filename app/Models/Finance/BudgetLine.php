@@ -73,6 +73,16 @@ class BudgetLine extends Model
         return $this->hasMany(BudgetLinePeriod::class, 'budget_line_id');
     }
 
+    public function forecasts(): HasMany
+    {
+        return $this->hasMany(Forecast::class, 'budget_line_id');
+    }
+
+    public function varianceNotes(): HasMany
+    {
+        return $this->hasMany(VarianceNote::class, 'budget_line_id');
+    }
+
     public function adjustments(): HasMany
     {
         return $this->hasMany(BudgetAdjustment::class, 'budget_line_id');

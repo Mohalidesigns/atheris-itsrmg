@@ -31,15 +31,40 @@ class AccrualService
         private readonly BudgetService $budgets,
         private readonly CurrencyService $fx,
         private readonly FinanceSettings $settings,
+        private readonly FinanceTax $tax,
     ) {}
 
     /** Proposes an accrual for every purchase order with goods received (to the period end) and not yet invoiced. */
     public function propose(Period $p, User $by): int
     {
-        $orgId = (int) $p->organization_id;
         $made = 0;
+        foreach ($this->candidates($p) as $c) {
+            $po = $c['po'];
+            $this->create([
+                'type' => 'accrual', 'source' => 'po', 'dedupe_key' => $c['dedupe_key'], 'period_id' => $p->id, 'po_id' => $po->id, 'budget_line_id' => $po->budget_line_id,
+                'gl_account_id' => $po->expenseRequest?->gl_account_id, 'cost_centre_id' => $po->cost_centre_id, 'description' => "Received not invoiced: {$po->po_code}",
+                'currency' => $po->currency, 'fx_rate' => (string) $po->fx_rate, 'amount' => $c['amount'], 'base_amount' => $c['base_amount'],
+            ], $p, $by);
+            $made++;
+        }
+
+        return $made;
+    }
+
+    /**
+     * Dry run of propose(): the received-not-invoiced accruals the period still needs (plan P4-14). Received value is invoiced
+     * against approved, scheduled or paid invoices of periods starting on or before the period end (M8), and the accrual carries
+     * VAT at the purchase order's tax type so it is on the same cost basis as the invoice (M7). Existing dedupe keys are skipped.
+     *
+     * @return list<array{po_id:int,po:PurchaseOrder,dedupe_key:string,amount:string,base_amount:string,tax_amount:string}>
+     */
+    public function candidates(Period $p): array
+    {
+        $orgId = (int) $p->organization_id;
+        $out = [];
         $pos = PurchaseOrder::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', ['open', 'partially_received', 'received', 'closed'])
-            ->whereDate('po_date', '<=', $p->ends_on->toDateString())->get();
+            ->whereDate('po_date', '<=', $p->ends_on->toDateString())->with('taxType')->get();
+        $periodIds = Period::withoutGlobalScopes()->where('organization_id', $orgId)->whereDate('starts_on', '<=', $p->ends_on->toDateString())->select('id');
         foreach ($pos as $po) {
             $key = "po:{$po->id}:{$p->id}";
             if (Accrual::withoutGlobalScopes()->where('organization_id', $orgId)->where('dedupe_key', $key)->exists()) {
@@ -50,21 +75,30 @@ class AccrualService
                 ->whereDate('g.received_on', '<=', $p->ends_on->toDateString())->where('fin_goods_receipt_lines.accepted', true)
                 ->selectRaw('coalesce(sum(fin_goods_receipt_lines.quantity * pl.unit_cost), 0) as v')->value('v') ?? '0');
             $invoiced = (string) InvoiceLine::withoutGlobalScopes()->whereIn('invoice_id', Invoice::withoutGlobalScopes()->where('po_id', $po->id)
-                ->whereIn('status', ['submitted', 'approved', 'scheduled', 'paid'])->select('id'))->sum('amount');
-            $amount = $this->phasing->round(bcsub($received, $invoiced, 8), 2);
-            if (bccomp($amount, '0', 2) <= 0) {
+                ->whereIn('status', ['approved', 'scheduled', 'paid'])->whereIn('period_id', $periodIds)->select('id'))->sum('amount');
+            $net = $this->phasing->round(bcsub($received, $invoiced, 8), 2);
+            if (bccomp($net, '0', 2) <= 0) {
                 continue;
             }
-            $this->create([
-                'type' => 'accrual', 'source' => 'po', 'dedupe_key' => $key, 'period_id' => $p->id, 'po_id' => $po->id, 'budget_line_id' => $po->budget_line_id,
-                'gl_account_id' => $po->expenseRequest?->gl_account_id, 'cost_centre_id' => $po->cost_centre_id, 'description' => "Received not invoiced: {$po->po_code}",
-                'currency' => $po->currency, 'fx_rate' => (string) $po->fx_rate, 'amount' => $amount,
-                'base_amount' => $this->phasing->round(bcmul($amount, (string) $po->fx_rate, 8), 2),
-            ], $p, $by);
-            $made++;
+            $t = $this->tax->compute($net, (string) $po->currency, $po->taxType, null);
+            $out[] = [
+                'po_id' => (int) $po->id, 'po' => $po, 'dedupe_key' => $key, 'amount' => $t['total_amount'], 'tax_amount' => $t['tax_amount'],
+                'base_amount' => $this->phasing->round(bcmul($t['total_amount'], (string) $po->fx_rate, 8), 2),
+            ];
         }
 
-        return $made;
+        return $out;
+    }
+
+    /** What still blocks the close of a period: proposed accruals and releases, accruals nobody has proposed yet (M9) and accruals due for reversal. @return array{accruals:int,releases:int,candidates:int,reversals:int} */
+    public function pendingFor(Period $p): array
+    {
+        $q = fn (string $type) => Accrual::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('period_id', $p->id)->where('type', $type)->where('status', 'proposed')->count();
+
+        // Posted accruals that must be reversed in this period (posted, not yet reversed) also block the close.
+        $reversals = Accrual::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('reversal_period_id', $p->id)->where('type', 'accrual')->where('status', 'posted')->count();
+
+        return ['accruals' => $q('accrual'), 'releases' => $q('prepayment_release'), 'candidates' => count($this->candidates($p)), 'reversals' => $reversals];
     }
 
     public function store(array $data, User $by): Accrual
@@ -184,11 +218,13 @@ class AccrualService
         return $out;
     }
 
-    public function cancel(Accrual $a, User $by): Accrual
+    public function cancel(Accrual $a, User $by, string $reason = ''): Accrual
     {
         $a->status === 'proposed' || $this->fail('Only a proposed accrual can be cancelled.');
-        $a->forceFill(['status' => 'cancelled'])->save();
-        $this->audit($a, $by, 'cancelled', "Accrual #{$a->id} cancelled");
+        $reason = trim($reason);
+        mb_strlen($reason) >= 10 || $this->fail('Give the reason for cancelling (at least 10 characters).', 'reason');
+        $a->forceFill(['status' => 'cancelled', 'cancel_reason' => $reason, 'cancelled_at' => now()])->save();
+        $this->audit($a, $by, 'cancelled', "Accrual #{$a->id} cancelled", ['reason' => $reason]);
 
         return $a->refresh();
     }

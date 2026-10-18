@@ -282,6 +282,8 @@ class FinanceConfigurationTest extends TestCase
     /** FIN-01.05 */
     public function test_fx_rates_import_and_single_base_currency(): void
     {
+        // Pinned to midday: near midnight the UTC and Africa/Lagos dates differ and the re-import flakes.
+        $this->travelTo(CarbonImmutable::parse('2027-02-15 12:00:00'));
         $this->actingAs($this->admin);
         app(FinanceSettings::class)->ensureDefaults($this->org->id);
         $yesterday = now()->subDay()->toDateString();

@@ -6,13 +6,14 @@ use App\Http\Controllers\Controller;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\Period;
 use App\Services\Finance\FiscalCalendarService;
+use App\Services\Finance\PeriodCloseService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class FiscalCalendarController extends Controller
 {
-    public function __construct(private readonly FiscalCalendarService $calendar) {}
+    public function __construct(private readonly FiscalCalendarService $calendar, private readonly PeriodCloseService $closes) {}
 
     private function done(string $message)
     {
@@ -59,7 +60,7 @@ class FiscalCalendarController extends Controller
     public function closePeriod(Request $request, Period $period)
     {
         Gate::authorize('closePeriod', $period);
-        $this->calendar->closePeriod($period, $request->user());
+        $this->closes->close($period, $request->user());
 
         return $this->done("{$period->name} closed.");
     }
@@ -67,7 +68,7 @@ class FiscalCalendarController extends Controller
     public function lockPeriod(Request $request, Period $period)
     {
         Gate::authorize('closePeriod', $period);
-        $this->calendar->lockPeriod($period, $request->user());
+        $this->closes->lock($period, $request->user());
 
         return $this->done("{$period->name} locked.");
     }

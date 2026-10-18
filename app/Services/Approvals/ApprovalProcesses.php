@@ -14,6 +14,7 @@ use App\Models\Finance\Category;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\Invoice;
+use App\Models\Finance\PeriodClose;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\SupplementaryRequest;
 use App\Models\Finance\Termination;
@@ -183,6 +184,15 @@ class ApprovalProcesses
                 'requires_cfo' => ['label' => 'Needs CFO (high value or after the notice deadline)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
             ],
             'default' => 'One approval by anyone with "approve it-finance-contracts" other than the requester, the contract owner and its creator.',
+        ],
+        'finance.period_reopen' => [
+            'module' => 'IT Financial Management', 'label' => 'Re-open a closed period', 'engine' => 'generic',
+            'description' => 'A closed or locked accounting period is re-opened only with approval (FIN-04.05, ICFR).',
+            'permission' => 'approve it-finance', 'view_permission' => 'view it-finance', 'model' => PeriodClose::class,
+            'initiator' => 'reopen_requested_by_id', 'title' => ['period_label'], 'route' => 'finance.period-closes.show',
+            'initiate' => 'Requesting a period re-open',
+            'conditions' => ['period_status' => ['label' => 'Period status', 'values' => ['closed' => 'Closed', 'locked' => 'Locked']]],
+            'default' => 'One approval by anyone with "approve it-finance" other than the requester and whoever created the close record.',
         ],
         'finance.expense_approval' => [
             'module' => 'IT Financial Management', 'label' => 'Expense request', 'engine' => 'generic', 'owner_cannot_approve' => true, 'owner_stage_without_permission' => true,

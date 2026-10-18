@@ -20,6 +20,7 @@ use App\Services\Reports\ReportFigures;
 use App\Services\RiskScoringService;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class ReportController extends Controller
@@ -167,6 +168,14 @@ class ReportController extends Controller
         ]);
     }
 
+    /** Finance schedules can only be changed, paused or deleted by someone who could have created them. */
+    private function assertCanManage(Request $request, ScheduledReport $schedule): void
+    {
+        $finance = $schedule->report_type === 'finance' || str_starts_with((string) $schedule->report_type, 'finance.');
+        $u = $request->user();
+        $finance && ! ($u->can('view it-finance') && $u->can('export it-finance')) && abort(403, 'IT finance schedules need the view and export permissions of IT Financial Management.');
+    }
+
     private function validateSchedule(Request $request): array
     {
         $data = $request->validate([
@@ -178,6 +187,10 @@ class ReportController extends Controller
             'active' => ['sometimes', 'boolean'],
         ]);
         $data['recipients'] = array_values(array_unique($data['recipients'] ?? []));
+        if (($data['report_type'] === 'finance' || str_starts_with($data['report_type'], 'finance.'))
+            && ! ($request->user()->can('view it-finance') && $request->user()->can('export it-finance'))) {
+            throw ValidationException::withMessages(['report_type' => 'IT finance reports need the view and export permissions of IT Financial Management.']);
+        }
 
         return $data;
     }
@@ -197,6 +210,7 @@ class ReportController extends Controller
     public function scheduledUpdate(Request $request, int $id)
     {
         $schedule = ScheduledReport::findOrFail($id);
+        $this->assertCanManage($request, $schedule);
         $data = $this->validateSchedule($request);
         if ($data['frequency'] !== $schedule->frequency) {
             $data['next_run_at'] = ScheduledReport::advance($data['frequency']);
@@ -206,17 +220,20 @@ class ReportController extends Controller
         return back()->with('success', 'Scheduled report updated.');
     }
 
-    public function scheduledToggle(int $id)
+    public function scheduledToggle(Request $request, int $id)
     {
         $schedule = ScheduledReport::findOrFail($id);
+        $this->assertCanManage($request, $schedule);
         $schedule->update(['active' => ! $schedule->active]);
 
         return back()->with('success', $schedule->active ? 'Schedule resumed.' : 'Schedule paused.');
     }
 
-    public function scheduledDestroy(int $id)
+    public function scheduledDestroy(Request $request, int $id)
     {
-        ScheduledReport::findOrFail($id)->delete();
+        $schedule = ScheduledReport::findOrFail($id);
+        $this->assertCanManage($request, $schedule);
+        $schedule->delete();
 
         return back()->with('success', 'Scheduled report deleted.');
     }

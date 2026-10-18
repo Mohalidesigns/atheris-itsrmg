@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Http\Controllers\Finance\BudgetController;
 use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalWorkflow;
+use App\Models\BoardPackRun;
 use App\Models\Ea\BusinessService;
 use App\Models\Ea\EaApplication;
 use App\Models\Finance\Accrual;
@@ -25,21 +26,32 @@ use App\Models\Finance\CostCentre;
 use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\FiscalYear;
+use App\Models\Finance\Forecast;
 use App\Models\Finance\FxRate;
 use App\Models\Finance\GoodsReceiptLine;
 use App\Models\Finance\ImportBatch;
 use App\Models\Finance\Invoice;
+use App\Models\Finance\Period;
+use App\Models\Finance\PeriodClose;
 use App\Models\Finance\PurchaseOrder;
 use App\Models\Finance\RecurringExpense;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\Setting;
 use App\Models\Finance\SupplementaryRequest;
+use App\Models\Finance\VarianceNote;
+use App\Models\Issue;
+use App\Models\Kri;
+use App\Models\KriReading;
 use App\Models\Risk;
+use App\Models\ScheduledReport;
+use App\Models\ScheduledReportRun;
 use App\Models\User;
 use App\Policies\Finance\FinancePolicy;
 use App\Services\Approvals\ApprovalEngine;
 use App\Services\Finance\BudgetCycleService;
 use App\Services\Finance\BudgetService;
+use App\Services\Finance\MonitoringService;
+use App\Services\Finance\Reports\FinanceReports;
 use Carbon\Carbon;
 use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\Artisan;
@@ -248,7 +260,7 @@ class RouteSmokeTest extends TestCase
                     $this->assertGreaterThan(0, $deciders->count(), "{$slug}: nobody can decide \"{$step->name}\" of {$request->subject_label}");
                 }
             }
-            $this->assertSame(7, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
+            $this->assertSame(8, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
 
             // DoA versions: the bank's own bands are active and each step is audited
             $active = DoaBandVersion::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'active')->firstOrFail();
@@ -519,6 +531,143 @@ class RouteSmokeTest extends TestCase
         $this->get(route('finance.expenses.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Expenses/Index'));
         foreach (['finance.purchase-orders.index', 'finance.invoices.index', 'finance.actuals.index', 'finance.recurring.index', 'finance.accruals.index', 'finance.imports.index'] as $name) {
             $this->get(route($name))->assertOk();
+        }
+    }
+
+    /**
+     * IT Financial Management P4 (plan §5.2): the seeded monitoring estate of each demo bank. FY variances of every severity above the
+     * bank's floor, a reconciled BvA, forecasts, a re-opened September that cannot close again (Kano) and a re-open request the CFO can
+     * decide (First Bank), the four finance KRIs with readings, the BAC finance section, every report in every format, and empty pages for Acme.
+     */
+    public function test_finance_monitoring_estate_is_seeded_and_renders_for_every_demo_tenant(): void
+    {
+        if (env('SMOKE') !== '1') {
+            $this->markTestSkipped('Set SMOKE=1 and use a seeded database to run the route smoke test.');
+        }
+
+        $engine = app(ApprovalEngine::class);
+        $banks = [
+            'kano-heritage-bank' => ['admin' => 'admin@kanoheritage.ng', 'cfo' => 'cfo@kanoheritage.ng', 'finance' => 'finance@kanoheritage.ng', 'floor' => 1000000, 'reopen' => 'approved'],
+            'first-bank-nigeria' => ['admin' => 'admin@firstbanknigeria.ng', 'cfo' => 'cfo@firstbanknigeria.ng', 'finance' => 'finance@firstbanknigeria.ng', 'floor' => 5000000, 'reopen' => 'submitted'],
+        ];
+        foreach ($banks as $slug => $b) {
+            $admin = User::where('email', $b['admin'])->firstOrFail();
+            $cfo = User::where('email', $b['cfo'])->firstOrFail();
+            $finance = User::where('email', $b['finance'])->firstOrFail();
+            $org = $admin->organization_id;
+            $this->actingAs($admin);
+            $fy = FiscalYear::withoutGlobalScopes()->where('organization_id', $org)->where('is_current', true)->firstOrFail();
+            $asOf = app(MonitoringService::class)->asOfPeriod($org, $fy->id);
+            $this->assertNotNull($asOf, "{$slug} has an ended period");
+            $props = fn ($response) => $response->viewData('page')['props'];
+
+            // variances: red overspends and underspends and amber ones, all above the bank's absolute floor
+            $notes = VarianceNote::withoutGlobalScopes()->where('organization_id', $org)->where('fiscal_year_id', $fy->id);
+            $latest = (clone $notes)->where('period_id', $asOf->id)->where('is_breaching', true);
+            $this->assertGreaterThanOrEqual(3, (clone $latest)->where('severity', 'red')->where('direction', 'over')->count(), "{$slug} red overspends");
+            $this->assertGreaterThanOrEqual(1, (clone $latest)->where('severity', 'red')->where('direction', 'under')->count(), "{$slug} red underspends");
+            $this->assertGreaterThanOrEqual(3, (clone $latest)->where('severity', 'amber')->count(), "{$slug} amber variances");
+            $this->assertSame(0, (clone $notes)->whereRaw('abs(variance_amount) < ?', [$b['floor']])->count(), "{$slug} every note clears the floor of {$b['floor']}");
+            $this->assertSame(0, (clone $notes)->whereIn('status', ['open'])->whereHas('period', fn ($q) => $q->where('sequence', '<', $asOf->sequence))->count(), "{$slug} earlier periods are fully explained");
+            $this->assertGreaterThanOrEqual(2, (clone $notes)->where('status', 'open')->where('severity', 'amber')->count(), "{$slug} two amber notes are left open");
+            $this->assertGreaterThanOrEqual(2, (clone $notes)->whereHas('comments')->count(), "{$slug} two notes carry a comment thread");
+            $this->assertGreaterThanOrEqual(1, Issue::withoutGlobalScopes()->where('organization_id', $org)->where('source_type', 'finance_variance')->count(), "{$slug} a variance issue");
+            $this->assertSame((clone $notes)->count(), DB::table('fin_notification_logs')->where('organization_id', $org)->where('notifiable_type', VarianceNote::class)->count(), "{$slug} notification history is back-filled");
+
+            // BvA reconciles to the cent for every grouping and renders every monitoring page
+            foreach (MonitoringService::GROUP_BY as $group) {
+                $matrix = $props($this->get(route('finance.monitor.bva', ['group_by' => $group, 'view' => 'fy']))->assertOk())['matrix'];
+                $this->assertSame('0.00', $matrix['reconciliation']['difference'], "{$slug} BvA {$group}");
+            }
+            $this->get(route('finance.dashboard'))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Dashboard')->where('metrics.variances.red', fn ($n) => $n >= 3));
+            $this->get(route('finance.monitor.variances', ['severity' => 'red']))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Monitor/Variances'));
+            $this->get(route('finance.monitor.variances', ['period_id' => $asOf->id, 'needs_explanation' => 1]))->assertOk();
+            $forecast = $props($this->get(route('finance.monitor.forecast'))->assertOk());
+            $this->assertSame(2, collect($forecast['lines'])->filter(fn ($l) => $l['manual'] !== null)->count(), "{$slug} two manual forecasts");
+            $this->assertNotEmpty($forecast['history'], "{$slug} forecast history from the close snapshots");
+            $this->get(route('finance.monitor.period-close'))->assertOk();
+            $this->get(route('finance.reports.index', ['report' => 'bva']))->assertOk()->assertInertia(fn (Assert $p) => $p->has('reports', 8)->where('schedules', fn ($s) => count($s) >= 2));
+            $first = Budget::withoutGlobalScopes()->where('organization_id', $org)->where('fiscal_year_id', $fy->id)->where('status', 'baseline')->first();
+            $line = BudgetLine::withoutGlobalScopes()->where('budget_id', $first->id)->orderBy('line_no')->first();
+            $this->getJson(route('finance.monitor.transactions', $line))->assertOk()->assertJsonStructure(['line', 'actuals', 'commitments', 'totals']);
+
+            // close history: a record and a forecast snapshot for every closed period
+            $this->assertGreaterThanOrEqual(9, PeriodClose::withoutGlobalScopes()->where('organization_id', $org)->count(), "{$slug} close records");
+            $this->assertGreaterThanOrEqual(9, Forecast::withoutGlobalScopes()->where('organization_id', $org)->where('is_snapshot', true)->distinct('period_id')->count('period_id'), "{$slug} a forecast snapshot per closed period");
+
+            // the latest closed period: re-opened and blocked (Kano) or waiting for the CFO (First Bank)
+            $sep = Period::withoutGlobalScopes()->findOrFail($asOf->id);
+            $checklist = $props($this->get(route('finance.monitor.period-close', ['fiscal_year_id' => $fy->id, 'period_id' => $sep->id]))->assertOk())['selected'];
+            $history = collect($checklist['history']);
+            if ($b['reopen'] === 'approved') {
+                $this->assertSame('open', $sep->status, "{$slug} {$sep->name} is open again");
+                $this->assertTrue($history->contains('reopen_status', 'approved'), "{$slug} the re-open was approved");
+                $this->assertFalse($checklist['checklist']['can_close'], "{$slug} {$sep->name} cannot close");
+                $status = collect($checklist['checklist']['items'])->pluck('status', 'key');
+                $this->assertSame('fail', $status['accruals_done'], "{$slug} M9: a proposed accrual blocks the close");
+                $this->assertSame('fail', $status['variances_explained'], "{$slug} an unexplained red variance blocks the close");
+                $this->assertSame(1, Accrual::withoutGlobalScopes()->where('organization_id', $org)->where('period_id', $sep->id)->where('status', 'proposed')->count());
+                $this->assertSame(1, (clone $notes)->where('period_id', $sep->id)->where('severity', 'red')->where('status', 'open')->count(), "{$slug} one unexplained red");
+                $this->actingAs($finance)->post(route('finance.periods.close', $sep))->assertSessionHasErrors('checklist');
+                $this->assertSame('open', Period::withoutGlobalScopes()->find($sep->id)->status);
+            } else {
+                $this->assertSame('closed', $sep->status);
+                $pending = PeriodClose::withoutGlobalScopes()->where('organization_id', $org)->where('period_id', $sep->id)->where('reopen_status', 'submitted')->first();
+                $this->assertNotNull($pending, "{$slug} a pending re-open request");
+                $this->assertSame($finance->id, (int) $pending->reopen_requested_by_id);
+                $request = ApprovalRequest::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'finance.period_reopen')->where('status', 'pending')->firstOrFail();
+                $step = $request->currentStep();
+                $this->assertSame('CFO approval', $step->name);
+                $deciders = $engine->eligibleUsers($step, $request)->filter(fn (User $u) => $u->can('approve it-finance') && $engine->canDecide($step, $request, $pending, $u));
+                $this->assertTrue($deciders->contains('id', $cfo->id), "{$slug}: the CFO can decide the re-open");
+                $this->assertFalse($deciders->contains('id', $finance->id), "{$slug}: the requester cannot");
+                $this->actingAs($cfo)->get(route('finance.period-closes.show', $pending))->assertRedirect();
+                $cfoView = $props($this->actingAs($cfo)->get(route('finance.monitor.period-close', ['fiscal_year_id' => $fy->id, 'period_id' => $sep->id]))->assertOk())['selected'];
+                $this->assertTrue($cfoView['reopen']['can']['approve'], "{$slug}: the CFO's page offers the decision");
+                $financeView = $props($this->actingAs($finance)->get(route('finance.monitor.period-close', ['fiscal_year_id' => $fy->id, 'period_id' => $sep->id]))->assertOk())['selected'];
+                $this->assertFalse($financeView['reopen']['can']['approve']);
+                $this->assertTrue($financeView['reopen']['can']['withdraw']);
+            }
+            $this->actingAs($admin);
+
+            // the four finance KRIs have readings, and the BAC pack has the finance section
+            foreach (['KRI-FIN-VAR', 'KRI-FIN-UNB', 'KRI-FIN-INV', 'KRI-FIN-NOT'] as $code) {
+                $kri = Kri::withoutGlobalScopes()->where('organization_id', $org)->where('code', $code)->first();
+                $this->assertNotNull($kri, "{$slug} {$code}");
+                $this->assertSame($cfo->id, (int) $kri->owner_id, "{$slug} {$code} is owned by the CFO");
+                $this->assertGreaterThan(0, KriReading::withoutGlobalScopes()->where('kri_id', $kri->id)->count(), "{$slug} {$code} has readings");
+            }
+            $bac = BoardPackRun::withoutGlobalScopes()->where('organization_id', $org)->get()->first(fn ($r) => collect($r->content)->contains('key', 'it_financial_position'));
+            $this->assertNotNull($bac, "{$slug} a board pack with the IT financial position");
+            $this->assertNotNull(collect($bac->content)->firstWhere('key', 'it_financial_position')['data'], "{$slug} the finance section carries data");
+
+            // scheduled finance reports, each with a recorded run
+            $schedules = ScheduledReport::withoutGlobalScopes()->where('organization_id', $org)->where('report_type', 'like', 'finance.%')->get();
+            $this->assertSame(['finance.bva', 'finance.invoice_ageing'], $schedules->pluck('report_type')->sort()->values()->all(), "{$slug} finance schedules");
+            foreach ($schedules as $s) {
+                $this->assertSame(1, ScheduledReportRun::withoutGlobalScopes()->where('scheduled_report_id', $s->id)->count());
+            }
+
+            // every report downloads in every format
+            foreach (array_keys(FinanceReports::DEFINITIONS) as $key) {
+                foreach (['csv', 'xlsx', 'pdf'] as $format) {
+                    $this->get(route('finance.reports.show', ['report' => $key, 'format' => $format]))->assertOk();
+                }
+            }
+        }
+
+        // a bank with no finance data renders empty monitoring pages, not errors
+        $acme = User::where('email', 'admin@acme.ng')->firstOrFail();
+        $this->actingAs($acme);
+        $this->get(route('finance.dashboard'))->assertOk();
+        $this->get(route('finance.monitor.bva'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('matrix.rows', []));
+        $this->get(route('finance.monitor.forecast'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('lines', []));
+        $this->get(route('finance.monitor.variances'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('notes.data', []));
+        $this->get(route('finance.monitor.period-close'))->assertOk();
+        $this->get(route('finance.reports.index'))->assertOk();
+        $this->get(route('finance.monitor.bva.export'))->assertOk();
+        foreach (array_keys(FinanceReports::DEFINITIONS) as $key) {
+            $this->get(route('finance.reports.show', ['report' => $key, 'format' => 'xlsx']))->assertOk();
         }
     }
 }

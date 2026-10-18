@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\FinanceSettings;
 use App\Services\Finance\FiscalCalendarService;
+use Carbon\Carbon;
 use Database\Seeders\RolesAndPermissionsSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -142,7 +143,9 @@ class FinancePermissionsTest extends TestCase
         $this->post(route('finance.fx-rates.import'), ['file' => UploadedFile::fake()->createWithContent('x.csv', "from_currency,to_currency,rate,rate_date\n")])->assertForbidden();
 
         $closer = $this->user([], ['view it-finance', 'close it-finance-periods']);
+        Carbon::setTestNow('2027-02-05 09:00:00'); // P4 checklist: the period must have ended (D10); the year has no baseline so actuals_posted is n/a
         $this->actingAs($closer)->post(route('finance.periods.close', $period))->assertRedirect()->assertSessionHasNoErrors();
+        Carbon::setTestNow();
         $this->assertSame('closed', Period::withoutGlobalScopes()->find($period->id)->status);
 
         $importer = $this->user([], ['view it-finance', 'manage it-finance-settings', 'import it-finance']);

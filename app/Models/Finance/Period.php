@@ -8,6 +8,8 @@ use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /** One accounting period of a fiscal year. */
 class Period extends Model
@@ -42,6 +44,16 @@ class Period extends Model
     public function lockedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'locked_by_id');
+    }
+
+    public function closes(): HasMany
+    {
+        return $this->hasMany(PeriodClose::class, 'period_id')->orderByDesc('id');
+    }
+
+    public function latestClose(): HasOne
+    {
+        return $this->hasOne(PeriodClose::class, 'period_id')->latestOfMany();
     }
 
     public function scopeOpen(Builder $q): Builder

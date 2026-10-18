@@ -2,12 +2,13 @@ import InputError from '@/Components/InputError';
 import Chip from '@/Components/Material/Chip';
 import { FIELD, FY_TONES, LABEL, PERIOD_TONES, humanize } from '@/Utils/finance';
 import { formatDate } from '@/Utils/risk';
-import { router, useForm } from '@inertiajs/react';
+import { Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import { AddButton, Card, Check, Empty, FormModal, Table } from './ui';
 
 export default function FiscalCalendarTab({ fiscalYears, options, can }) {
     const [mode, setMode] = useState(null); // null | 'new' | fiscal year row
+    const checklistErrors = String(usePage().props.errors?.checklist ?? '').split(/\n|;\s/).filter(Boolean);
     const form = useForm({ year_label: '', starts_on: '', period_scheme: 'monthly', status: 'planning', is_current: false });
     const openNew = () => { form.setData({ year_label: '', starts_on: '', period_scheme: 'monthly', status: 'planning', is_current: false }); form.clearErrors(); setMode('new'); };
     const openEdit = (fy) => { form.setData({ year_label: fy.year_label, status: fy.status, is_current: fy.is_current }); form.clearErrors(); setMode(fy); };
@@ -23,6 +24,13 @@ export default function FiscalCalendarTab({ fiscalYears, options, can }) {
     return (
         <div className="space-y-4">
             <div className="flex justify-end">{can.manage && <AddButton onClick={openNew}>Add fiscal year</AddButton>}</div>
+            {checklistErrors.length > 0 && (
+                <div role="alert" className="rounded-lg border border-[#B3261E]/30 bg-[#FDF3F2] px-4 py-3">
+                    <p className="text-sm font-semibold text-[#8C1D18]">The period could not be closed:</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-[#8C1D18]">{checklistErrors.map((e, i) => <li key={i}>{e}</li>)}</ul>
+                    <Link href={route('finance.monitor.period-close')} className="mt-2 inline-block text-xs text-[#0A1F44] underline">Open the close checklist</Link>
+                </div>
+            )}
             {fiscalYears.length === 0 && <Card><Empty>No fiscal years yet. Add the current year and next year's planning year.</Empty></Card>}
             {fiscalYears.map((fy) => (
                 <Card key={fy.id}

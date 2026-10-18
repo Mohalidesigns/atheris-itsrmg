@@ -28,6 +28,7 @@ class FinanceApprovalNotifier
             'finance.contract_termination' => route('finance.terminations.show', $subject),
             'finance.expense_approval' => route('finance.expenses.show', $subject),
             'finance.invoice_approval' => route('finance.invoices.show', $subject),
+            'finance.period_reopen' => route('finance.period-closes.show', $subject),
             default => route('finance.supplementary.index', ['highlight' => $subject->getKey()]),
         };
     }

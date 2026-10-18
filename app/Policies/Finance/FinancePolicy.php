@@ -18,14 +18,17 @@ use App\Models\Finance\CostCentre;
 use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\FinanceDocument;
+use App\Models\Finance\Forecast;
 use App\Models\Finance\GoodsReceipt;
 use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
+use App\Models\Finance\PeriodClose;
 use App\Models\Finance\PurchaseOrder;
 use App\Models\Finance\RecurringExpense;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\SupplementaryRequest;
 use App\Models\Finance\Termination;
+use App\Models\Finance\VarianceNote;
 use App\Models\User;
 use App\Services\Finance\FinanceApprovals;
 use Illuminate\Database\Eloquent\Model;
@@ -180,6 +183,38 @@ class FinancePolicy
         return $user->can('close it-finance-periods') && $this->sameOrg($user, $period);
     }
 
+    /* Monitoring, variance, period close and reports (P4). */
+
+    public function overrideForecast(User $user, BudgetLine $line): bool
+    {
+        return $user->can('edit it-finance') && $user->can('view it-finance-amounts') && $this->sameOrg($user, $line) && $this->costCentreVisible($user, $line);
+    }
+
+    public function explainVariance(User $user, VarianceNote $note): bool
+    {
+        return $user->can('edit it-finance') && $this->sameOrg($user, $note) && $this->costCentreVisible($user, $note);
+    }
+
+    public function acknowledgeVariance(User $user, VarianceNote $note): bool
+    {
+        return $user->can('close it-finance-periods') && $this->sameOrg($user, $note);
+    }
+
+    public function requestReopen(User $user, Period $period): bool
+    {
+        return $this->closePeriod($user, $period);
+    }
+
+    public function decideReopen(User $user, PeriodClose $close): bool
+    {
+        return $user->can('approve it-finance') && $this->sameOrg($user, $close);
+    }
+
+    public function exportFinance(User $user): bool
+    {
+        return $user->can('export it-finance');
+    }
+
     /**
      * Cost-centre row restriction (§8): null means all; otherwise the ids the user owns plus every
      * descendant (possibly none). Applied to budgets, expenses and so on from P1.
@@ -220,6 +255,16 @@ class FinancePolicy
         }
         if ($this->isTransactional($model)) {
             return $this->transactionVisible($user, $model);
+        }
+        if ($model instanceof VarianceNote) {
+            $ids = self::visibleCostCentreIds($user);
+
+            return $ids === null || in_array((int) $model->cost_centre_id, $ids, true);
+        }
+        if ($model instanceof Forecast) {
+            $ids = self::visibleCostCentreIds($user);
+
+            return $ids === null || in_array((int) BudgetLine::withoutGlobalScopes()->whereKey($model->budget_line_id)->value('cost_centre_id'), $ids, true);
         }
         $planning = [Budget::class, BudgetLine::class, BudgetScenario::class, BudgetComment::class, BudgetTransfer::class, SupplementaryRequest::class];
         if (! in_array($model::class, $planning, true)) {

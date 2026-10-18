@@ -392,3 +392,51 @@ Both reviewers returned NO-GO before the fixes (security: H1, H2; domain: H1–H
 - `migrate:fresh --seed` on `it_security_risk_scratch`: clean, no seeder warnings. `SMOKE=1 RouteSmokeTest`: 5 passed (3444 assertions).
 - `npm run build` passes. Playwright not run in P3 (per the token rules: P2 and P7 only).
 - After the suite run: added a missing `FinancePolicy` import in `FinanceImportController` (the import page 500'd, caught by SMOKE) and changed the seeder so procurement, not the Finance Controller, overrides the demo variance (H1 had left that review stage with no eligible decider in org 3). `ExpenseReviewRegressionTest` and `ActualsImportAndReconciliationTest` were re-run green after the change.
+
+## Phase P4 — Budget monitoring, variance, period close & reports (2026-10-18, branch `feature/it-finance-p4`)
+
+Plan: `docs/build/ATH-FIN-PLAN-p4.md`. Built by fin-architect (opus) → fin-backend-engineer ∥ fin-frontend-engineer → fin-workflow-integrator → fin-qa-engineer (sonnet) → fin-security-reviewer + fin-domain-reviewer (sonnet, "be exhaustive") → fixes → gate.
+
+### Shipped
+- **Schema:** `2027_03_10_000001` (forecasts, variance notes, variance comments, period closes) and `2027_03_10_000002` (accrual `cancel_reason`, `cancelled_at`). 4 models; `Period::closes()`; Issue source `finance_variance`.
+- **Services:** `MonitoringService` (BvA matrix over 10 groupings, drill-down, ledger reconciliation incl. the unallocated row), `ForecastService` (EAC by remaining budget and run rate, floored at booked actuals + open commitments; overrides; burn; snapshots at close), `VarianceService` (YTD, both directions, % and absolute floor, per-line overrides; explain, acknowledge with SoD, comments, raise issue), `PeriodCloseService` (8-item checklist, close, lock, reopen through approval), `FinanceMetrics`, `FinanceKriSource`, `PeriodCloseReminderSweeper`, and a report framework with a dependency-free XLSX writer.
+- **Workflow:** `finance.period_reopen` (CFO stage; requested with `close it-finance-periods`, decided with `approve it-finance`, subject = the close record). Processes total 19 (8 for finance). Notifications: BudgetVariance (amber/red, once per line/period/severity) and PeriodCloseReminder (due, overdue, blocked). Commands: `fin:variances-sweep` (07:00) and `fin:period-reminders` (08:00), both Africa/Lagos, `withoutOverlapping`.
+- **Reports:** 8 keys (`bva`, `budget_book`, `variance_commentary`, `commitments`, `invoice_ageing`, `unbudgeted`, `contract_register`, `vendor_spend`) in CSV, XLSX and PDF, schedulable through `ScheduledReport` (`finance` and `finance.*` types). 4 finance KRIs (`KRI-FIN-VAR`, `-UNB`, `-INV`, `-NOT`), CFO-owned. Board-pack section `it_financial_position`.
+- **HTTP/UI:** 22 routes; Dashboard, Budget Monitor (BvA pivot + drill-down + export), Variances, Forecast, Period Close, Reports pages; 20 components; nav entries; board-pack section; checklist errors on the Settings fiscal calendar.
+- **P3 carry-overs folded in:** domain M7 (accrual VAT), M8 (accrual cut-off), M9 (close blocked by pending accruals/releases), D10 (no close before period end), C7 (reopen/checklist).
+- **Demo data:** `FinanceMonitoringDemoSeeder` (run twice in `DatabaseSeeder`: after the expense seeder, and after `ReportsIntegrationsSettingsDemoSeeder` for finance schedules). Kano 260 variance notes, First Bank 365; Kano September re-opened and blocked (pending accrual + unexplained red); First Bank September reopen pending at the CFO stage, decidable by cfo@firstbanknigeria.ng.
+
+### Tests
+New: `MonitoringBackendSmokeTest` (9), `MonitoringWorkflowIntegrationTest` (10), `MonitoringAndVarianceTest` (15), `PeriodCloseTest` (16), `FinanceReportsTest` (9), `MonitoringReviewRegressionTest` (9), and a `RouteSmokeTest` monitoring-estate test. Counts updated in `WorkflowStudioModuleTest` (19), `FinanceWorkflowStudioTest` (8) and `FinanceTenancyAndRoutesTest` (P4 page routes).
+
+### Decisions
+P4-1 … P4-14 and C101 … C125 as written in the plan §0/§10, all accepted. Key ones: YTD variance with % AND absolute floor, flagged both ways (P4-1); reopen decided with `approve it-finance` because the CFO doesn't hold `close it-finance-periods` (P4-6, C102; spec §6 should be updated to match — domain L12); corrective actions as system-raised Issues with no linked model (P4-12); XLSX via ZipArchive for report exports only, the workbook and imports stay CSV (P4-10). L13 (emergency spend escalation) stays deferred to P3.1.
+
+### Fixes during the build
+- `FinanceConfigurationTest::test_fx_rates_import_and_single_base_currency` was time-of-day flaky (UTC vs Africa/Lagos dates); pinned to midday.
+- `ReportFigures` `finance.*` match arm could never match; prefix check moved ahead of the match.
+- BvA reconciliation badge hidden for users without amounts (it showed red "Out of balance").
+- Accrual Cancel now prompts for the required reason.
+
+### Review fixes applied
+- **Security H1 / domain M4:** finance scheduled-run summaries hold no money; `reports:run-due` runs finance schedules as `created_by` and records a failed run if that user lacks access; finance schedules can only be edited, paused or deleted with view + export it-finance (security L4).
+- **Security H2 / domain H3:** explain, acknowledge, comment, raise-issue and evaluate are refused on closed or locked periods; the nightly sweep only evaluates open, ended periods.
+- **Domain H1:** dashboard, board pack and KRIs include unmatched/unbudgeted actuals (`actual_unallocated`) and tie to the BvA and ledger.
+- **Domain H2:** close checks period end before evaluating; evaluation of an unended period needs an explicit force flag.
+- **Domain H4:** posted accruals due for reversal block the close; cancelling an accrual needs a reason, shown on the checklist as a warning.
+- **Domain H5:** EAC and snapshots are floored at booked actuals + open commitments; overrides below the floor are refused.
+- **Security M1 / domain M10, M3, M4:** dashboard pending approvals scoped to what the viewer may see and limited in SQL; one failing schedule no longer stops `reports:run-due`; unchanged nightly evaluations write no activity-log rows.
+
+### Deferred / logged (not fixed)
+- **Domain:** M1 (BvA severity over unelapsed periods), M2 (close needs no acknowledgement of explained reds; closer may self-explain), M3 (BvA export, commitments report and drill use a different commitments definition from availability), M5 (snapshots ignore overrides and are replaced on re-close), M6 (accruals at PO-date FX, not period-end), M7 (demo polish: hard-coded seeded checklist, red-heavy floors, burn vs EAC note, synthetic KRI history), M8 (scoped viewers don't see their unallocated spend), M9 ("approvals complete" checks invoices only), L1–L14.
+- **Security:** M2 (finance KRIs and stored board-pack content unmasked; masking only on board-pack read), L1 (org-wide checklist counts for restricted users), L2 (report preview needs only view), L3 (`$guarded = []` on new models), L5 (issue title exposes line labels), L6 (reopen/close races), L7 (defence-in-depth org filters on vendor/legal-entity lookups), L8 (notification recipients not permission-checked), L9 (report memory before the row cap).
+- XLSX output proven as valid zip/XML only, not opened in Excel. Playwright not run (P2 and P7 only).
+
+### Review verdicts
+Both reviewers returned NO-GO before fixes (security: H1, H2; domain: H1–H5). All are fixed and covered by `MonitoringReviewRegressionTest`.
+
+### Gate (PostgreSQL)
+- First run, before the review fixes: 682 passed, 6 skipped, 1 failed (the P4 page routes missing from `FinanceTenancyAndRoutesTest`, then fixed).
+- Re-run after the review fixes, on `it_security_risk_test`: 692 passed, 6 skipped (9691 assertions, 22 min).
+- `migrate:fresh --seed` on `it_security_risk_scratch`: clean (only the deliberate EA metamodel demotions). `SMOKE=1 RouteSmokeTest`: 6 passed (3786 assertions, 233 GET routes).
+- `npm run build` passes.

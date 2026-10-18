@@ -101,6 +101,9 @@ class FinanceTenancyAndRoutesTest extends TestCase
             'finance.accruals.index', 'finance.actuals.candidates', 'finance.actuals.index', 'finance.documents.download', 'finance.expenses.availability', 'finance.expenses.create',
             'finance.expenses.edit', 'finance.expenses.index', 'finance.expenses.show', 'finance.imports.index', 'finance.imports.show', 'finance.invoices.create', 'finance.invoices.edit',
             'finance.invoices.index', 'finance.invoices.show', 'finance.purchase-orders.index', 'finance.purchase-orders.show', 'finance.recurring.index',
+            // P4: dashboard, monitoring, period close and reports
+            'finance.dashboard', 'finance.monitor.bva', 'finance.monitor.bva.export', 'finance.monitor.forecast', 'finance.monitor.period-close',
+            'finance.monitor.transactions', 'finance.monitor.variances', 'finance.period-closes.show', 'finance.periods.close-checklist', 'finance.reports.index', 'finance.reports.show',
         ];
         sort($expected);
         $this->assertSame($expected, $names);
