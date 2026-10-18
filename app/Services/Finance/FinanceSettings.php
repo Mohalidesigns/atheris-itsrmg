@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Models\Finance\Currency;
 use App\Models\Finance\GlAccount;
+use App\Models\Finance\Investment;
 use App\Models\Finance\Setting;
 use App\Models\Finance\TaxType;
 use App\Models\Organization;
@@ -24,6 +25,7 @@ class FinanceSettings
         'doa' => ['invoice_sod_from'],
         'variance' => ['variance_amber_pct', 'variance_red_pct', 'variance_abs_floor'],
         'renewal' => ['renewal_lead_days', 'renewal_notice_offsets', 'escalation_role', 'renewal_cfo_from', 'renewal_cfo_uplift_pct'],
+        'investments' => ['investment_score_weights', 'investment_discount_rate_pct', 'investment_cost_tolerance_pct', 'value_review_lead_days'],
     ];
 
     /** @var array<int, Setting> memoised per request (the service is a container singleton) */
@@ -66,10 +68,67 @@ class FinanceSettings
             $data['renewal_notice_offsets'] = $offsets;
         }
 
+        $weightsChanged = false;
+        if ($section === 'investments' && array_key_exists('investment_score_weights', $data)) {
+            $weights = $this->normaliseWeights($data['investment_score_weights']);
+            $weightsChanged = $weights !== $this->investmentWeights((int) $setting->organization_id);
+            $data['investment_score_weights'] = $weights;
+        }
+
         $setting->fill($data)->save();
         $this->flush();
+        $weightsChanged && app(InvestmentScoring::class)->rescore((int) $setting->organization_id);
 
         return $setting->refresh();
+    }
+
+    /**
+     * The five scoring weights as whole percentages that sum to 100 (plan P5-10).
+     *
+     * @return array<string,int>
+     */
+    public function normaliseWeights(mixed $weights): array
+    {
+        $fail = fn (string $m) => throw ValidationException::withMessages(['investment_score_weights' => $m]);
+        is_array($weights) || $fail('Give a weight for each of the five criteria.');
+        $out = [];
+        foreach (Investment::CRITERIA as $k) {
+            $v = $weights[$k] ?? null;
+            (is_int($v) || (is_string($v) && ctype_digit($v))) && (int) $v >= 0 && (int) $v <= 100 || $fail('Each weight must be a whole number from 0 to 100.');
+            $out[$k] = (int) $v;
+        }
+        array_sum($out) === 100 || $fail('The five weights must add up to 100 (they add up to '.array_sum($out).').');
+
+        return $out;
+    }
+
+    /** @return array<string,int> */
+    public function investmentWeights(int $orgId): array
+    {
+        $stored = (array) ($this->for($orgId)->investment_score_weights ?? []);
+        $default = (array) config('finance.settings_defaults.investment_score_weights');
+        $out = [];
+        foreach (Investment::CRITERIA as $k) {
+            $out[$k] = (int) ($stored[$k] ?? $default[$k] ?? 0);
+        }
+
+        return $out;
+    }
+
+    /** Hurdle rate (percent) for new business cases; null setting falls back to config. */
+    public function discountRatePct(int $orgId): string
+    {
+        return (string) ($this->for($orgId)->investment_discount_rate_pct ?? config('finance.investments.default_discount_rate_pct'));
+    }
+
+    public function costTolerancePct(int $orgId): string
+    {
+        return (string) ($this->for($orgId)->investment_cost_tolerance_pct ?? config('finance.investments.default_cost_tolerance_pct'));
+    }
+
+    public function valueReviewLeadDays(int $orgId): int
+    {
+        return (int) ($this->for($orgId)->value_review_lead_days ?? config('finance.investments.value_review_lead_days'));
     }
 
     /**

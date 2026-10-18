@@ -104,6 +104,8 @@ class FinanceTenancyAndRoutesTest extends TestCase
             // P4: dashboard, monitoring, period close and reports
             'finance.dashboard', 'finance.monitor.bva', 'finance.monitor.bva.export', 'finance.monitor.forecast', 'finance.monitor.period-close',
             'finance.monitor.transactions', 'finance.monitor.variances', 'finance.period-closes.show', 'finance.periods.close-checklist', 'finance.reports.index', 'finance.reports.show',
+            // P5: investments and value realisation
+            'finance.business-cases.show', 'finance.investments.create', 'finance.investments.index', 'finance.investments.show', 'finance.portfolio', 'finance.stage-gates.show', 'finance.value-reviews.show',
         ];
         sort($expected);
         $this->assertSame($expected, $names);
@@ -113,6 +115,7 @@ class FinanceTenancyAndRoutesTest extends TestCase
             'finance.cycles.index' => 'Finance/Budgets/Cycles', 'finance.targets.index' => 'Finance/Budgets/Targets',
             'finance.transfers.index' => 'Finance/Budgets/Transfers', 'finance.supplementary.index' => 'Finance/Budgets/Supplementary',
             'finance.contracts.index' => 'Finance/Contracts/Index', 'finance.contracts.create' => 'Finance/Contracts/Create', 'finance.renewals.index' => 'Finance/Renewals/Index',
+            'finance.investments.index' => 'Finance/Investments/Index', 'finance.investments.create' => 'Finance/Investments/Create', 'finance.portfolio' => 'Finance/Investments/Portfolio',
         ];
         foreach ($components as $name => $component) {
             $this->actingAs($this->admin)->get(route($name))->assertOk()->assertInertia(fn (Assert $p) => $p->component($component, false)->has('auth.user'));

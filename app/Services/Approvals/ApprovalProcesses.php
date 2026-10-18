@@ -16,6 +16,7 @@ use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\Invoice;
 use App\Models\Finance\PeriodClose;
 use App\Models\Finance\Renewal;
+use App\Models\Finance\StageGate;
 use App\Models\Finance\SupplementaryRequest;
 use App\Models\Finance\Termination;
 use App\Models\Policy;
@@ -184,6 +185,22 @@ class ApprovalProcesses
                 'requires_cfo' => ['label' => 'Needs CFO (high value or after the notice deadline)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
             ],
             'default' => 'One approval by anyone with "approve it-finance-contracts" other than the requester, the contract owner and its creator.',
+        ],
+        'finance.business_case_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Business case / stage gate', 'engine' => 'generic', 'owner_cannot_approve' => true,
+            'description' => 'An investment passes its business-case and delivery gates, and changes beyond tolerance, only with approval (FIN-05.04, FIN-05.11; COBIT APO05, BAI01).',
+            'permission' => 'approve it-finance-investments', 'view_permission' => 'view it-finance', 'model' => StageGate::class,
+            'initiator' => 'requested_by_id', 'owner' => 'sponsor_id', 'title' => ['gate_title'], 'route' => 'finance.stage-gates.show',
+            'initiate' => 'Requesting an investment gate',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA, BAC)', 'values' => 'finance.doa_bands'],
+                'rgt' => ['label' => 'Run / grow / transform', 'values' => ['run' => 'Run', 'grow' => 'Grow', 'transform' => 'Transform']],
+                'is_regulatory' => ['label' => 'Regulatory mandate', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'gate' => ['label' => 'Gate', 'values' => ['approved' => 'Business case approval', 'delivered' => 'Delivery acceptance', 'change' => 'Change beyond tolerance']],
+                'requires_cfo' => ['label' => 'Needs CFO (business case or change)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'requires_board' => ['label' => 'Needs the board (high value)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance-investments" other than the requester, the manager, the sponsor and the business case preparer.',
         ],
         'finance.period_reopen' => [
             'module' => 'IT Financial Management', 'label' => 'Re-open a closed period', 'engine' => 'generic',

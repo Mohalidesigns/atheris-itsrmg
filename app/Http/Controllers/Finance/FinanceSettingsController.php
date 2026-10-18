@@ -27,7 +27,7 @@ use Inertia\Inertia;
 /** Finance Settings page and the four settings sections (ATH-FIN-001 §3.1, §9). */
 class FinanceSettingsController extends Controller
 {
-    public const TABS = ['general', 'calendar', 'cost-centres', 'categories', 'gl-accounts', 'currencies', 'taxes', 'drivers', 'doa', 'variance', 'renewal'];
+    public const TABS = ['general', 'calendar', 'cost-centres', 'categories', 'gl-accounts', 'currencies', 'taxes', 'drivers', 'doa', 'variance', 'renewal', 'investments'];
 
     public function __construct(private readonly FinanceSettings $settings, private readonly CurrencyService $currency, private readonly DoaBandService $doa) {}
 
@@ -79,6 +79,13 @@ class FinanceSettingsController extends Controller
             'tab' => $tab,
             'baseCurrency' => $this->settings->baseCurrency($orgId),
             'settings' => $this->settingProps($setting),
+            'investmentPolicy' => [
+                'weights' => $this->settings->investmentWeights($orgId), 'discount_rate_pct' => $setting->investment_discount_rate_pct === null ? null : (string) $setting->investment_discount_rate_pct,
+                'cost_tolerance_pct' => $setting->investment_cost_tolerance_pct === null ? null : (string) $setting->investment_cost_tolerance_pct,
+                'value_review_lead_days' => $setting->value_review_lead_days,
+                'defaults' => ['discount_rate_pct' => (string) config('finance.investments.default_discount_rate_pct'), 'cost_tolerance_pct' => (string) config('finance.investments.default_cost_tolerance_pct'),
+                    'value_review_lead_days' => (int) config('finance.investments.value_review_lead_days'), 'weights' => (array) config('finance.settings_defaults.investment_score_weights')],
+            ],
             'fiscalYears' => $fiscalYears,
             'costCentres' => $costCentres,
             'categories' => Category::query()->orderBy('kind')->orderBy('sort_order')->orderBy('code')->get()->map(fn (Category $c) => [
@@ -145,6 +152,13 @@ class FinanceSettingsController extends Controller
                 'variance_amber_pct' => ['required', 'numeric', 'between:0.01,100'],
                 'variance_red_pct' => ['required', 'numeric', 'gt:variance_amber_pct', 'max:1000'],
                 'variance_abs_floor' => ['required', 'numeric', 'min:0'],
+            ],
+            'investments' => [
+                'investment_score_weights' => ['required', 'array'],
+                'investment_score_weights.*' => ['required', 'integer', 'between:0,100'],
+                'investment_discount_rate_pct' => ['nullable', 'numeric', 'between:0,100'],
+                'investment_cost_tolerance_pct' => ['nullable', 'numeric', 'between:0,100'],
+                'value_review_lead_days' => ['nullable', 'integer', 'between:0,365'],
             ],
             'renewal' => [
                 'renewal_lead_days' => ['required', 'integer', 'between:1,730'],

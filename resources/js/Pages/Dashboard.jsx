@@ -206,7 +206,7 @@ export default function Dashboard({ orgName = 'Kano Heritage Bank Plc', counts =
                                     <p className="text-[10px] text-[#718096] font-mono">{k.code}</p>
                                     <p className="text-xs font-semibold text-[#2D3748] truncate">{k.name}</p>
                                     <div className="flex items-end justify-between mt-1">
-                                        <p className="text-lg font-bold text-[#0A1F44]">{latest ? Number(latest.value).toFixed(1) : '—'}</p>
+                                        <p className="text-lg font-bold text-[#0A1F44]">{latest ? (latest.value === null || latest.value === undefined ? 'Hidden' : Number(latest.value).toFixed(1)) : '—'}</p>
                                         {latest && <StatusBadge status={latest.status} />}
                                     </div>
                                     <div className="flex items-end gap-0.5 h-6 mt-1">

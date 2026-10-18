@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Events\Finance\FinanceApprovalDecided;
 use App\Events\Finance\FinanceApprovalRequested;
+use App\Models\Approvals\ApprovalDecision;
 use App\Models\Approvals\ApprovalRequest;
 use App\Models\User;
 use App\Services\Approvals\ApprovalEngine;
@@ -63,6 +64,60 @@ class FinanceApprovals
         }
 
         return $message;
+    }
+
+    /**
+     * Look-ahead for a decision about to be recorded: refuses it when it would leave a later pending stage with nobody who can still decide
+     * (each person decides one stage only, so the actor and everyone who already decided are out, as are the initiator and the SoD snapshot).
+     * Stages are matched to distinct people, so two later stages cannot both rely on the same single person.
+     */
+    public function assertNoStageStranded(string $process, Model $subject, User $actor): void
+    {
+        $request = $this->engine->current($process, $subject);
+        $current = $request?->currentStep();
+        if (! $request || ! $current) {
+            return;
+        }
+        $out = array_map('intval', (array) ($request->context['sod_excluded_ids'] ?? []));
+        $request->initiated_by && $out[] = (int) $request->initiated_by;
+        $out[] = (int) $actor->id;
+        $decided = ApprovalDecision::withoutGlobalScopes()->whereIn('step_id', $request->steps->pluck('id'))->pluck('user_id')->map(fn ($v) => (int) $v)->all();
+        $out = array_merge($out, $decided);
+        $slots = [];
+        $users = User::where('organization_id', $request->organization_id)->get()->reject(fn ($u) => in_array((int) $u->id, $out, true));
+        $steps = $request->steps->where('status', 'pending')->where('id', '!=', $current->id);
+        // The current stage may still need more approvals from other people before it closes.
+        $remaining = max(0, (int) $current->min_approvals - $current->decisions->where('decision', 'approved')->count() - 1);
+        foreach ($steps->prepend($current)->values() as $k => $step) {
+            $need = $k === 0 ? $remaining : max(1, (int) $step->min_approvals);
+            for ($n = 0; $n < $need; $n++) {
+                $slots[] = [$step, $users->filter(fn ($u) => $this->engine->matches($step, $u))->pluck('id')->map(fn ($v) => (int) $v)->all()];
+            }
+        }
+        $owner = [];
+        $try = function (int $s, array &$seen) use (&$try, &$owner, $slots): bool {
+            foreach ($slots[$s][1] as $uid) {
+                if (isset($seen[$uid])) {
+                    continue;
+                }
+                $seen[$uid] = true;
+                if (! isset($owner[$uid]) || $try($owner[$uid], $seen)) {
+                    $owner[$uid] = $s;
+
+                    return true;
+                }
+            }
+
+            return false;
+        };
+        foreach ($slots as $s => [$step]) {
+            $seen = [];
+            if (! $try($s, $seen)) {
+                throw ValidationException::withMessages(['approval' => "This decision would leave \"{$step->name}\" without anyone who can still decide it ("
+                    .$this->engine->describe($step).'; people who decided an earlier stage, took part in the record or started it are excluded). '
+                    .'Ask an administrator to adjust the workflow or its people first.']);
+            }
+        }
     }
 
     public function finalised(string $process, Model $subject, User $actor, ?string $note = null): void

@@ -14,7 +14,7 @@ class Setting extends Model
 
     public const EAC_METHODS = ['remaining_budget', 'run_rate'];
 
-    public const SECTIONS = ['general', 'doa', 'variance', 'renewal'];
+    public const SECTIONS = ['general', 'doa', 'variance', 'renewal', 'investments'];
 
     protected $table = 'fin_settings';
 
@@ -32,6 +32,9 @@ class Setting extends Model
         'match_tolerance_pct' => 'decimal:2',
         'match_tolerance_abs' => 'decimal:2',
         'invoice_sod_from' => 'decimal:2',
+        'investment_discount_rate_pct' => 'decimal:3',
+        'investment_cost_tolerance_pct' => 'decimal:2',
+        'value_review_lead_days' => 'integer',
         'showback_enabled' => 'boolean',
         'fiscal_year_start_month' => 'integer',
         'renewal_lead_days' => 'integer',

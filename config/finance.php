@@ -72,6 +72,7 @@ return [
         'renewal_cfo_from' => 10000000, 'renewal_cfo_uplift_pct' => 10, // a contract renewal also needs the CFO above either threshold (plan C50)
         'expense_head_of_it_from' => 1000000, 'expense_cfo_from' => 10000000, 'expense_md_ceo_from' => 50000000,
         'invoice_sod_from' => 10000000, // fallback when fin_settings.invoice_sod_from is null
+        'business_case_board_from' => 250000000, // a business case or change at or above this base amount also needs the board (P5-5)
     ],
 
     // P2 contracts, subscriptions, renewals and calendar (ATH-FIN-001 §3.6, §5.4)
@@ -102,4 +103,29 @@ return [
         'top_variances' => 10,
     ],
     'reports' => ['max_rows' => 20000, 'pdf_max_rows' => 1500, 'preview_rows' => 50],
+
+    // KRI codes whose values are hidden from viewers without `view it-finance-amounts` (security M2, used from P5 WP-B)
+    'masked_kri_codes' => ['KRI-FIN-VAR', 'KRI-FIN-UNB'],
+
+    // P5 IT investment and value realisation (ATH-FIN-001 §3.5)
+    'investments' => [
+        'approval_gates' => ['approved', 'delivered'], // gates routed through finance.business_case_approval ('change' always, when over tolerance)
+        'default_discount_rate_pct' => 15, // demo hurdle rate, unverified; fin_settings overrides
+        'default_horizon_years' => 5, 'max_horizon_years' => 15,
+        'default_cost_tolerance_pct' => 10, 'schedule_tolerance_days' => 30,
+        'value_review_offsets_months' => ['pir_3m' => 3, 'pir_6m' => 6, 'pir_12m' => 12],
+        'value_review_lead_days' => 14, 'value_review_overdue_offsets' => [1, 7, 14, 30],
+        'cost_outcome_band_pct' => 5,
+        'health' => ['cpi_at_risk' => '0.95', 'cpi_off_track' => '0.85'],
+        'reason_min' => 20,
+        'irr' => ['guess' => 0.10, 'max_iterations' => 100, 'tolerance' => 1e-10, 'low' => -0.99, 'high' => 10.0],
+        'gate_criteria' => [ // [key, label, auto]; auto keys are evaluated by StageGateService::criteria(); manual keys must be ticked
+            'business_case' => [['sponsor_named', 'Sponsor named', true], ['manager_named', 'Manager named', true], ['cost_centre_set', 'Cost centre set', true], ['problem_agreed', 'Problem statement and options agreed with the sponsor', false]],
+            'approved' => [['business_case_complete', 'Business case complete (costs, horizon, rate)', true], ['scored', 'All five criteria scored', true], ['risks_recorded', 'Risks recorded (summary or linked risk)', true], ['regulatory_reference', 'Regulatory reference (regulatory investments)', true], ['options_considered', 'Options considered and recommendation stated', false]],
+            'in_delivery' => [['funded', 'Funded: at least one baseline budget line tagged', true], ['start_date', 'Start date set', true], ['delivery_plan', 'Delivery plan and governance agreed', false]],
+            'delivered' => [['actual_end', 'Actual end date given', true], ['acceptance', 'User acceptance signed off', false], ['handover', 'Handed over to operations', false]],
+            'benefits_tracking' => [['benefits_registered', 'At least one benefit with owner, target and due date', true], ['reviews_scheduled', 'Value reviews scheduled', true]],
+            'closed' => [['reviews_done', 'No value review scheduled, due or overdue', true], ['benefits_final', 'Every benefit has a final status', true], ['lessons', 'Lessons learned recorded', false]],
+        ],
+    ],
 ];

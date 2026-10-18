@@ -4,10 +4,12 @@ namespace App\Services\Finance\Reports;
 
 use App\Models\User;
 use App\Policies\Finance\FinancePolicy;
+use App\Services\Finance\Reports\Definitions\BenefitsRegisterReport;
 use App\Services\Finance\Reports\Definitions\BudgetBookReport;
 use App\Services\Finance\Reports\Definitions\BvaReport;
 use App\Services\Finance\Reports\Definitions\CommitmentsReport;
 use App\Services\Finance\Reports\Definitions\ContractRegisterReport;
+use App\Services\Finance\Reports\Definitions\InvestmentPortfolioReport;
 use App\Services\Finance\Reports\Definitions\InvoiceAgeingReport;
 use App\Services\Finance\Reports\Definitions\UnbudgetedSpendReport;
 use App\Services\Finance\Reports\Definitions\VarianceCommentaryReport;
@@ -21,6 +23,7 @@ class FinanceReports
         'variance_commentary' => VarianceCommentaryReport::class, 'commitments' => CommitmentsReport::class,
         'invoice_ageing' => InvoiceAgeingReport::class, 'unbudgeted' => UnbudgetedSpendReport::class,
         'contract_register' => ContractRegisterReport::class, 'vendor_spend' => VendorSpendReport::class,
+        'investment_portfolio' => InvestmentPortfolioReport::class, 'benefits_register' => BenefitsRegisterReport::class,
     ];
 
     /** @return array<string, class-string<FinanceReport>> the definitions that exist (others land with later work packages) */
@@ -78,7 +81,7 @@ class FinanceReports
         if (! $amounts) {
             $money = array_keys(array_filter($cols, fn ($c) => in_array($c['type'], ['money', 'pct'], true)));
             $blank = fn (array $r) => array_merge($r, array_fill_keys($money, null));
-            $rows = array_map($blank, $rows);
+            $rows = array_map(fn (array $r) => array_merge($blank($r), array_fill_keys($def->rowMoneyKeys($r), null)), $rows);
             $totals = $totals ? $blank($totals) : null;
         }
 

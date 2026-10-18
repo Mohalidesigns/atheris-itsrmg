@@ -140,11 +140,11 @@ class PeriodCloseService
 
         return DB::transaction(function () use ($p, $by, $list) {
             $closed = $this->calendar->closePeriod($p, $by);
-            $this->forecasts->snapshot($closed, $by);
             $c = PeriodClose::withoutGlobalScopes()->create([
                 'organization_id' => $p->organization_id, 'created_by_id' => $by->id, 'fiscal_year_id' => $p->fiscal_year_id, 'period_id' => $p->id,
                 'status' => 'closed', 'checklist' => $list['items'], 'closed_by_id' => $by->id, 'closed_at' => now(),
             ]);
+            $this->forecasts->snapshot($closed, $by, $c);
             $this->audit($c, $by, 'closed', "{$p->name} closed");
 
             return $c;

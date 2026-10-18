@@ -349,7 +349,8 @@ class FinanceDemoSeeder extends Seeder
     private function users(string $slug, array $bank): void
     {
         $specs = [
-            'md' => ['Executive', 'Managing Director/CEO', ['Finance Approver', 'IT Steering Committee']],
+            // No IT Steering Committee role: stage 3 would let the MD pre-empt it and then be barred from the board stage (one stage per person).
+            'md' => ['Executive', 'Managing Director/CEO', ['Finance Approver']],
             'headofit' => ['Technology', 'Head of IT Governance', ['Finance Approver']],
         ];
         foreach ($specs as $key => [$dept, $title, $roles]) {

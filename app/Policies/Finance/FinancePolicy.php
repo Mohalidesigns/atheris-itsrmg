@@ -4,11 +4,14 @@ namespace App\Policies\Finance;
 
 use App\Models\Finance\Accrual;
 use App\Models\Finance\Actual;
+use App\Models\Finance\Benefit;
+use App\Models\Finance\BenefitReading;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetComment;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetScenario;
 use App\Models\Finance\BudgetTransfer;
+use App\Models\Finance\BusinessCase;
 use App\Models\Finance\Contract;
 use App\Models\Finance\ContractDocument;
 use App\Models\Finance\ContractEvent;
@@ -20,14 +23,20 @@ use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\FinanceDocument;
 use App\Models\Finance\Forecast;
 use App\Models\Finance\GoodsReceipt;
+use App\Models\Finance\Investment;
+use App\Models\Finance\InvestmentChange;
+use App\Models\Finance\InvestmentLink;
+use App\Models\Finance\InvestmentScore;
 use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
 use App\Models\Finance\PeriodClose;
 use App\Models\Finance\PurchaseOrder;
 use App\Models\Finance\RecurringExpense;
 use App\Models\Finance\Renewal;
+use App\Models\Finance\StageGate;
 use App\Models\Finance\SupplementaryRequest;
 use App\Models\Finance\Termination;
+use App\Models\Finance\ValueReview;
 use App\Models\Finance\VarianceNote;
 use App\Models\User;
 use App\Services\Finance\FinanceApprovals;
@@ -215,6 +224,75 @@ class FinancePolicy
         return $user->can('export it-finance');
     }
 
+    /* Investments and value realisation (P5). */
+
+    public function createInvestment(User $user): bool
+    {
+        return $user->can('create it-finance');
+    }
+
+    /** Edit permission or being the investment's manager, within a visible investment. */
+    public function updateInvestment(User $user, Model $model): bool
+    {
+        $inv = $this->investmentOf($model);
+
+        return $inv !== null && $this->sameOrg($user, $inv) && ($user->can('edit it-finance') || (int) $inv->manager_id === (int) $user->id)
+            && $user->can('view it-finance') && $this->costCentreVisible($user, $inv);
+    }
+
+    public function scoreInvestment(User $user, Investment $investment): bool
+    {
+        return ($user->can('edit it-finance') || $user->can('approve it-finance-investments')) && $this->sameOrg($user, $investment) && $this->costCentreVisible($user, $investment);
+    }
+
+    public function decideGate(User $user, StageGate $gate): bool
+    {
+        return $user->can('approve it-finance-investments') && $this->sameOrg($user, $gate);
+    }
+
+    public function recordBenefit(User $user, Benefit $benefit): bool
+    {
+        return $this->sameOrg($user, $benefit) && $user->can('view it-finance') && (($user->can('edit it-finance') && $this->updateInvestment($user, $benefit)) || (int) $benefit->owner_id === (int) $user->id
+            || $this->updateInvestment($user, $benefit));
+    }
+
+    public function completeReview(User $user, ValueReview $review): bool
+    {
+        // The delivery manager never reviews his own project (PIR independence); the service also refuses the gate requester.
+        $inv = $this->investmentOf($review);
+
+        return $this->sameOrg($user, $review) && $user->can('view it-finance') && ! ($inv && (int) $inv->manager_id === (int) $user->id)
+            && ($this->updateInvestment($user, $review) || (int) $review->reviewer_id === (int) $user->id);
+    }
+
+    private function investmentOf(Model $m): ?Investment
+    {
+        return match (true) {
+            $m instanceof Investment => $m,
+            $m instanceof FinanceDocument => $m->documentable()->withoutGlobalScopes()->first() instanceof Investment ? $m->documentable()->withoutGlobalScopes()->first() : null,
+            isset($m->investment_id) => Investment::withoutGlobalScopes()->find($m->investment_id),
+            $m instanceof BenefitReading => ($b = Benefit::withoutGlobalScopes()->find($m->benefit_id)) ? Investment::withoutGlobalScopes()->find($b->investment_id) : null,
+            default => null,
+        };
+    }
+
+    private function isInvestmentRecord(Model $m): bool
+    {
+        return $m instanceof Investment || $m instanceof BusinessCase || $m instanceof InvestmentScore || $m instanceof StageGate || $m instanceof Benefit
+            || $m instanceof BenefitReading || $m instanceof ValueReview || $m instanceof InvestmentChange || $m instanceof InvestmentLink;
+    }
+
+    private function investmentVisible(User $user, Model $model): bool
+    {
+        $inv = $this->investmentOf($model);
+        if (! $inv) {
+            return false;
+        }
+        $ids = self::visibleCostCentreIds($user);
+
+        return $ids === null || $user->can('approve it-finance-investments') || ($inv->cost_centre_id && in_array((int) $inv->cost_centre_id, $ids, true)) || $inv->involves($user);
+    }
+
     /**
      * Cost-centre row restriction (§8): null means all; otherwise the ids the user owns plus every
      * descendant (possibly none). Applied to budgets, expenses and so on from P1.
@@ -252,6 +330,12 @@ class FinancePolicy
         if ($model instanceof Contract || $model instanceof ContractTeamMember || $model instanceof ContractLink || $model instanceof ContractDocument
             || $model instanceof ContractEvent || $model instanceof Renewal || $model instanceof Termination) {
             return $this->contractVisible($user, $model);
+        }
+        if ($this->isInvestmentRecord($model)) {
+            return $this->investmentVisible($user, $model);
+        }
+        if ($model instanceof FinanceDocument && $model->documentable_type === Investment::class) {
+            return $this->investmentVisible($user, $model);
         }
         if ($this->isTransactional($model)) {
             return $this->transactionVisible($user, $model);

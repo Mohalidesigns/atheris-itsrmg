@@ -4,10 +4,12 @@ namespace App\Services\Finance;
 
 use App\Models\Approvals\ApprovalRequest;
 use App\Models\Finance\Actual;
+use App\Models\Finance\Benefit;
 use App\Models\Finance\Category;
 use App\Models\Finance\Contract;
 use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\FiscalYear;
+use App\Models\Finance\Investment;
 use App\Models\Finance\Invoice;
 use App\Models\Finance\VarianceNote;
 use App\Models\User;
@@ -31,7 +33,12 @@ class FinanceMetrics
         private readonly BudgetAvailability $availability,
         private readonly BudgetPhasing $phasing,
         private readonly ApprovalEngine $engine,
+        private readonly PortfolioService $portfolio,
+        private readonly InvestmentFinancials $investmentFinancials,
     ) {}
+
+    /** Money-bearing keys of boardInvestmentFigures(), plus `by_stage.*.bac`; nulled for a viewer without `view it-finance-amounts` (security M2). */
+    public const BOARD_INVESTMENT_MONEY_KEYS = ['rgt_split', 'regulatory_share_pct', 'bac_total', 'ac_total', 'eac_total', 'cpi_portfolio', 'benefits_planned', 'benefits_realised'];
 
     private function fy(int $orgId, ?int $id): ?FiscalYear
     {
@@ -49,6 +56,9 @@ class FinanceMetrics
             'burn' => ['monthly' => $z, 'months_remaining' => null, 'exhaustion_on' => null], 'variances' => ['red' => 0, 'amber' => 0, 'unexplained_red' => 0],
             'investments_by_stage' => [], 'benefits_realised_pct' => null, 'cloud_mtd' => null, 'cloud_anomalies_open' => null,
         ] + $this->contractFigures($orgId, $costCentreIds);
+        $inv = $this->portfolio->summary($orgId, $costCentreIds);
+        $out['investments_by_stage'] = $inv['by_stage'];
+        $out['benefits_realised_pct'] = $inv['benefits_realised_pct'];
         if (! $fy) {
             return $out;
         }
@@ -263,6 +273,35 @@ class FinanceMetrics
             'unbudgeted_amount' => $s['unbudgeted_amount'], 'capex_opex_split' => $s['capex_opex_split'], 'rgt_split' => $s['rgt_split'], 'red' => $s['variances']['red'],
             'amber' => $s['variances']['amber'], 'unexplained_red' => $s['variances']['unexplained_red'], 'top_variances' => $top, 'renewals_due_90' => $s['renewals_due_90'],
             'contracts_passed' => $s['contracts_passed'], 'invoices_overdue' => $s['invoices_overdue'],
+        ];
+    }
+
+    /** @return array<string,mixed>|null the board-pack investment section (plan §3.7); null when the bank has no investments */
+    public function boardInvestmentFigures(int $orgId): ?array
+    {
+        $open = Investment::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->whereIn('stage', Investment::OPEN_STAGES)->get();
+        if ($open->isEmpty()) {
+            return null;
+        }
+        $s = $this->portfolio->summary($orgId);
+        $fin = $this->investmentFinancials->forInvestments($open);
+        $ev = '0.00';
+        $ac = '0.00';
+        foreach ($open->filter(fn ($i) => $i->bac !== null && $i->percent_complete !== null) as $i) {
+            $ev = bcadd($ev, bcmul((string) $i->bac, bcdiv((string) $i->percent_complete, '100', 8), 4), 4);
+            $ac = bcadd($ac, $fin[$i->id]['ac'], 2);
+        }
+        $ben = Benefit::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('investment_id', $open->pluck('id'))->where('status', '!=', 'cancelled')->where('unit', 'currency')->get();
+        $risk = $open->filter(fn ($i) => in_array($fin[$i->id]['health'] ?? null, ['at_risk', 'off_track'], true) || $i->is_late)
+            ->map(fn ($i) => ['code' => $i->investment_code, 'title' => $i->title, 'status' => $i->status, 'health' => $fin[$i->id]['health'] ?? 'at_risk'])->values()->all();
+
+        return [
+            'as_of' => $s['as_of'], 'currency' => app(FinanceSettings::class)->baseCurrency($orgId), 'count_open' => $open->count(), 'by_stage' => $s['by_stage'],
+            'rgt_split' => $s['rgt_split'], 'regulatory_share_pct' => $s['regulatory_share_pct'], 'bac_total' => $s['bac_total'], 'ac_total' => $s['ac_total'], 'eac_total' => $s['eac_total'],
+            'cpi_portfolio' => bccomp($ac, '0', 2) > 0 ? bcadd(bcdiv($ev, $ac, 6), '0.005', 2) : null,
+            'benefits_planned' => $ben->reduce(fn ($t, $b) => bcadd($t, (string) $b->target_value, 2), '0.00'),
+            'benefits_realised' => $ben->reduce(fn ($t, $b) => bcadd($t, (string) ($b->realised_value ?? '0'), 2), '0.00'),
+            'benefits_realised_pct' => $s['benefits_realised_pct'], 'at_risk' => $risk, 'reviews_due' => $s['reviews_due'], 'reviews_overdue' => $s['reviews_overdue'],
         ];
     }
 

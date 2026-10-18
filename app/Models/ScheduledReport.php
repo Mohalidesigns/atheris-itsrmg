@@ -18,6 +18,7 @@ class ScheduledReport extends Model
         'finance.variance_commentary' => 'IT finance: Variance commentary', 'finance.commitments' => 'IT finance: Commitments',
         'finance.invoice_ageing' => 'IT finance: Invoice ageing', 'finance.unbudgeted' => 'IT finance: Unbudgeted spend',
         'finance.contract_register' => 'IT finance: Contract register', 'finance.vendor_spend' => 'IT finance: Vendor spend',
+        'finance.investment_portfolio' => 'IT finance: Investment portfolio', 'finance.benefits_register' => 'IT finance: Benefits register',
     ];
 
     public const FREQUENCIES = ['daily', 'weekly', 'monthly'];

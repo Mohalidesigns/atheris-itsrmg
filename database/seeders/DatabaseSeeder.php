@@ -141,6 +141,11 @@ class DatabaseSeeder extends Seeder
         // Separate seeder: the P1-P3 ones skip a bank once seeded
         $this->call(FinanceMonitoringDemoSeeder::class);
 
+        // IT Financial Management P5 (investment and value realisation): the investment portfolio of each bank in every stage with
+        // business cases through the Studio chain, scores and ranks, tagged budget lines, EVM, benefits with readings, value reviews
+        // (one due, one overdue), a gate waiting at the CFO and an over-tolerance change waiting at Head of IT
+        $this->call(FinanceInvestmentDemoSeeder::class);
+
         // Asset Management: coherent owners and departments, provenance from real sandbox connector
         // runs and a CSV import, business services and dependency chains per bank, asset → service
         // links, inherited criticality, and First Bank's EA applications tied to their assets

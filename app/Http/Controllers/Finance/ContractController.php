@@ -17,6 +17,7 @@ use App\Models\Finance\Contract;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\Currency;
 use App\Models\Finance\FiscalYear;
+use App\Models\Finance\Investment;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\Termination;
 use App\Models\LegalEntity;
@@ -174,6 +175,7 @@ class ContractController extends Controller
                 'ea_application' => $pick(EaApplication::class, fn ($a) => trim("{$a->code} {$a->name}")),
                 'business_service' => $pick(BusinessService::class, fn ($a) => trim("{$a->code} {$a->name}")),
                 'risk' => $pick(Risk::class, fn ($r) => trim("{$r->risk_id_code} {$r->title}")),
+                'investment' => $pick(Investment::class, fn ($v) => trim("{$v->investment_code} {$v->title}")),
             ],
             'users' => $this->usersPayload($orgId),
             'options' => $this->optionsPayload(),

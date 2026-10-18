@@ -157,6 +157,7 @@ const navigation = [
             { name: 'Recurring & Accruals', href: 'finance.recurring.index', permission: 'view it-finance' },
             { name: 'Contracts & Renewals', href: 'finance.contracts.index', permission: 'view it-finance' },
             { name: 'Calendar', href: 'finance.calendar', permission: 'view it-finance' },
+            { name: 'Investments & Value', href: 'finance.investments.index', permission: 'view it-finance' },
             { name: 'Reports', href: 'finance.reports.index', permission: 'view it-finance' },
             { name: 'Settings', href: 'finance.settings', permission: 'view it-finance' },
         ],

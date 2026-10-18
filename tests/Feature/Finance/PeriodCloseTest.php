@@ -198,7 +198,7 @@ class PeriodCloseTest extends TestCase
         $this->assertSame(['period_ended', 'earlier_periods_closed', 'actuals_posted', 'accruals_done', 'accruals_cancelled', 'invoices_approved', 'variances_explained', 'cloud_imported'], array_column($c->checklist, 'key'));
         $this->assertNotContains('fail', array_column($c->checklist, 'status'));
         $this->assertSame('n_a', $this->item(['items' => $c->checklist], 'cloud_imported')['status']);
-        $this->assertSame(3, Forecast::withoutGlobalScopes()->where('period_id', $p1->id)->where('is_snapshot', true)->count());
+        $this->assertSame(3, Forecast::withoutGlobalScopes()->where('period_id', $p1->id)->where('is_snapshot', true)->whereNull('superseded_at')->count());
         $this->assertRefused(fn () => $this->svc()->close($p1, $this->fin), null, 'cannot be closed'); // closing twice
 
         $l = $this->svc()->lock($p1, $this->fin);

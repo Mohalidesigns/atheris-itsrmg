@@ -8,6 +8,7 @@ import DriversTab from '@/Components/Finance/Settings/DriversTab';
 import FiscalCalendarTab from '@/Components/Finance/Settings/FiscalCalendarTab';
 import GeneralTab from '@/Components/Finance/Settings/GeneralTab';
 import GlAccountsTab from '@/Components/Finance/Settings/GlAccountsTab';
+import InvestmentPolicyTab from '@/Components/Finance/Settings/InvestmentPolicyTab';
 import RenewalPolicyTab from '@/Components/Finance/Settings/RenewalPolicyTab';
 import TaxesTab from '@/Components/Finance/Settings/TaxesTab';
 import VarianceTab from '@/Components/Finance/Settings/VarianceTab';
@@ -27,6 +28,7 @@ const TABS = [
     ['doa', 'DoA bands'],
     ['variance', 'Variance thresholds'],
     ['renewal', 'Renewal policy'],
+    ['investments', 'Investment policy'],
 ];
 
 export default function Settings(props) {
@@ -73,6 +75,7 @@ export default function Settings(props) {
             {tab === 'drivers' && <DriversTab drivers={props.drivers} fiscalYears={props.fiscalYears} can={can} />}
             {tab === 'doa' && <DoaBandsTab settings={props.settings} doaVersions={props.doaVersions} baseCurrency={props.baseCurrency} can={can} />}
             {tab === 'variance' && <VarianceTab settings={props.settings} baseCurrency={props.baseCurrency} can={can} />}
+            {tab === 'investments' && <InvestmentPolicyTab policy={props.investmentPolicy} options={props.options} can={can} />}
             {tab === 'renewal' && <RenewalPolicyTab settings={props.settings} jobTitles={props.jobTitles} can={can} />}
         </AuthenticatedLayout>
     );

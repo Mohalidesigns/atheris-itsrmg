@@ -129,7 +129,7 @@ class MonitorController extends Controller
         if ($fy) {
             $lineIds = $lines->pluck('id')->all();
             $periodNames = $this->monitoring->periodsOf($orgId, $fy->id);
-            $snap = Forecast::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fy->id)->where('is_snapshot', true)->whereIn('budget_line_id', $lineIds ?: [0])
+            $snap = Forecast::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fy->id)->where('is_snapshot', true)->whereNull('superseded_at')->whereIn('budget_line_id', $lineIds ?: [0])
                 ->selectRaw('period_id, sum(base_amount) as t')->groupBy('period_id')->pluck('t', 'period_id');
             foreach ($periodNames as $pid => $p) {
                 isset($snap[$pid]) && $history[] = ['period_id' => (int) $pid, 'name' => $p->name, 'eac_total' => bcadd((string) $snap[$pid], '0', 2)];

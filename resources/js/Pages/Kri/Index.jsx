@@ -8,7 +8,7 @@ import { fmtDate, Pill } from '@/Components/Monitoring/format';
 export const kriTone = { green: 'bg-[#D1FAE5] text-[#2D7D46]', amber: 'bg-[#FEF3C7] text-[#8A6400]', red: 'bg-[#FEE2E2] text-[#C53030]' };
 const bar = { green: '#2D7D46', amber: '#E5A100', red: '#B3261E' };
 export const unitLabel = (u) => ({ count: '', NGN_M: '₦m', '%': '%', hours: 'h' })[u] ?? u;
-export const withUnit = (v, u) => (u === 'NGN_M' ? `₦${fmtNum(v)}m` : `${fmtNum(v)}${unitLabel(u) ? (u === '%' || u === 'hours' ? unitLabel(u) : ` ${unitLabel(u)}`) : ''}`);
+export const withUnit = (v, u) => (v === null || v === undefined ? 'Hidden' : u === 'NGN_M' ? `₦${fmtNum(v)}m` : `${fmtNum(v)}${unitLabel(u) ? (u === '%' || u === 'hours' ? unitLabel(u) : ` ${unitLabel(u)}`) : ''}`);
 export const fmtNum = (v) => (v === null || v === undefined ? '—' : Number(v).toLocaleString('en-GB', { maximumFractionDigits: 2 }));
 export const limits = (k) => (k.direction === 'lower_worse'
     ? `green ≥ ${fmtNum(k.threshold_green)} · amber ≥ ${fmtNum(k.threshold_amber)} · red below`

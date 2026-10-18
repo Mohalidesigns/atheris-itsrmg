@@ -13,7 +13,7 @@ class FinanceDocument extends Model
 {
     use FinanceRecord;
 
-    public const KINDS = ['quote', 'purchase_order', 'goods_receipt', 'invoice', 'delivery_note', 'approval', 'other'];
+    public const KINDS = ['quote', 'purchase_order', 'goods_receipt', 'invoice', 'delivery_note', 'approval', 'other', 'business_case', 'benefit_evidence', 'pir_report'];
 
     protected $table = 'fin_documents';
 
@@ -21,7 +21,8 @@ class FinanceDocument extends Model
 
     public static function subjects(): array
     {
-        return ['expense' => ExpenseRequest::class, 'purchase_order' => PurchaseOrder::class, 'goods_receipt' => GoodsReceipt::class, 'invoice' => Invoice::class];
+        return ['expense' => ExpenseRequest::class, 'purchase_order' => PurchaseOrder::class, 'goods_receipt' => GoodsReceipt::class, 'invoice' => Invoice::class,
+            'investment' => Investment::class, 'business_case' => BusinessCase::class, 'benefit' => Benefit::class, 'value_review' => ValueReview::class];
     }
 
     public function documentable(): MorphTo

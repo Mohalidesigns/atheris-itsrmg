@@ -53,11 +53,22 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 - **Scheduled finance reports** run as the schedule's `created_by` and store no money in `summary`.
 - `FinanceConfigurationTest` FX import test was time-of-day flaky; now pinned to midday.
 
+## State (2026-10-18, P5 done)
+
+- P5 Investments & value realisation is committed and pushed on `feature/it-finance-p5` (branched from P4 5ad7b14). ATH-FIN-003 §P5 has what shipped, decisions C126–C143, review fixes and deferrals.
+- Gate: 763 passed / 7 skipped on Postgres (26 min), seed + SMOKE (7) pass, build passes.
+- **Logged for P5.1 / before UAT:** domain M1–M14, L1–L9 and security M1, M2, M4–M7, L1–L11 (full list in ATH-FIN-003 §P5). Open gap: no investment-change path to reassign sponsor/manager/cost centre/rgt after approval (frozen).
+- **Approval stages:** `finance.business_case_approval` = Head of IT → CFO → IT Steering Committee (role) → MD (job title). Never give md@ the steerco role; `assertNoStageStranded()` refuses a decision that strands a later stage. Each bank has a `steerco@` user.
+- **SoD exclusions are snapshotted** on `fin_stage_gates.sod_excluded_ids` at request time; control fields are frozen after approval and while a gate/change is pending. Seeders must set sponsor/manager before requesting gates.
+- **PIR independence:** the manager and the delivered-gate requester cannot complete a value review; seeders complete as the sponsor.
+- **Forecast snapshots** are never deleted on re-close: read live ones with `whereNull('superseded_at')`.
+- A running suite can be stopped with TaskStop on its background task (pkill is refused by auto mode).
+
 ## Next session — paste this
 
 ```
-Start P5 of IT Financial Management (Investments & value realisation; see ATH-FIN-002 §4 P5), branching feature/it-finance-p5 from feature/it-finance-p4.
-Read docs/build/ATH-FIN-HANDOVER.md (token rules + P4 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p5.md. Ask it to say which P4 deferrals in ATH-FIN-003 §P4 belong in P5 (e.g. domain M5 forecast snapshots, security M2 KRI/board-pack masking).
-Then: builders (sonnet) on their own DBs → QA on it_security_risk_fin_qa → gate (suite on it_security_risk_test in background, about 22 min; seed + SMOKE on it_security_risk_scratch; npm run build; pint on touched files) → reviewers (sonnet, be exhaustive) on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P5, commit AND push, memory, handover.
+Start P6 of IT Financial Management (see ATH-FIN-002 §4 P6; includes Application TCO FIN-05.10 deferred from P5), branching feature/it-finance-p6 from feature/it-finance-p5.
+Read docs/build/ATH-FIN-HANDOVER.md (token rules + P5 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p6.md. Ask it which P5 deferrals in ATH-FIN-003 §P5 belong in P6.
+Then: builders (sonnet) on their own DBs → QA on it_security_risk_fin_qa → gate (suite on it_security_risk_test in background, about 26 min; seed + SMOKE on it_security_risk_scratch; npm run build; pint on touched files) → reviewers (sonnet, be exhaustive) on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P6, commit AND push, memory, handover.
 Check disk first (df -h).
 ```

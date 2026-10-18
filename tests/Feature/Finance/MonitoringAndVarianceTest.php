@@ -229,7 +229,8 @@ class MonitoringAndVarianceTest extends TestCase
         $this->assertSame(['12000000.00'], $snaps->pluck('base_amount')->map(fn ($v) => (string) $v)->unique()->values()->all());
         $this->assertSame(0, Forecast::withoutGlobalScopes()->activeOverride()->count(), 'snapshots are not overrides');
         $this->assertSame(3, app(ForecastService::class)->snapshot($p1, $this->fin));
-        $this->assertCount(3, Forecast::withoutGlobalScopes()->where('period_id', $p1->id)->where('is_snapshot', true)->get(), 'a second snapshot replaces the first');
+        $this->assertCount(3, Forecast::withoutGlobalScopes()->where('period_id', $p1->id)->where('is_snapshot', true)->whereNull('superseded_at')->get(), 'a second snapshot supersedes the first');
+        $this->assertCount(3, Forecast::withoutGlobalScopes()->where('period_id', $p1->id)->where('is_snapshot', true)->whereNotNull('superseded_at')->get(), 'and the first is kept as history');
     }
 
     /** FIN-04.04: monthly burn, months remaining and the exhaustion date. */

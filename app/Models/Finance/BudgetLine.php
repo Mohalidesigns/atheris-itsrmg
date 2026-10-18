@@ -68,6 +68,11 @@ class BudgetLine extends Model
         return $this->belongsTo(Budget::class, 'budget_id');
     }
 
+    public function investment(): BelongsTo
+    {
+        return $this->belongsTo(Investment::class, 'investment_id');
+    }
+
     public function periods(): HasMany
     {
         return $this->hasMany(BudgetLinePeriod::class, 'budget_line_id');

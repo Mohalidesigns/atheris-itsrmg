@@ -169,6 +169,7 @@ trait PresentsContracts
                 'ea_application' => [$t ? trim("{$t->code} {$t->name}") : null, $t ? route('ea.applications.show', $t->id) : null],
                 'business_service' => [$t ? trim("{$t->code} {$t->name}") : null, null],
                 'risk' => [$t ? trim("{$t->risk_id_code} {$t->title}") : null, $t ? route('risks.show', $t->id) : null],
+                'investment' => [$t ? trim("{$t->investment_code} {$t->title}") : null, $t ? route('finance.investments.show', $t->id) : null],
                 default => [null, null],
             };
 

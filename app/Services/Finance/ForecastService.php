@@ -6,6 +6,7 @@ use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\Forecast;
 use App\Models\Finance\Period;
+use App\Models\Finance\PeriodClose;
 use App\Models\User;
 use App\Services\Finance\Concerns\LogsFinanceEvents;
 use Illuminate\Support\Collection;
@@ -152,26 +153,29 @@ class ForecastService
         }
     }
 
-    /** Stores one snapshot row per baseline line, by the bank's EAC method, as of the period being closed. Replaces an earlier snapshot of the same period. */
-    public function snapshot(Period $p, User $by): int
+    /**
+     * Stores one snapshot row per baseline line, as of the period being closed, at the EAC then in force (an active manual override is snapshotted
+     * as `manual`). An earlier snapshot of the same period is kept as history, marked superseded (domain M5).
+     */
+    public function snapshot(Period $p, User $by, ?PeriodClose $close = null): int
     {
         $orgId = (int) $p->organization_id;
         $mon = $this->monitoring();
         $lines = $mon->baselineLines($orgId, (int) $p->fiscal_year_id);
         $eac = $this->eacForLines($lines, (int) $p->fiscal_year_id, $p);
-        $method = $this->settings->for($orgId)->eac_method === 'run_rate' ? 'run_rate' : 'remaining_budget';
         $keys = $mon->lineage($orgId, $lines);
 
-        return DB::transaction(function () use ($p, $by, $orgId, $lines, $eac, $method, $keys) {
-            Forecast::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $p->id)->where('is_snapshot', true)->delete();
+        return DB::transaction(function () use ($p, $by, $orgId, $lines, $eac, $keys, $close) {
+            Forecast::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $p->id)->where('is_snapshot', true)->whereNull('superseded_at')
+                ->update(['superseded_at' => now()]);
             $n = 0;
             foreach ($lines as $l) {
-                $base = $method === 'run_rate' ? $eac[$l->id]['eac_run_rate'] : $eac[$l->id]['eac_remaining_budget'];
+                $base = $eac[$l->id]['eac'];
                 $rate = (string) $l->fx_rate;
                 Forecast::withoutGlobalScopes()->create([
                     'organization_id' => $orgId, 'created_by_id' => $by->id, 'fiscal_year_id' => $p->fiscal_year_id, 'budget_line_id' => $l->id, 'line_key' => (int) end($keys[$l->id]),
-                    'period_id' => $p->id, 'method' => $method, 'amount' => bccomp($rate, '0', 8) > 0 ? $this->phasing->round(bcdiv($base, $rate, 12), 2) : $base,
-                    'base_amount' => $base, 'set_by_id' => $by->id, 'is_snapshot' => true,
+                    'period_id' => $p->id, 'period_close_id' => $close?->id, 'method' => $eac[$l->id]['method'], 'amount' => bccomp($rate, '0', 8) > 0 ? $this->phasing->round(bcdiv($base, $rate, 12), 2) : $base,
+                    'base_amount' => $base, 'reason' => $eac[$l->id]['manual']['reason'] ?? null, 'set_by_id' => $by->id, 'is_snapshot' => true,
                 ]);
                 $n++;
             }

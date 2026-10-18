@@ -41,6 +41,7 @@ class FinanceCalendarController extends Controller
             'events' => $this->calendar->events($orgId, $from, $to, $filters, $user),
             'timeline' => $view === 'timeline' ? $this->calendar->timeline($orgId, $from, $to, $filters, $user) : [],
             'passed' => $this->calendar->passed($orgId, $filters, $user),
+            'passedInvestments' => $this->calendar->passedInvestments($orgId, $user),
             'filters' => $filters, 'options' => $options, 'legend' => $options['legend'] ?? [],
             'feed' => ['url' => URL::signedRoute('finance.calendar.ics', ['u' => $user->id, 'v' => $feed->version]), 'rotate_url' => route('finance.calendar.feed.rotate')],
             'exportUrls' => ['csv' => route('finance.calendar.export', $query + ['format' => 'csv']), 'pdf' => route('finance.calendar.export', $query + ['format' => 'pdf'])],

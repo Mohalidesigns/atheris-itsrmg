@@ -21,6 +21,7 @@ use App\Models\Finance\Driver;
 use App\Models\Finance\DriverValue;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\GlAccount;
+use App\Models\Finance\Investment;
 use App\Models\LegalEntity;
 use App\Models\Risk;
 use App\Models\User;
@@ -385,8 +386,11 @@ class BudgetService
         in_array($rgt, BudgetLine::RGT, true) || $this->fail('Unknown run / grow / transform value.', 'rgt');
         $method = $get('phasing_method', 'equal');
         in_array($method, BudgetLine::PHASING, true) || $this->fail('Unknown phasing method.', 'phasing_method');
+        $investmentId = null;
         if (! empty($data['investment_id'])) {
-            $this->fail('Investments can be linked from a later phase.', 'investment_id');
+            Investment::withoutGlobalScopes()->where('organization_id', $orgId)->whereKey($data['investment_id'])->whereNotIn('stage', ['closed', 'cancelled'])->exists()
+                || $this->fail('Pick an open investment of this bank.', 'investment_id');
+            $investmentId = (int) $data['investment_id'];
         }
         $contractId = null;
         if (! empty($data['contract_id'])) {
@@ -469,6 +473,7 @@ class BudgetService
             'cost_centre_id' => $b->cost_centre_id, 'legal_entity_id' => $dims['legal_entity_id'] ?? $b->legal_entity_id,
             'is_capex' => $isCapex, 'is_recurring' => (bool) $get('is_recurring', false), 'priority' => $priority, 'rgt' => $rgt,
             'contract_id' => array_key_exists('contract_id', $data) ? $contractId : ($cur['contract_id'] ?? null),
+            'investment_id' => array_key_exists('investment_id', $data) ? $investmentId : ($cur['investment_id'] ?? null),
             'vendor_id' => $dims['vendor_id'], 'asset_id' => $dims['asset_id'], 'risk_id' => $dims['risk_id'], 'driver_id' => $driverId ?: null,
             'ea_application_id' => $dims['ea_application_id'], 'business_service_id' => $dims['business_service_id'],
             'driver_rate' => $driverRate === '' ? null : $driverRate, 'quantity' => $quantity, 'unit_cost' => $unit === '' ? null : $unit,

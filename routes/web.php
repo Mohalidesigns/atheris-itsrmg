@@ -35,6 +35,7 @@ use App\Http\Controllers\EaController;
 use App\Http\Controllers\EvidenceController;
 use App\Http\Controllers\Finance\AccrualController;
 use App\Http\Controllers\Finance\ActualsController;
+use App\Http\Controllers\Finance\BenefitController;
 use App\Http\Controllers\Finance\BudgetController;
 use App\Http\Controllers\Finance\BudgetCycleController;
 use App\Http\Controllers\Finance\BudgetLineController;
@@ -42,6 +43,7 @@ use App\Http\Controllers\Finance\BudgetScenarioController;
 use App\Http\Controllers\Finance\BudgetTargetController;
 use App\Http\Controllers\Finance\BudgetTransferController;
 use App\Http\Controllers\Finance\BudgetWorkbookController;
+use App\Http\Controllers\Finance\BusinessCaseController;
 use App\Http\Controllers\Finance\ContractController;
 use App\Http\Controllers\Finance\ContractRelationsController;
 use App\Http\Controllers\Finance\DoaBandController;
@@ -55,14 +57,19 @@ use App\Http\Controllers\Finance\FinanceImportController;
 use App\Http\Controllers\Finance\FinanceReportController;
 use App\Http\Controllers\Finance\FinanceSettingsController;
 use App\Http\Controllers\Finance\FiscalCalendarController;
+use App\Http\Controllers\Finance\InvestmentChangeController;
+use App\Http\Controllers\Finance\InvestmentController;
 use App\Http\Controllers\Finance\InvoiceController;
 use App\Http\Controllers\Finance\MonitorController;
 use App\Http\Controllers\Finance\PeriodCloseController;
+use App\Http\Controllers\Finance\PortfolioController;
 use App\Http\Controllers\Finance\PurchaseOrderController;
 use App\Http\Controllers\Finance\RecurringExpenseController;
 use App\Http\Controllers\Finance\RenewalController;
+use App\Http\Controllers\Finance\StageGateController;
 use App\Http\Controllers\Finance\SupplementaryRequestController;
 use App\Http\Controllers\Finance\TerminationController;
+use App\Http\Controllers\Finance\ValueReviewController;
 use App\Http\Controllers\GapController;
 use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\IncidentController;
@@ -970,6 +977,46 @@ Route::middleware('auth')->group(function () {
         Route::middleware('permission:approve it-finance')->group(function () {
             Route::post('/period-closes/{periodClose}/approve', [PeriodCloseController::class, 'approve'])->whereNumber('periodClose')->name('period-closes.approve');
             Route::post('/period-closes/{periodClose}/reject', [PeriodCloseController::class, 'reject'])->whereNumber('periodClose')->name('period-closes.reject');
+        });
+
+        // P5: IT investment and value realisation (ATH-FIN-001 §3.5, §9)
+        Route::get('/investments', [InvestmentController::class, 'index'])->name('investments.index');
+        Route::get('/investments/create', [InvestmentController::class, 'create'])->middleware('permission:create it-finance')->name('investments.create');
+        Route::get('/investments/{investment}', [InvestmentController::class, 'show'])->whereNumber('investment')->name('investments.show');
+        Route::get('/portfolio', [PortfolioController::class, 'index'])->name('portfolio');
+        Route::get('/stage-gates/{stageGate}', [StageGateController::class, 'show'])->whereNumber('stageGate')->name('stage-gates.show');
+        Route::get('/business-cases/{businessCase}', [BusinessCaseController::class, 'show'])->whereNumber('businessCase')->name('business-cases.show');
+        Route::get('/value-reviews/{valueReview}', [ValueReviewController::class, 'show'])->whereNumber('valueReview')->name('value-reviews.show');
+        Route::post('/business-cases/evaluate', [BusinessCaseController::class, 'evaluate'])->name('business-cases.evaluate');
+        Route::post('/investments/{investment}/score', [InvestmentController::class, 'score'])->whereNumber('investment')->name('investments.score');
+        Route::post('/benefits/{benefit}/readings', [BenefitController::class, 'storeReading'])->whereNumber('benefit')->name('benefits.readings.store');
+        Route::post('/value-reviews/{valueReview}/complete', [ValueReviewController::class, 'complete'])->whereNumber('valueReview')->name('value-reviews.complete');
+        Route::middleware('permission:create it-finance')->group(function () {
+            Route::post('/investments', [InvestmentController::class, 'store'])->name('investments.store');
+        });
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::put('/investments/{investment}', [InvestmentController::class, 'update'])->whereNumber('investment')->name('investments.update');
+            Route::delete('/investments/{investment}', [InvestmentController::class, 'destroy'])->whereNumber('investment')->name('investments.destroy');
+            foreach (['advance-gate' => 'advanceGate', 'hold' => 'hold', 'resume' => 'resume', 'cancel' => 'cancel', 'progress' => 'progress', 'budget-lines' => 'syncLines'] as $uri => $method) {
+                Route::post("/investments/{investment}/{$uri}", [InvestmentController::class, $method])->whereNumber('investment')->name('investments.'.($uri === 'budget-lines' ? 'lines.sync' : $uri));
+            }
+            Route::post('/investments/{investment}/links', [InvestmentController::class, 'storeLink'])->whereNumber('investment')->name('investments.links.store');
+            Route::delete('/investments/{investment}/links/{link}', [InvestmentController::class, 'destroyLink'])->whereNumber('investment')->whereNumber('link')->name('investments.links.destroy');
+            Route::post('/investments/{investment}/business-cases', [BusinessCaseController::class, 'store'])->whereNumber('investment')->name('business-cases.store');
+            Route::put('/business-cases/{businessCase}', [BusinessCaseController::class, 'update'])->whereNumber('businessCase')->name('business-cases.update');
+            Route::post('/business-cases/{businessCase}/submit', [BusinessCaseController::class, 'submit'])->whereNumber('businessCase')->name('business-cases.submit');
+            Route::post('/investments/{investment}/benefits', [BenefitController::class, 'store'])->whereNumber('investment')->name('benefits.store');
+            Route::put('/benefits/{benefit}', [BenefitController::class, 'update'])->whereNumber('benefit')->name('benefits.update');
+            Route::post('/benefits/{benefit}/cancel', [BenefitController::class, 'cancel'])->whereNumber('benefit')->name('benefits.cancel');
+            Route::post('/investments/{investment}/value-reviews', [ValueReviewController::class, 'store'])->whereNumber('investment')->name('value-reviews.store');
+            Route::put('/value-reviews/{valueReview}', [ValueReviewController::class, 'update'])->whereNumber('valueReview')->name('value-reviews.update');
+            Route::post('/investments/{investment}/changes', [InvestmentChangeController::class, 'store'])->whereNumber('investment')->name('investment-changes.store');
+            Route::post('/investment-changes/{investmentChange}/withdraw', [InvestmentChangeController::class, 'withdraw'])->whereNumber('investmentChange')->name('investment-changes.withdraw');
+            Route::post('/stage-gates/{stageGate}/withdraw', [StageGateController::class, 'withdraw'])->whereNumber('stageGate')->name('stage-gates.withdraw');
+        });
+        Route::middleware('permission:approve it-finance-investments')->group(function () {
+            Route::post('/stage-gates/{stageGate}/approve', [StageGateController::class, 'approve'])->whereNumber('stageGate')->name('stage-gates.approve');
+            Route::post('/stage-gates/{stageGate}/reject', [StageGateController::class, 'reject'])->whereNumber('stageGate')->name('stage-gates.reject');
         });
     });
 

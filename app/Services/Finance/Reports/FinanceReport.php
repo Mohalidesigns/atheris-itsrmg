@@ -36,6 +36,12 @@ abstract class FinanceReport
      */
     abstract public function rows(int $orgId, array $filters, ?array $costCentreIds): iterable;
 
+    /** Extra keys of one row to hide from a viewer without amounts, beyond the money/pct columns (e.g. only currency rows of a mixed-unit column). @return list<string> */
+    public function rowMoneyKeys(array $row): array
+    {
+        return [];
+    }
+
     /**
      * A totals row: money columns summed, the first column labelled.
      *

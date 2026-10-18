@@ -9,7 +9,7 @@ import useBaseCurrency from '@/Components/Finance/Budgets/useBaseCurrency';
 import { Card, Empty } from '@/Components/Finance/Settings/ui';
 import Chip from '@/Components/Material/Chip';
 import Icon from '@/Components/Material/Icon';
-import { CONTRACT_TONES, MASK, daysLabel, fmtPct, humanize, localDate, moneyOrMask } from '@/Utils/finance';
+import { CONTRACT_TONES, MASK, stageLabel, daysLabel, fmtPct, humanize, localDate, moneyOrMask } from '@/Utils/finance';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -120,6 +120,19 @@ export default function Dashboard(props) {
                                 </dl>
                             )}
                         </Card>
+                        {(m.investments_by_stage ?? []).length > 0 && (
+                            <Card title="Investments" right={<Link href={route('finance.portfolio')} className="text-xs text-[#0A1F44] underline">Portfolio</Link>}>
+                                <ul className="divide-y divide-gray-50">
+                                    {m.investments_by_stage.map((r) => (
+                                        <li key={r.stage} className="flex items-center justify-between gap-3 px-5 py-2 text-sm">
+                                            <Link href={route('finance.investments.index', { stage: r.stage })} className="text-[#0A1F44] hover:underline">{stageLabel(r.stage)}</Link>
+                                            <span className="tabular-nums text-[#4A5568]">{r.count}{money ? ` · ${moneyOrMask(r.bac, baseCurrency, true, { decimals: 0 })}` : ''}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                <p className="border-t border-gray-100 px-5 py-2 text-xs text-[#718096]">Benefits realised: <b>{m.benefits_realised_pct === null || m.benefits_realised_pct === undefined ? '—' : fmtPct(m.benefits_realised_pct, { decimals: 0 })}</b></p>
+                            </Card>
+                        )}
                     </div>
                 </>
             )}

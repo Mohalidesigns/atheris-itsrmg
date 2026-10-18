@@ -151,3 +151,38 @@ export function fmtPct(value, { sign = false, decimals = 1 } = {}) {
 const CHECKLIST_ICONS = { pass: ['check_circle', 'success'], fail: ['cancel', 'error'], warn: ['warning', 'warning'], n_a: ['remove_circle', 'muted'] };
 /** [icon, tone] for a close-checklist item status. */
 export const checklistIcon = (status) => CHECKLIST_ICONS[status] || CHECKLIST_ICONS.n_a;
+
+/* ---------------------------------------------------------------- investments and value realisation (P5) */
+
+export const STAGES = ['idea', 'business_case', 'approved', 'in_delivery', 'delivered', 'benefits_tracking', 'closed'];
+const STAGE_LABELS = { idea: 'Idea', business_case: 'Business case', approved: 'Approved', in_delivery: 'In delivery', delivered: 'Delivered', benefits_tracking: 'Benefits tracking', closed: 'Closed', cancelled: 'Cancelled' };
+export const stageLabel = (s) => STAGE_LABELS[s] ?? humanize(String(s ?? ''));
+const STAGE_TONES = { idea: 'neutral', business_case: 'info', approved: 'primary', in_delivery: 'warning', delivered: 'success', benefits_tracking: 'tertiary', closed: 'muted', cancelled: 'muted' };
+export const stageTone = (s) => STAGE_TONES[s] ?? 'neutral';
+const HEALTH_TONES = { on_track: 'success', at_risk: 'warning', off_track: 'error', on_hold: 'muted' };
+export const healthTone = (h) => HEALTH_TONES[h] ?? 'neutral';
+export const GATE_TONES = { submitted: 'warning', approved: 'success', rejected: 'error', withdrawn: 'muted', passed: 'success' };
+export const BENEFIT_TONES = { planned: 'neutral', tracking: 'info', realised: 'success', partially_realised: 'warning', not_realised: 'error', cancelled: 'muted' };
+export const REVIEW_TONES = { scheduled: 'neutral', due: 'warning', overdue: 'error', completed: 'success', cancelled: 'muted' };
+
+/** Whole months as "3 years 4 months" / "40 months"; null stays a dash. */
+export function fmtMonths(m) {
+    if (m === null || m === undefined || m === '') return '—';
+    const n = Number(m);
+    if (n < 24) return `${n} month${n === 1 ? '' : 's'}`;
+    const y = Math.floor(n / 12);
+    const r = n % 12;
+    return `${y} years${r ? ` ${r} months` : ''}`;
+}
+
+/** Investment money: masked → "Hidden", absent → dash. Base currency only (C144). */
+export function invMoney(value, currency, viewAmounts = true, opts = {}) {
+    if (viewAmounts === false || value === undefined) return viewAmounts === false ? 'Hidden' : '—';
+    return formatMoney(value, currency, opts);
+}
+/** Plain number with fixed decimals (CPI etc.); null → "Hidden" when masked, dash otherwise. */
+export function invNumber(value, viewAmounts = true, decimals = 2) {
+    if (viewAmounts === false) return 'Hidden';
+    if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
+    return Number(value).toFixed(decimals);
+}

@@ -73,7 +73,7 @@ class FinanceReportsTest extends TestCase
     public function test_each_report_returns_rows(): void
     {
         $reports = app(FinanceReports::class);
-        $this->assertEqualsCanonicalizing(self::KEYS, array_keys($reports->available()));
+        $this->assertEqualsCanonicalizing(array_merge(self::KEYS, ['investment_portfolio', 'benefits_register']), array_keys($reports->available()));
         foreach (self::KEYS as $key) {
             $r = $reports->run($key, $this->org->id, [], $this->fin);
             $this->assertGreaterThan(0, $r['row_count'], $key);

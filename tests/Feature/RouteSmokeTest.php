@@ -6,10 +6,12 @@ use App\Http\Controllers\Finance\BudgetController;
 use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalWorkflow;
 use App\Models\BoardPackRun;
+use App\Models\BoardPackTemplate;
 use App\Models\Ea\BusinessService;
 use App\Models\Ea\EaApplication;
 use App\Models\Finance\Accrual;
 use App\Models\Finance\Actual;
+use App\Models\Finance\Benefit;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetAdjustment;
 use App\Models\Finance\BudgetComment;
@@ -30,6 +32,7 @@ use App\Models\Finance\Forecast;
 use App\Models\Finance\FxRate;
 use App\Models\Finance\GoodsReceiptLine;
 use App\Models\Finance\ImportBatch;
+use App\Models\Finance\Investment;
 use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
 use App\Models\Finance\PeriodClose;
@@ -37,7 +40,9 @@ use App\Models\Finance\PurchaseOrder;
 use App\Models\Finance\RecurringExpense;
 use App\Models\Finance\Renewal;
 use App\Models\Finance\Setting;
+use App\Models\Finance\StageGate;
 use App\Models\Finance\SupplementaryRequest;
+use App\Models\Finance\ValueReview;
 use App\Models\Finance\VarianceNote;
 use App\Models\Issue;
 use App\Models\Kri;
@@ -50,8 +55,11 @@ use App\Policies\Finance\FinancePolicy;
 use App\Services\Approvals\ApprovalEngine;
 use App\Services\Finance\BudgetCycleService;
 use App\Services\Finance\BudgetService;
+use App\Services\Finance\FinanceCalendarService;
+use App\Services\Finance\FinanceClock;
 use App\Services\Finance\MonitoringService;
 use App\Services\Finance\Reports\FinanceReports;
+use App\Services\Finance\StageGateService;
 use Carbon\Carbon;
 use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\Artisan;
@@ -260,7 +268,7 @@ class RouteSmokeTest extends TestCase
                     $this->assertGreaterThan(0, $deciders->count(), "{$slug}: nobody can decide \"{$step->name}\" of {$request->subject_label}");
                 }
             }
-            $this->assertSame(8, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
+            $this->assertSame(9, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
 
             // DoA versions: the bank's own bands are active and each step is audited
             $active = DoaBandVersion::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'active')->firstOrFail();
@@ -586,7 +594,7 @@ class RouteSmokeTest extends TestCase
             $this->assertSame(2, collect($forecast['lines'])->filter(fn ($l) => $l['manual'] !== null)->count(), "{$slug} two manual forecasts");
             $this->assertNotEmpty($forecast['history'], "{$slug} forecast history from the close snapshots");
             $this->get(route('finance.monitor.period-close'))->assertOk();
-            $this->get(route('finance.reports.index', ['report' => 'bva']))->assertOk()->assertInertia(fn (Assert $p) => $p->has('reports', 8)->where('schedules', fn ($s) => count($s) >= 2));
+            $this->get(route('finance.reports.index', ['report' => 'bva']))->assertOk()->assertInertia(fn (Assert $p) => $p->has('reports', 10)->where('schedules', fn ($s) => count($s) >= 2));
             $first = Budget::withoutGlobalScopes()->where('organization_id', $org)->where('fiscal_year_id', $fy->id)->where('status', 'baseline')->first();
             $line = BudgetLine::withoutGlobalScopes()->where('budget_id', $first->id)->orderBy('line_no')->first();
             $this->getJson(route('finance.monitor.transactions', $line))->assertOk()->assertJsonStructure(['line', 'actuals', 'commitments', 'totals']);
@@ -669,5 +677,75 @@ class RouteSmokeTest extends TestCase
         foreach (array_keys(FinanceReports::DEFINITIONS) as $key) {
             $this->get(route('finance.reports.show', ['report' => $key, 'format' => 'xlsx']))->assertOk();
         }
+    }
+
+    /**
+     * IT Financial Management P5 (plan §5.2): the seeded investment estate of each demo bank renders, every stage is represented, a review
+     * is due, the pending gates have a decider, the calendar and the BAC template carry investments, and Acme renders empty pages.
+     */
+    public function test_finance_investment_estate_is_seeded_and_renders_for_every_demo_tenant(): void
+    {
+        if (env('SMOKE') !== '1') {
+            $this->markTestSkipped('Set SMOKE=1 and use a seeded database to run the route smoke test.');
+        }
+
+        $engine = app(ApprovalEngine::class);
+        $banks = ['kano-heritage-bank' => ['admin' => 'admin@kanoheritage.ng', 'min' => 10], 'first-bank-nigeria' => ['admin' => 'admin@firstbanknigeria.ng', 'min' => 12]];
+        foreach ($banks as $slug => $b) {
+            $admin = User::where('email', $b['admin'])->firstOrFail();
+            $org = $admin->organization_id;
+            $this->actingAs($admin);
+            $domain = substr($b['admin'], strpos($b['admin'], '@') + 1);
+            $inv = Investment::withoutGlobalScopes()->where('organization_id', $org)->get();
+            $this->assertGreaterThanOrEqual(8, $inv->count(), "{$slug} investments");
+            $this->assertSame($b['min'], $inv->count(), "{$slug} investment count");
+            foreach (Investment::STAGES as $stage) {
+                $this->assertTrue($inv->contains('stage', $stage), "{$slug} has a {$stage} investment");
+            }
+            $this->assertTrue($inv->contains('status', 'on_hold'), "{$slug} an on-hold investment");
+            $this->assertTrue($inv->contains('is_regulatory', true), "{$slug} a regulatory investment");
+            $this->assertTrue($inv->contains('rgt', 'transform'), "{$slug} a transform investment");
+            $this->assertTrue(str_ends_with((string) $inv->sortBy('id')->first()->investment_code, 'IVT-0001'));
+            $decidersKeys = User::whereIn('email', array_map(fn ($k) => "{$k}@{$domain}", ['headofit', 'cfo', 'cio', 'md']))->pluck('id')->all();
+            $this->assertEmpty($inv->filter(fn ($i) => in_array($i->manager_id, $decidersKeys, true) || in_array($i->sponsor_id, $decidersKeys, true))->all(), "{$slug} no stage decider manages or sponsors");
+            $this->assertTrue(User::where('email', "steerco@{$domain}")->firstOrFail()->hasRole('IT Steering Committee'));
+
+            $due = ValueReview::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'due')->get();
+            $this->assertTrue($due->contains(fn ($r) => FinanceClock::daysUntil($r->due_on) <= 14), "{$slug} a review due within 14 days");
+            $slug === 'first-bank-nigeria' && $this->assertTrue(ValueReview::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'overdue')->exists());
+            $this->assertTrue(Benefit::withoutGlobalScopes()->where('organization_id', $org)->whereNotNull('realised_pct')->exists());
+
+            // the pending gate at the CFO and the pending change at Head of IT each have someone who can decide
+            foreach (['approved' => 'cfo', 'change' => 'headofit'] as $gateName => $who) {
+                $gate = StageGate::withoutGlobalScopes()->where('organization_id', $org)->where('gate', $gateName)->where('status', 'submitted')->first();
+                $this->assertNotNull($gate, "{$slug} pending {$gateName} gate");
+                $request = $engine->current(StageGateService::PROCESS, $gate);
+                $step = $request->currentStep();
+                $decider = User::where('email', "{$who}@{$domain}")->firstOrFail();
+                $this->assertTrue($engine->canDecide($step, $request, $gate, $decider) && $decider->can('approve it-finance-investments'), "{$slug}: {$who} can decide \"{$step->name}\"");
+            }
+
+            $this->get(route('finance.investments.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Investments/Index'));
+            $one = $inv->firstWhere('stage', 'benefits_tracking');
+            foreach (['overview', 'business-case', 'scoring', 'gates', 'budget', 'benefits', 'reviews', 'changes', 'activity'] as $tab) {
+                $this->get(route('finance.investments.show', [$one->id, 'tab' => $tab]))->assertOk();
+            }
+            $pf = $this->get(route('finance.portfolio'))->assertOk()->viewData('page')['props'];
+            $this->assertTrue(collect($pf['ranking'])->contains('above_line', true), "{$slug} a fund line with investments above it");
+            $events = collect(app(FinanceCalendarService::class)->events($org, Carbon::now()->subMonths(6), Carbon::now()->addMonths(6), ['sources' => ['investments']], $admin));
+            $this->assertNotEmpty($events, "{$slug} investment events in the calendar");
+            $bac = BoardPackTemplate::where('name', 'like', 'BAC%')->first();
+            $this->assertContains('it_investment_portfolio', (array) $bac->sections);
+            foreach (['investment_portfolio', 'benefits_register'] as $key) {
+                foreach (['csv', 'xlsx', 'pdf'] as $format) {
+                    $this->get(route('finance.reports.show', ['report' => $key, 'format' => $format]))->assertOk();
+                }
+            }
+        }
+
+        $acme = User::where('email', 'admin@acme.ng')->firstOrFail();
+        $this->actingAs($acme);
+        $this->get(route('finance.investments.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('investments.data', []));
+        $this->get(route('finance.portfolio'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('ranking', []));
     }
 }

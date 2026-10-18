@@ -40,6 +40,11 @@ class Actual extends Model
         static::deleting(fn () => throw ValidationException::withMessages(['workflow' => 'A posted actual cannot be deleted; post a reversal.']));
     }
 
+    public function investment(): BelongsTo
+    {
+        return $this->belongsTo(Investment::class, 'investment_id');
+    }
+
     public function period(): BelongsTo
     {
         return $this->belongsTo(Period::class, 'period_id');

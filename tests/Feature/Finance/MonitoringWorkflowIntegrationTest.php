@@ -228,7 +228,7 @@ class MonitoringWorkflowIntegrationTest extends TestCase
     public function test_finance_schedules_need_export_and_run_due_records_a_summary(): void
     {
         $this->breach();
-        $this->assertSame(['budget_book', 'bva', 'variance_commentary', 'commitments', 'invoice_ageing', 'unbudgeted', 'contract_register', 'vendor_spend'], array_keys(app(FinanceReports::class)->available()));
+        $this->assertSame(['budget_book', 'bva', 'variance_commentary', 'commitments', 'invoice_ageing', 'unbudgeted', 'contract_register', 'vendor_spend', 'investment_portfolio', 'benefits_register'], array_keys(app(FinanceReports::class)->available()));
         foreach (array_keys(FinanceReports::DEFINITIONS) as $k) {
             $this->assertArrayHasKey("finance.{$k}", ScheduledReport::TYPES);
         }

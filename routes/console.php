@@ -25,6 +25,7 @@ use App\Services\Finance\FinanceDigest;
 use App\Services\Finance\InvoiceSweeper;
 use App\Services\Finance\PeriodCloseReminderSweeper;
 use App\Services\Finance\RecurringExpenseService;
+use App\Services\Finance\ValueReviewSweeper;
 use App\Services\Finance\VarianceService;
 use App\Services\Issues\IssueWorkflow;
 use App\Services\Kri\KriService;
@@ -126,6 +127,10 @@ Artisan::command('fin:period-reminders {--date= : Y-m-d, run as if today}', func
     $this->info($s->sweep($this->option('date') ? CarbonImmutable::parse($this->option('date'), config('finance.timezone'))->startOfDay() : null).' period-close reminder(s) sent.');
 })->purpose('Remind Finance and cost-centre owners that a period is about to close or is overdue (ATH-FIN-001 §7)');
 Schedule::command('fin:period-reminders')->dailyAt('08:00')->timezone(config('finance.timezone'))->name('finance.period-reminders')->withoutOverlapping();
+Artisan::command('fin:value-reviews-sweep {--date= : Y-m-d, run as if today}', function (ValueReviewSweeper $s) {
+    $this->info($s->sweep($this->option('date') ? CarbonImmutable::parse($this->option('date'), config('finance.timezone'))->startOfDay() : null).' value-review notification(s) sent.');
+})->purpose('Mark value reviews due or overdue and notify the reviewer and sponsor (ATH-FIN-001 §7)');
+Schedule::command('fin:value-reviews-sweep')->dailyAt('07:45')->timezone(config('finance.timezone'))->name('finance.value-reviews-sweep')->withoutOverlapping();
 Schedule::command('fin:digest')->hourly()->name('finance.digest')->withoutOverlapping();
 
 /* =====================  Policy Management ===================== */

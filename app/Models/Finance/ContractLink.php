@@ -16,7 +16,7 @@ class ContractLink extends Model
 {
     use FinanceRecord;
 
-    public const TYPES = ['asset' => Asset::class, 'ea_application' => EaApplication::class, 'business_service' => BusinessService::class, 'risk' => Risk::class];
+    public const TYPES = ['asset' => Asset::class, 'ea_application' => EaApplication::class, 'business_service' => BusinessService::class, 'risk' => Risk::class, 'investment' => Investment::class];
 
     protected $table = 'fin_contract_links';
 

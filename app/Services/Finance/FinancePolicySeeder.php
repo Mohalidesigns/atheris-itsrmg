@@ -52,6 +52,12 @@ class FinancePolicySeeder
                 self::stage(20, 'Finance Controller review', 'role', 'IT Finance Controller', 48, 'match_status', ['variance', 'override', 'unmatched']),
                 self::stage(30, 'Finance Approver (high value)', 'role', 'Finance Approver', 48, 'high_value', ['yes']),
             ],
+            'finance.business_case_approval' => [
+                self::stage(10, 'Head of IT review', 'job_title', 'Head of IT', 72),
+                self::stage(20, 'CFO approval', 'job_title', 'Chief Financial Officer', 72, 'requires_cfo', ['yes']),
+                self::stage(30, 'IT Steering Committee', 'role', 'IT Steering Committee', 120),
+                self::stage(40, 'Board approval (MD/CEO)', 'job_title', 'Managing Director', 168, 'requires_board', ['yes']),
+            ],
         ];
 
         foreach ($plans as $process => $stages) {

@@ -37,7 +37,7 @@ class FinancePermissionsTest extends TestCase
         'Procurement Officer' => ['view it-finance', 'create it-finance', 'edit it-finance', 'import it-finance', 'view it-finance-amounts'],
         'Investment Sponsor' => ['view it-finance', 'approve it-finance-investments', 'view it-finance-amounts'],
         'IT Steering Committee' => ['view it-finance', 'approve it-finance-investments', 'view it-finance-amounts'],
-        'Finance Approver' => ['view it-finance', 'export it-finance', 'approve it-finance', 'approve it-finance-invoices', 'approve it-finance-contracts', 'view it-finance-amounts'],
+        'Finance Approver' => ['view it-finance', 'export it-finance', 'approve it-finance', 'approve it-finance-invoices', 'approve it-finance-contracts', 'approve it-finance-investments', 'view it-finance-amounts'],
         'Auditor' => ['view it-finance', 'export it-finance', 'view it-finance-amounts'],
         'Viewer' => ['view it-finance'],
     ];

@@ -76,7 +76,7 @@ class KriService
 
         if ($reading->status === 'green') {
             $open?->update(['resolved_at' => $reading->recorded_at,
-                'notes' => trim(($open->notes ? $open->notes."\n" : '')."Back within appetite in {$reading->period} (".$kri->formatValue($reading->value).').')]);
+                'notes' => trim(($open->notes ? $open->notes."\n" : '')."Back within appetite in {$reading->period}".$this->valueText($kri, $reading->value, ' (%s)').'.')]);
             if ($open?->issue_id && ($issue = Issue::withoutGlobalScopes()->find($open->issue_id)) && $issue->isOpen()) {
                 $this->issues->log($issue, 'comment', "{$kri->code} is green again in {$reading->period}. Ready for remediation sign-off.", $actor);
             }
@@ -88,11 +88,11 @@ class KriService
             $open = KriBreach::withoutGlobalScopes()->create([
                 'organization_id' => $kri->organization_id, 'kri_id' => $kri->id, 'reading_id' => $reading->id,
                 'level' => $reading->status, 'occurred_at' => $reading->recorded_at,
-                'notes' => ucfirst($reading->status)." in {$reading->period}: ".$kri->formatValue($reading->value).'.',
+                'notes' => ucfirst($reading->status)." in {$reading->period}".$this->valueText($kri, $reading->value, ': %s').'.',
             ]);
         } elseif ($open->level === 'amber' && $reading->status === 'red') {
             $open->update(['level' => 'red', 'reading_id' => $reading->id,
-                'notes' => trim($open->notes."\nEscalated to red in {$reading->period}: ".$kri->formatValue($reading->value).'.')]);
+                'notes' => trim($open->notes."\nEscalated to red in {$reading->period}".$this->valueText($kri, $reading->value, ': %s').'.')]);
         }
 
         if ($raiseIssues && $open->level === 'red' && config('kri.auto_issue', true)) {
@@ -101,8 +101,7 @@ class KriService
                 $issue = $this->issues->open([
                     'organization_id' => $kri->organization_id,
                     'title' => "KRI red: {$kri->name}",
-                    'description' => "{$kri->code} read ".$kri->formatValue($reading->value)." in {$reading->period}, beyond its amber limit "
-                        .'('.$kri->formatValue($kri->threshold_amber).').'.($kri->risk ? " Indicates risk {$kri->risk->risk_id_code} {$kri->risk->title}." : ''),
+                    'description' => $this->issueText($kri, $reading),
                     'severity' => 'high',
                     'source_type' => 'kri',
                     'source_id' => $kri->id,
@@ -112,5 +111,25 @@ class KriService
                 $open->update(['issue_id' => $issue->id]);
             }
         }
+    }
+
+    /** Money KRIs (config finance.masked_kri_codes) carry no amount in notes or auto-raised Issues: those are visible beyond `view it-finance-amounts`. */
+    private function valueText(Kri $kri, mixed $value, string $format): string
+    {
+        return $this->isMasked($kri) ? '' : sprintf($format, $kri->formatValue($value));
+    }
+
+    private function issueText(Kri $kri, KriReading $reading): string
+    {
+        $head = $this->isMasked($kri)
+            ? "{$kri->code} breached its red limit in {$reading->period}, beyond its amber limit."
+            : "{$kri->code} read ".$kri->formatValue($reading->value)." in {$reading->period}, beyond its amber limit (".$kri->formatValue($kri->threshold_amber).').';
+
+        return $head.($kri->risk ? " Indicates risk {$kri->risk->risk_id_code} {$kri->risk->title}." : '');
+    }
+
+    private function isMasked(Kri $kri): bool
+    {
+        return in_array($kri->code, (array) config('finance.masked_kri_codes', []), true);
     }
 }

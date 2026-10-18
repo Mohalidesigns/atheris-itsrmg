@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Reports;
 use App\Http\Controllers\Controller;
 use App\Models\BoardPackRun;
 use App\Models\BoardPackTemplate;
-use App\Services\Finance\FinanceMetrics;
+use App\Services\Finance\FinanceMasking;
 use App\Services\Reports\BoardPackBuilder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -42,30 +42,14 @@ class BoardPackController extends Controller
     public function show(Request $request, BoardPackRun $run)
     {
         $run->load(['template:id,name,navy_variant', 'preparer:id,name', 'approver:id,name']);
-        if (! $request->user()->can('view it-finance-amounts') && is_array($run->content)) {
-            $run->content = $this->maskFinance($run->content);
+        if (is_array($run->content)) {
+            $run->content = app(FinanceMasking::class)->boardContent($run->content, $request->user());
         }
 
         return Inertia::render('BoardPacks/Show', [
             'run' => $run,
             'can' => ['approve' => $request->user()->can('approve reports') && (int) $run->prepared_by !== (int) $request->user()->id],
         ]);
-    }
-
-    /** Null the money keys of the IT finance section for a viewer without `view it-finance-amounts` (plan P4-11). */
-    private function maskFinance(array $content): array
-    {
-        return array_map(function ($s) {
-            if (($s['key'] ?? null) !== 'it_financial_position' || ! is_array($s['data'] ?? null)) {
-                return $s;
-            }
-            foreach (FinanceMetrics::BOARD_MONEY_KEYS as $k) {
-                array_key_exists($k, $s['data']) && $s['data'][$k] = null;
-            }
-            $s['data']['top_variances'] = array_map(fn ($t) => array_merge($t, ['variance_pct' => null]), $s['data']['top_variances'] ?? []);
-
-            return $s;
-        }, $content);
     }
 
     public function approve(Request $request, BoardPackRun $run, BoardPackBuilder $builder)

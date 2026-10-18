@@ -23,7 +23,11 @@ class FinanceDocumentController extends Controller
         ]);
         $class = FinanceDocument::subjects()[$d['subject']];
         $subject = $class::query()->findOrFail($d['subject_id']); // the global scope makes another bank's record a 404
-        Gate::authorize(in_array($d['subject'], ['purchase_order', 'goods_receipt'], true) ? 'procure' : 'updateExpense', $subject);
+        Gate::authorize(match (true) {
+            in_array($d['subject'], ['purchase_order', 'goods_receipt'], true) => 'procure',
+            in_array($d['subject'], ['investment', 'business_case', 'benefit', 'value_review'], true) => 'updateInvestment',
+            default => 'updateExpense',
+        }, $subject);
         $this->documents->attach($subject, $d, $request->file('file'), $request->user());
 
         return back()->with('success', 'Document attached.');

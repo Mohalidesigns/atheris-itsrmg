@@ -17,6 +17,7 @@ use App\Models\Finance\Driver;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\FxRate;
 use App\Models\Finance\GlAccount;
+use App\Models\Finance\Investment;
 use App\Models\Finance\Period;
 use App\Models\LegalEntity;
 use App\Models\Risk;
@@ -201,7 +202,8 @@ trait PresentsBudgets
             'legalEntities' => LegalEntity::query()->orderBy('code')->get(['id', 'code', 'name'])->map(fn ($e) => ['id' => $e->id, 'code' => $e->code, 'name' => $e->name])->values()->all(),
             'contracts' => Contract::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', array_merge(['draft'], Contract::LIVE))
                 ->orderBy('contract_code')->get(['id', 'contract_code', 'title'])->map(fn ($c) => ['id' => $c->id, 'contract_code' => $c->contract_code, 'title' => $c->title])->values()->all(),
-            'investments' => [],
+            'investments' => Investment::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('stage', Investment::OPEN_STAGES)
+                ->orderBy('investment_code')->get(['id', 'investment_code', 'title'])->map(fn ($v) => ['id' => $v->id, 'investment_code' => $v->investment_code, 'title' => $v->title])->values()->all(),
             'priorities' => BudgetLine::PRIORITIES, 'rgt' => BudgetLine::RGT, 'phasingMethods' => BudgetLine::PHASING, 'fxRateTypes' => FxRate::RATE_TYPES,
         ];
     }

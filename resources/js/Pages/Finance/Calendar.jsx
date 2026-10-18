@@ -5,6 +5,7 @@ import CalendarFilters from '@/Components/Finance/Calendar/CalendarFilters';
 import Legend from '@/Components/Finance/Calendar/Legend';
 import MonthGrid from '@/Components/Finance/Calendar/MonthGrid';
 import PassedPanel from '@/Components/Finance/Calendar/PassedPanel';
+import PassedInvestmentsPanel from '@/Components/Finance/Calendar/PassedInvestmentsPanel';
 import QuarterView from '@/Components/Finance/Calendar/QuarterView';
 import SubscribeLink from '@/Components/Finance/Calendar/SubscribeLink';
 import TimelineGantt from '@/Components/Finance/Calendar/TimelineGantt';
@@ -13,7 +14,7 @@ import { VIEWS, periodLabel, stepDate } from '@/Components/Finance/Calendar/cale
 import { BTN_SECONDARY, isoDate } from '@/Utils/finance';
 import { Head, router } from '@inertiajs/react';
 
-export default function Calendar({ view, anchor, from, to, today, events, timeline, passed, filters, options, legend, feed, exportUrls, can, errors }) {
+export default function Calendar({ view, anchor, from, to, today, events, timeline, passed, passedInvestments = [], filters, options, legend, feed, exportUrls, can, errors }) {
     const go = (next = {}) => {
         const params = { view, date: anchor, ...filters, ...next };
         const clean = {};
@@ -74,6 +75,7 @@ export default function Calendar({ view, anchor, from, to, today, events, timeli
                 </div>
                 <div className="order-1 space-y-4 xl:order-2">
                     <PassedPanel passed={passed} />
+                    <PassedInvestmentsPanel passed={passedInvestments} />
                     <div className="print:hidden"><SubscribeLink feed={feed} /></div>
                 </div>
             </div>

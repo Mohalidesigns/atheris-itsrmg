@@ -440,3 +440,61 @@ Both reviewers returned NO-GO before fixes (security: H1, H2; domain: H1–H5). 
 - Re-run after the review fixes, on `it_security_risk_test`: 692 passed, 6 skipped (9691 assertions, 22 min).
 - `migrate:fresh --seed` on `it_security_risk_scratch`: clean (only the deliberate EA metamodel demotions). `SMOKE=1 RouteSmokeTest`: 6 passed (3786 assertions, 233 GET routes).
 - `npm run build` passes.
+
+## Phase P5 — Investments & value realisation (2026-10-18, branch `feature/it-finance-p5`)
+
+Plan: `docs/build/ATH-FIN-PLAN-p5.md`. Spec FIN-05.01–.09 and .11 (FIN-05.10 Application TCO deferred to P6, C142), plus the FIN-07 items P5 touches (investment events in the calendar, portfolio and benefits reports). Built by fin-architect (opus) → fin-backend-engineer (WP-A) ∥ fin-frontend-engineer (WP-C) → fin-workflow-integrator (WP-B) → fin-qa-engineer (WP-E, sonnet) → fin-security-reviewer + fin-domain-reviewer (sonnet, "be exhaustive") → fixes → gate.
+
+### Shipped
+- **Schema:** investments, business cases (versioned), investment scores, stage gates, investment changes, benefits, benefit readings, value reviews, plus the freeze-control migration `2027_03_25_000001_p5_freeze_control_fields`. 9 new models. Codes: `IVT-` for investments, `ICR-` for changes (C141); the first seeded code per bank is `{KHB|FBN}-IVT-0001`.
+- **Services:** `InvestmentService` (lifecycle, `linkLines`), `BusinessCaseService` and the calculator (NPV, IRR, payback, ROI, TCO), `InvestmentScoring` and `PortfolioService` (rank, fund line, summary), `InvestmentFinancials` (BAC, AC, committed, EVM, grouped for lists), `StageGateService`, `InvestmentChangeService`, `BenefitsService`, `ValueReviewService`, `ValueReviewSweeper`.
+- **Workflow:** `finance.business_case_approval`, subject `StageGate`. Default stages: Head of IT (job title, all gates) → CFO (approved and change gates) → IT Steering Committee (role, all gates) → Board, decided by job title "Managing Director" (approved and change gates, base amount at or above `business_case_board_from`, 250m). Delivered gates skip CFO and Board. Processes total 20 (9 for finance). `ValueReviewDueNotification` and `fin:value-reviews-sweep` (daily 07:45, `--date=`): due once at the 14-day lead window, overdue at 1/7/14/30 days; recipients are active reviewer and sponsor holding `view it-finance` (C140).
+- **Integrations:** investment events in the finance calendar (separate `passedInvestments` prop, C143; "mine" filter applies); 2 reports (10 total, group `investments`); `investments_by_stage` and `benefits_realised_pct` figures; board-pack section `it_investment_portfolio`.
+- **P4 carry-overs adopted:** security M2 (`FinanceMasking::boardContent` masks `it_financial_position`, `it_investment_portfolio` and the `KRI-FIN-VAR` / `KRI-FIN-UNB` values and notes; `config('finance.masked_kri_codes')`), domain M5 (re-close sets `superseded_at` on forecast snapshots, readers filter on it), security L8 (new notification only).
+- **HTTP/UI:** 35 new routes (930 total, 243 `finance.*`). Pages `Investments/{Index,Create,Show,Portfolio}`; nav entries; the finance dashboard, calendar, budget line form and KRI/board-pack views updated for masking.
+- **Demo data:** `FinanceInvestmentDemoSeeder` (called after the first `FinanceMonitoringDemoSeeder`). Kano Heritage 10 investments, First Bank 12; a `steerco@` user per bank. A pending approved gate sits at the CFO stage (KHB-IVT-0004, FBN-IVT-0007) and an over-tolerance change at Head of IT (KHB-IVT-0008, FBN-IVT-0011). Mixed health, rejected, withdrawn and closed paths, and an overdue value review are seeded on purpose.
+
+### Tests
+New: `Unit/Finance/BusinessCaseCalculatorTest` (10), `InvestmentBackendSmokeTest` (10), `InvestmentAndBusinessCaseTest` (18), `BenefitsAndValueReviewTest` (11), `InvestmentWorkflowIntegrationTest` (11), `FinanceP4CarryOverTest` (3), all on the `BuildsInvestments` fixture trait, plus 8 review-regression tests for the fixes below and `RouteSmokeTest::test_finance_investment_estate_is_seeded_and_renders_for_every_demo_tenant`. Counts updated in the Workflow Studio, finance Workflow Studio, tenancy/routes and route-smoke tests (20 processes, 9 finance, P5 page routes).
+
+### Decisions
+P5-1 … P5-14 and C126 … C144 as written in the plan §0/§10. C126–C134 were put to sign-off and are **accepted with the plan's recommended option**:
+- **C126 / P5-1:** BAC is the approved business case's one-off cost (capex + opex, run excluded), set at the `approved` gate and changed only by an applied investment change; tagged budget lines show as allocated, with a funding gap.
+- **C127 / P5-2:** EV = BAC × manager-reported % complete; CPI = EV / AC; EAC = BAC / CPI, with a manual override needing a reason of 20 characters or more.
+- **C128 / P5-4:** the approval subject is `StageGate`, one row per gate request; approval gates are `approved`, `delivered` and over-tolerance `change`.
+- **C129:** business cases are decided on the gate routes (`finance.stage-gates.approve/reject`), not on separate business-case routes.
+- **C130 / P5-5:** the Board stage is decided by job title "Managing Director" rather than a new role.
+- **C131 / P5-6:** `approve it-finance-investments` is granted to Finance Approver.
+- **C132 / P5-9:** calculator conventions (base currency, year-0 undiscounted, IRR null without a sign change, payback linear within the year).
+- **C133:** benefit readings link evidence through `document_id` to `fin_documents`.
+- **C134:** `linkLines` may tag or untag `investment_id` on baseline lines without a revision, audited.
+
+Other settled decisions: delivery risk is entered as risk and **inverted** in the score (P5-10, C136); the fund-line envelope defaults to the change-the-bank (grow/transform) baseline lines, with `?envelope=` as a what-if (P5-11, C137); Application TCO is deferred to P6 (C142); multi-currency business cases are deferred (C144).
+
+### P4 deferrals
+- **Adopted in P5:** security M2, domain M5, security L8 (new code only).
+- **Left for P7:** domain M1, M2, M3, M6–M9, L1–L14; security L1–L7, L9.
+
+### Fixes during the build
+- Demo `md@` no longer holds the IT Steering Committee role (see domain H1 below).
+- Finance KRI masking: the Dashboard showed `0.0` for a masked KRI value; now a dash.
+
+### Review fixes applied
+- **Domain H1 (approval deadlock):** `md@` was a legitimate stage-3 decider and then, by the engine's one-stage-per-person rule, could not decide the Board stage. `md@` removed from the IT Steering Committee role in `FinanceDemoSeeder`; `FinanceApprovals::assertNoStageStranded` look-ahead (called from `StageGateService::approve`) refuses a decision that would leave a later stage without an eligible decider.
+- **Domain H2 / security H1 + H2 (control parameters editable under review):** `cost_tolerance_pct` is snapshotted at baseline in `bac_baselined_tolerance_pct` and used by `InvestmentChangeService`; sponsor, manager, cost centre, `is_regulatory`, `rgt` and tolerance are frozen while a gate or change is pending and after approval; `StageGate.sod_excluded_ids` is snapshotted at request time. Migration `2027_03_25_000001_p5_freeze_control_fields`.
+- **Domain H3 (PIR independence):** the reviewer defaults to the sponsor, then a non-manager benefit owner; the manager and the delivered-gate requester cannot complete reviews.
+- **Security M3:** `KRI-FIN-VAR` / `KRI-FIN-UNB` breach notes and the auto-raised Issue text carry no amounts.
+
+### Deferred / logged (not fixed; P5.1 / before UAT)
+- **New:** no investment-change path to reassign sponsor, manager, cost centre, regulatory flag or rgt after approval (the fields are frozen).
+- **Domain M:** M1 benefit status derived lazily (sweep only runs for orgs with open reviews); M2 audit text lacks the bank prefix on the first seeded code (`recode()`); M3 DoA/board band uses one-off cost only, not TCO; M4 "funded" criterion needs only one tagged line, not allocated >= BAC; M5 closure and benefit-shortfall acceptance have no approval; M6 gate criteria not re-evaluated at decision time; M7 readings and financials mutable after closure; M8 EVM edge cases (delivered not forced to 100 %, CPI = 0); M9 delivery acceptance is self-attested; M10 benefit percentages averaged across mixed units; M11 business-case benefits not linked to the benefits register; M12 job-title approver matching is a substring match on a free-text field; M13 unconfigured workflow collapses to a single approver; M14 scoring is not independent of manager and sponsor.
+- **Domain L:** L1 advance check races without a row lock; L2 change apply clamps negative BAC and tests tolerance against the drifted BAC; L3 fund line keeps delivered items and ignores committed spend; L4 actual tagged to two investments counts twice in portfolio AC; L5 NPV convention note and sensitivity table missing; L6 IAS 38 capitalisable flag missing; L7 board threshold is config, not per-bank; L8 value-review postponement unlimited; L9 delivered end date read from `$criteria[0]` by position.
+- **Security M:** M1 approval trail leaks the amount band to users without `view it-finance-amounts`; M2 untagging budget lines not scoped to the editor's cost centres or budget status; M4 benefit targets, units and due dates editable after approval, readings self-attested; M5 no lock on one pending request per investment; M6 gate approvers see and may score every investment; M7 raw or bulk writes outside the audit trail.
+- **Security L:** L1 investment picker discloses titles beyond cost-centre visibility; L2 risk/change/EA link picker ignores module permissions; L3 `saveLine` accepts any open investment for `investment_id`; L4 uploaded evidence file orphaned when a reading is refused; L5 business-case cost and benefit inputs lack type/size rules; L6 rejection and withdrawal audit rows have a null causer; L7 manual criteria for non-approval gates are self-attested; L8 `$guarded = []` on the nine new models; L9 `ValueReviewSweeper` per-review queries; L10 activity log stores business-case money regardless of `view it-finance-amounts`.
+- Also deferred from scope: FIN-05.10 Application TCO (P6), investment API endpoints (P7), value reviews in the daily digest, webhook channel, multi-currency business cases, automatic Change Management link.
+
+### Review verdicts
+Domain: conditional go before fixes (0 Critical, 3 High, 14 Medium, 9 Low). Security: 0 Critical, 2 High, 7 Medium, 11 Low. All Highs and security M3 are fixed and covered by regression tests.
+
+### Gate (PostgreSQL)
+Gate: 763 tests passed, 7 skipped (10,395 assertions, 26 min) on PostgreSQL `it_security_risk_test`; `migrate:fresh --seed` on `it_security_risk_scratch` ([KHB] 10 / [FBN] 12 investments, no warnings); SMOKE `RouteSmokeTest` 7 passed (3,936 assertions); `npm run build` passes; Pint clean on all touched PHP files.

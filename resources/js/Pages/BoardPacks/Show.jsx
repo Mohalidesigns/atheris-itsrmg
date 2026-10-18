@@ -91,6 +91,26 @@ function Section({ s }) {
                 </div>
             );
         }
+        case 'it_investment_portfolio': {
+            const cur = d.currency || 'NGN';
+            const m = (v) => (v === null || v === undefined ? 'Hidden' : new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 1 }).format(Number(v)));
+            const p = (v) => (v === null || v === undefined ? 'Hidden' : `${Number(v).toFixed(1)}%`);
+            return (
+                <div className="space-y-3">
+                    <p className="text-xs text-[#718096]">{d.as_of ? `As of ${fmtDate(d.as_of)} · ` : ''}{cur}</p>
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        <Stat label="Open investments" value={d.count_open} /><Stat label="Budget at completion" value={m(d.bac_total)} />
+                        <Stat label="Actual cost" value={m(d.ac_total)} /><Stat label="Estimate at completion" value={m(d.eac_total)} />
+                        <Stat label="Portfolio CPI" value={d.cpi_portfolio === null || d.cpi_portfolio === undefined ? 'Hidden' : Number(d.cpi_portfolio).toFixed(2)} />
+                        <Stat label="Benefits realised" value={p(d.benefits_realised_pct)} />
+                        <Stat label="Reviews due / overdue" value={`${d.reviews_due ?? 0} / ${d.reviews_overdue ?? 0}`} alert={d.reviews_overdue > 0} />
+                        <Stat label="Regulatory share" value={p(d.regulatory_share_pct)} />
+                    </div>
+                    <Table head={['Stage', 'Investments', 'BAC']} rows={(d.by_stage || []).map((r) => [String(r.stage).replace(/_/g, ' '), r.count, m(r.bac)])} />
+                    <Table head={['At risk', 'Status', 'Health']} rows={(d.at_risk || []).map((r) => [`${r.code} ${r.title}`, String(r.status).replace(/_/g, ' '), String(r.health ?? '').replace(/_/g, ' ')])} />
+                </div>
+            );
+        }
         default:
             return <pre className="text-[10px]">{JSON.stringify(d, null, 2)}</pre>;
     }

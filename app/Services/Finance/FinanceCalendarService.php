@@ -5,9 +5,12 @@ namespace App\Services\Finance;
 use App\Models\Finance\BudgetCycle;
 use App\Models\Finance\Contract;
 use App\Models\Finance\CostCentre;
+use App\Models\Finance\Investment;
 use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
 use App\Models\Finance\Renewal;
+use App\Models\Finance\StageGate;
+use App\Models\Finance\ValueReview;
 use App\Models\Organization;
 use App\Models\User;
 use App\Models\Vendor;
@@ -25,7 +28,7 @@ use Illuminate\Support\Collection;
  */
 class FinanceCalendarService
 {
-    public const SOURCES = ['contracts' => 'Contracts and renewals', 'budget' => 'Budget cycles', 'periods' => 'Fiscal periods', 'invoices' => 'Invoice due dates'];
+    public const SOURCES = ['contracts' => 'Contracts and renewals', 'budget' => 'Budget cycles', 'periods' => 'Fiscal periods', 'invoices' => 'Invoice due dates', 'investments' => 'Investments and value reviews'];
 
     private const EVENT_TYPES = [
         'contract_commencement' => ['Contract commences', 'blue'],
@@ -40,6 +43,12 @@ class FinanceCalendarService
         'period_closed' => ['Period closed', 'blue'],
         'period_locked' => ['Period locked', 'blue'],
         'invoice_due' => ['Invoice due', 'blue'],
+        'investment_start' => ['Investment starts', 'blue'],
+        'investment_planned_end' => ['Investment planned end', 'amber'],
+        'investment_delivered' => ['Investment delivered', 'blue'],
+        'investment_gate_passed' => ['Stage gate passed', 'blue'],
+        'investment_gate_pending' => ['Stage gate awaiting approval', 'amber'],
+        'value_review_due' => ['Value review due', 'amber'],
     ];
 
     private const LEGEND = [
@@ -233,6 +242,10 @@ class FinanceCalendarService
         $wanted = array_values(array_intersect(array_keys(self::SOURCES), (array) ($filters['sources'] ?? []))) ?: array_keys(self::SOURCES);
         $contractOnly = array_filter(Arr::only($filters, ['vendor_id', 'owner_id', 'member', 'cost_centre_id', 'type', 'value_band', 'status']), fn ($v) => $v !== null && $v !== '');
 
+        if ($contractOnly && array_keys($contractOnly) === ['member']) { // "mine" also applies to investments and value reviews
+            return array_values(array_intersect($wanted, ['contracts', 'investments']));
+        }
+
         return $contractOnly ? array_values(array_intersect($wanted, ['contracts'])) : $wanted;
     }
 
@@ -347,6 +360,92 @@ class FinanceCalendarService
                 ],
             ];
         })->values();
+    }
+
+    private function sourceInvestments(int $orgId, CarbonInterface $from, CarbonInterface $to, array $filters, User $viewer): Collection
+    {
+        $f = $from->toDateString();
+        $t = $to->toDateString();
+        $today = FinanceClock::today()->toDateString();
+        $mine = ($filters['member'] ?? null) === 'me' ? (int) $viewer->id : null;
+        $out = collect();
+        $in = fn (?string $d) => $d !== null && $d >= $f && $d <= $t;
+        $push = function (Investment $i, string $type, string $date, string $color, string $status, string $suffix = '', ?string $title = null) use ($out, $today) {
+            $out->push([
+                'id' => "investment-{$i->id}-{$type}{$suffix}", 'type' => $type, 'title' => $i->investment_code.' · '.self::EVENT_TYPES[$type][0].' · '.($title ?? $i->title),
+                'start' => $date, 'end' => $date, 'color' => $color, 'status' => $status, 'href' => route('finance.investments.show', $i->id),
+                'meta' => ['source' => 'investments', 'contract_code' => $i->investment_code, 'owner' => $i->manager?->name, 'days_left' => FinanceClock::daysUntil($date, CarbonImmutable::parse($today))],
+            ]);
+        };
+
+        $invs = Investment::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->whereNot('stage', 'cancelled')->visibleTo($viewer)
+            ->when($mine, fn ($q) => $q->where(fn ($w) => $w->where('manager_id', $mine)->orWhere('sponsor_id', $mine)
+                ->orWhereIn('id', ValueReview::withoutGlobalScopes()->where('reviewer_id', $mine)->select('investment_id'))))
+            ->with('manager:id,name')->get();
+        foreach ($invs as $i) {
+            $i->starts_on && $in($i->starts_on->toDateString()) && $push($i, 'investment_start', $i->starts_on->toDateString(), 'blue', $i->stage);
+            if ($i->planned_ends_on && $in($i->planned_ends_on->toDateString()) && in_array($i->stage, ['idea', 'business_case', 'approved', 'in_delivery'], true)) {
+                $push($i, 'investment_planned_end', $i->planned_ends_on->toDateString(), $i->planned_ends_on->toDateString() < $today && $i->is_late ? 'red' : 'amber', $i->stage);
+            }
+            $i->actual_ends_on && $in($i->actual_ends_on->toDateString()) && $push($i, 'investment_delivered', $i->actual_ends_on->toDateString(), 'blue', $i->stage);
+        }
+        $visible = $invs->keyBy('id');
+        if ($visible->isEmpty()) {
+            return $out;
+        }
+        $gates = StageGate::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('investment_id', $visible->keys())->whereIn('status', ['submitted', 'approved', 'passed'])->get();
+        foreach ($gates as $g) {
+            $i = $visible[$g->investment_id];
+            $label = ucfirst(str_replace('_', ' ', (string) $g->gate));
+            if ($g->status === 'submitted') {
+                $d = ($g->requested_at ?? $g->created_at)?->timezone(config('finance.timezone'))->format('Y-m-d');
+                $in($d) && $push($i, 'investment_gate_pending', $d, 'amber', 'submitted', "-{$g->id}", $label);
+            } else {
+                $d = ($g->passed_at ?? $g->decided_at)?->timezone(config('finance.timezone'))->format('Y-m-d');
+                $in($d) && $push($i, 'investment_gate_passed', $d, 'blue', (string) $g->status, "-{$g->id}", $label);
+            }
+        }
+        $reviews = ValueReview::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('investment_id', $visible->keys())->whereBetween('due_on', [$f, $t])
+            ->when($mine, fn ($q) => $q->where(fn ($w) => $w->where('reviewer_id', $mine)->orWhereIn('investment_id', $visible->filter(fn ($i) => (int) $i->manager_id === $mine || (int) $i->sponsor_id === $mine)->keys())))->get();
+        foreach ($reviews as $r) {
+            $color = in_array($r->status, ['completed', 'cancelled'], true) ? 'grey' : ($r->status === 'overdue' ? 'red' : 'amber');
+            $push($visible[$r->investment_id], 'value_review_due', $r->due_on->toDateString(), $color, (string) $r->status, "-{$r->id}", ValueReview::TYPE_LABELS[$r->review_type] ?? $r->review_type);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Late investments (planned end passed, not delivered) and overdue value reviews.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function passedInvestments(int $orgId, User $viewer, ?CarbonInterface $today = null): array
+    {
+        $today ??= FinanceClock::today();
+        $td = $today->toDateString();
+        $rows = collect();
+        $invs = Investment::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->visibleTo($viewer)->with('manager:id,name')->get()->keyBy('id');
+        foreach ($invs as $i) {
+            if (in_array($i->stage, ['approved', 'in_delivery'], true) && $i->planned_ends_on && $i->planned_ends_on->toDateString() < $td) {
+                $rows->push($this->passedRow($i, 'planned_end', $i->planned_ends_on, $today));
+            }
+        }
+        $reviews = ValueReview::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('investment_id', $invs->keys())->whereIn('status', ValueReview::OPEN)->whereDate('due_on', '<', $td)->get();
+        foreach ($reviews as $r) {
+            $i = $invs[$r->investment_id];
+            $i->is_open && $rows->push($this->passedRow($i, 'value_review', $r->due_on, $today));
+        }
+
+        return $rows->sortByDesc('days_overdue')->values()->all();
+    }
+
+    private function passedRow(Investment $i, string $which, CarbonInterface $date, CarbonInterface $today): array
+    {
+        return [
+            'id' => $i->id, 'investment_code' => $i->investment_code, 'title' => $i->title, 'stage' => $i->stage, 'manager' => $i->manager?->name, 'which' => $which,
+            'date' => $date->toDateString(), 'days_overdue' => abs((int) FinanceClock::daysUntil($date, $today)), 'href' => route('finance.investments.show', [$i->id, 'tab' => $which === 'value_review' ? 'reviews' : 'overview']),
+        ];
     }
 
     // ---- helpers -------------------------------------------------------------------------------------------------
