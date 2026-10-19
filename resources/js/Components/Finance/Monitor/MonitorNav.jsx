@@ -5,6 +5,8 @@ const TABS = [
     ['variances', 'Variances', 'finance.monitor.variances'],
     ['forecast', 'Forecast', 'finance.monitor.forecast'],
     ['period-close', 'Period close', 'finance.monitor.period-close'],
+    ['showback', 'Showback', 'finance.monitor.showback'],
+    ['tco', 'Application TCO', 'finance.monitor.tco'],
 ];
 
 /** Section tab bar shared by the P4 monitoring pages. `params` (e.g. fiscal_year_id) carries across tabs. */

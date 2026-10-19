@@ -1,0 +1,5 @@
+project.id,usage_start_time,service.description,resource.name,location.region,cost,currency,labels
+khb-analytics-1,2026-08-03T00:00:00Z,BigQuery,projects/khb/datasets/mart,europe-west1,6.400000,USD,"[{""key"":""service"",""value"":""mobile""},{""key"":""env"",""value"":""prod""}]"
+khb-analytics-1,2026-08-03T00:00:00Z,Cloud Storage,projects/khb/buckets/raw,europe-west1,1.100000,USD,"{""costcentre"":""KHB-IT-DC""}"
+khb-analytics-1,2026-08-04T00:00:00Z,BigQuery,projects/khb/datasets/mart,europe-west1,6.800000,USD,"[{""key"":""service"",""value"":""mobile""},{""key"":""env"",""value"":""prod""}]"
+khb-analytics-1,2026-08-04T00:00:00Z,Compute Engine,projects/khb/instances/etl,europe-west1,2.000000,USD,

@@ -10,6 +10,7 @@ use App\Models\ConfigDriftEvent;
 use App\Models\Ea\MaturityAssessment;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetTransfer;
+use App\Models\Finance\Capitalisation;
 use App\Models\Finance\Category;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\ExpenseRequest;
@@ -243,6 +244,20 @@ class ApprovalProcesses
                 'cost_centre_id' => ['label' => 'Cost centre', 'values' => 'finance.cost_centres'],
             ],
             'default' => 'One approval by anyone with "approve it-finance-invoices" other than the submitter, and above the SoD band not an approver of the purchase order.',
+        ],
+        'finance.capitalisation_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Capitalisation (IAS 38 / IAS 16)', 'engine' => 'generic', 'owner_cannot_approve' => false,
+            'description' => 'Investment or capex spend is capitalised as an asset, and amortisation starts, only with approval (FIN-03.13; IAS 38, IAS 16).',
+            'permission' => 'approve it-finance', 'view_permission' => 'view it-finance', 'model' => Capitalisation::class,
+            'initiator' => 'requested_by_id', 'title' => ['capitalisation_title'], 'route' => 'finance.capitalisations.show',
+            'initiate' => 'Submitting a capitalisation',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'standard' => ['label' => 'Standard', 'values' => ['ias_38' => 'IAS 38 intangible', 'ias_16' => 'IAS 16 PP&E']],
+                'source_type' => ['label' => 'Source', 'values' => ['investment' => 'Investment', 'expense' => 'Capex expense']],
+                'requires_cfo' => ['label' => 'Needs the CFO (high value)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the preparer and the investment manager or expense requester.',
         ],
     ];
 

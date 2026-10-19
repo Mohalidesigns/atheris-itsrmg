@@ -204,10 +204,13 @@ class InvestmentController extends Controller
             'changes' => $changes->map(fn ($c) => [
                 'id' => $c->id, 'change_code' => $c->change_code, 'description' => $c->description, 'reason' => $c->reason, 'cost_delta' => (string) $c->cost_delta,
                 'schedule_delta_days' => (int) $c->schedule_delta_days, 'status' => $c->status, 'requires_approval' => (bool) $c->requires_approval, 'requested_by' => $this->userMini($c->requestedBy),
+                'kind' => $c->kind ?? 'scope', 'field_changes' => $this->fieldChangeRows($c->field_changes),
                 'requested_at' => $c->requested_at?->toIso8601String(), 'gate_id' => $changeGates->get($c->id)?->id, 'applied_at' => $c->applied_at?->toIso8601String(),
                 'can' => ['withdraw' => $c->status === 'submitted' && $edit && ((int) $c->requested_by_id === (int) $user->id || (int) $i->manager_id === (int) $user->id)],
             ])->values()->all(),
             'links' => $i->links()->withoutGlobalScopes()->with(['linkable' => fn ($q) => $q->withoutGlobalScopes()])->orderBy('id')->get()->map(fn (InvestmentLink $l) => $this->linkPayload($l))->values()->all(),
+            'capitalisations' => $this->capitalisationRows($i),
+            'costCentres' => $edit ? $this->costCentresOpts($user) : [],
             'linkOptions' => $edit ? $this->linkOptions($orgId) : ['ea_application' => [], 'capability' => [], 'business_service' => [], 'risk' => [], 'change' => []],
             'documents' => FinanceDocument::query()->where('documentable_type', Investment::class)->where('documentable_id', $i->id)->with(['evidence', 'creator:id,name'])->orderByDesc('id')->get()
                 ->map(fn ($d) => $this->documentPayload($d))->values()->all(),
@@ -222,6 +225,7 @@ class InvestmentController extends Controller
                 'hold' => $edit && $open && ! $held, 'resume' => $edit && $open && $held, 'cancel' => $edit && in_array($i->stage, ['idea', 'business_case', 'approved', 'in_delivery'], true),
                 'progress' => $edit && in_array($i->stage, ['approved', 'in_delivery', 'delivered', 'benefits_tracking'], true),
                 'addBenefit' => $edit && $open, 'addReview' => $edit && $open, 'requestChange' => $edit && in_array($i->stage, ['approved', 'in_delivery'], true) && ! $held && ! $pending,
+                'reassign' => $edit && in_array($i->stage, ['approved', 'in_delivery', 'delivered', 'benefits_tracking'], true) && ! $held && ! $pending,
             ],
         ]);
     }

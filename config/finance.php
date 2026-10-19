@@ -63,7 +63,7 @@ return [
     'transfers' => ['allow_capex_opex' => false],
     // Tables that hold money; the base currency is frozen once any has a row (P3+ append).
     'money_tables' => ['fin_budget_lines', 'fin_budget_transfers', 'fin_supplementary_requests', 'fin_contracts', 'fin_contract_renewals',
-        'fin_expense_requests', 'fin_purchase_orders', 'fin_invoices', 'fin_actuals', 'fin_recurring_expenses', 'fin_accruals'],
+        'fin_expense_requests', 'fin_purchase_orders', 'fin_invoices', 'fin_actuals', 'fin_recurring_expenses', 'fin_accruals', 'fin_cloud_cost_lines', 'fin_capitalisations'],
     'workbook' => ['max_rows' => 2000, 'max_kb' => 4096],
     'approval_defaults' => [ // base-currency thresholds that FinancePolicySeeder maps onto each bank's bands
         'budget_md_ceo_from' => 250000000,
@@ -73,6 +73,7 @@ return [
         'expense_head_of_it_from' => 1000000, 'expense_cfo_from' => 10000000, 'expense_md_ceo_from' => 50000000,
         'invoice_sod_from' => 10000000, // fallback when fin_settings.invoice_sod_from is null
         'business_case_board_from' => 250000000, // a business case or change at or above this base amount also needs the board (P5-5)
+        'capitalisation_cfo_from' => 50000000, // a capitalisation at or above this base amount also needs the CFO (P6-11)
     ],
 
     // P2 contracts, subscriptions, renewals and calendar (ATH-FIN-001 §3.6, §5.4)
@@ -127,5 +128,39 @@ return [
             'benefits_tracking' => [['benefits_registered', 'At least one benefit with owner, target and due date', true], ['reviews_scheduled', 'Value reviews scheduled', true]],
             'closed' => [['reviews_done', 'No value review scheduled, due or overdue', true], ['benefits_final', 'Every benefit has a final status', true], ['lessons', 'Lessons learned recorded', false]],
         ],
+    ],
+
+    // P6 cloud cost / FinOps, allocation and showback, capitalisation, application TCO (ATH-FIN-001 §3.3, §3.5)
+    'cloud' => [
+        'providers' => ['aws' => 'Amazon Web Services', 'azure' => 'Microsoft Azure', 'gcp' => 'Google Cloud', 'oci' => 'Oracle Cloud', 'other' => 'Other'],
+        'dimensions' => ['cost_centre' => 'Cost centre', 'ea_application' => 'EA application', 'business_service' => 'Business service'],
+        'max_rows' => 200000, 'max_kb' => 51200, 'chunk' => 500,
+        'anomaly' => ['default_pct' => 30, 'default_abs_floor' => 250000, 'baseline_days' => 7, 'min_baseline_days' => 5, 'lookback_days' => 3, 'kri_window_days' => 30],
+        'close_requires_import' => false,
+        'formats' => [ // canonical => candidate header names (first present wins); tag_prefix/tags_json/tags_kv describe tags; account => id column checked against account_identifier
+            'aws_cur' => ['date' => ['lineItem/UsageStartDate'], 'service' => ['product/ProductName', 'lineItem/ProductCode'], 'resource_id' => ['lineItem/ResourceId'],
+                'region' => ['product/region', 'product/regionCode'], 'cost' => ['lineItem/UnblendedCost'], 'currency' => ['lineItem/CurrencyCode'], 'account' => ['lineItem/UsageAccountId'], 'tag_prefix' => 'resourceTags/user:'],
+            'azure' => ['date' => ['Date', 'UsageDate'], 'service' => ['ServiceName', 'MeterCategory'], 'resource_id' => ['ResourceId', 'InstanceId'], 'region' => ['ResourceLocation'],
+                'cost' => ['CostInBillingCurrency', 'Cost', 'PreTaxCost'], 'currency' => ['BillingCurrencyCode', 'BillingCurrency', 'Currency'], 'account' => ['SubscriptionId'], 'tags_json' => ['Tags']],
+            'gcp' => ['date' => ['usage_start_time'], 'service' => ['service.description'], 'resource_id' => ['resource.name', 'sku.description'], 'region' => ['location.region'],
+                'cost' => ['cost'], 'currency' => ['currency'], 'account' => ['project.id'], 'tags_json' => ['labels'], 'tag_prefix' => 'labels.'],
+            'generic' => ['date' => ['date'], 'service' => ['service'], 'resource_id' => ['resource_id'], 'region' => ['region'], 'cost' => ['cost'], 'currency' => ['currency'],
+                'account' => ['account_id'], 'tags_kv' => ['tags'], 'tag_prefix' => 'tag:'],
+        ],
+    ],
+    'allocations' => ['source_precedence' => ['budget_line', 'contract', 'category', 'cost_centre']],
+    'showback' => ['default_units' => [], 'chargeback_debit_gl' => '6950', 'chargeback_credit_gl' => '6951', 'void_reason_min' => 10],
+    'capitalisation' => [
+        'standards' => ['ias_38' => 'IAS 38 intangible (software)', 'ias_16' => 'IAS 16 property, plant and equipment (hardware)'],
+        'checklists' => [
+            'ias_38' => [['technical_feasibility', 'Technically feasible to complete for use (IAS 38.57a)'], ['intention', 'Intention to complete and use (57b)'], ['ability_to_use', 'Ability to use the asset (57c)'],
+                ['future_benefits', 'How it will generate probable future economic benefits (57d)'], ['resources', 'Adequate technical, financial and other resources to complete (57e)'],
+                ['reliable_measurement', 'Development expenditure reliably measured (57f)'], ['exclusions', 'Research-phase, training and admin overheads excluded (IAS 38.54, .67)']],
+            'ias_16' => [['future_benefits', 'Probable future economic benefits (IAS 16.7a)'], ['reliable_measurement', 'Cost reliably measurable (16.7b)'], ['use_beyond_year', 'Expected to be used for more than one period (16.6)']],
+        ],
+        'note_min' => 10, 'max_life_months' => 600, 'default_life_months' => ['ias_38' => 60, 'ias_16' => 48],
+        'investment_stages' => ['in_delivery', 'delivered', 'benefits_tracking', 'closed'],
+        'expense_statuses' => ['received', 'invoiced', 'closed'],
+        'asset_category' => 'Capitalised IT asset',
     ],
 ];

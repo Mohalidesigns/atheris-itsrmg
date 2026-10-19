@@ -498,3 +498,64 @@ Domain: conditional go before fixes (0 Critical, 3 High, 14 Medium, 9 Low). Secu
 
 ### Gate (PostgreSQL)
 Gate: 763 tests passed, 7 skipped (10,395 assertions, 26 min) on PostgreSQL `it_security_risk_test`; `migrate:fresh --seed` on `it_security_risk_scratch` ([KHB] 10 / [FBN] 12 investments, no warnings); SMOKE `RouteSmokeTest` 7 passed (3,936 assertions); `npm run build` passes; Pint clean on all touched PHP files.
+
+## Phase P6 — Cloud FinOps, allocation, showback & capitalisation (2026-10-19, branch `feature/it-finance-p6`)
+
+Plan: `docs/build/ATH-FIN-PLAN-p6.md`. Spec FIN-03.09, .10, .12, .13, FIN-02.12 and FIN-05.10 (Application TCO, deferred from P5, C142), plus the P5 carry-overs below. Built by fin-architect (opus) → fin-backend-engineer ∥ fin-frontend-engineer → fin-workflow-integrator → fin-qa-engineer (sonnet) → fin-security-reviewer + fin-domain-reviewer (sonnet, "be exhaustive") → fixes → gate.
+
+### Shipped
+- **Schema:** migrations `2027_04_01_000001` (cloud accounts, import lines, tag rules, anomalies), `…000002` (guarded drop and rebuild of the unused P1 allocation tables in the spec shape, plus allocation runs), `…000003` (capitalisations and amortisation lines), `…000004` (FinOps settings columns), `…000005` (investment reassignment and BAC baseline) and `2027_04_02_000001_capitalisation_cost_basis`. New models: `CloudAccount`, `CloudCostLine`, `CloudTagRule`, `CloudAnomaly`, `AllocationRun`, `ChargebackRun`, `Capitalisation`, `AmortisationLine`. Codes: `CAP-` for capitalisations, `CBK-` for chargeback runs (C171).
+- **Cloud / FinOps (FIN-03.09, .10):** cloud accounts, import of AWS, Azure and generic CSV exports (`CloudExportParser`, `CloudCostService`), tag rules and tag attribution, untagged assignment and reallocation, and the FinOps sub-ledger, which is never posted to `fin_actuals` (C145). Anomaly detection (`CloudAnomalyService`) with the sweeper `fin:cloud-anomalies` (daily 05:45) and `CloudAnomalyNotification`; `KRI-FIN-CLD` (open + acknowledged in 30 days, not masked, C170). A `cloud_imported` item on the period-close checklist (warn, never fail by default, C167).
+- **Allocation, showback, chargeback (FIN-03.12, .13):** `AllocationService` rebuilt on the spec's tables; results frozen with the period, so allocation runs are computed once at close (C152). `ShowbackService` statements by target type and basis, and `ChargebackService` journals for closed or locked periods (one run per period and target type until voided, C154). `CostPools` and `BudgetLineClassifier` (line classification of application and business service, C162).
+- **Application TCO (FIN-05.10):** `ApplicationTcoService`, by application and by business service (Kano has no EA applications, C160). EA hook: `CostModelService::tco()` is unchanged; `tcoWithFinance()` adds the measured finance TCO when `ea.cost` is enabled (C161).
+- **Capitalisation (FIN-02.12):** IAS 38 / IAS 16 capitalisation from an investment or a capex expense request, with the IAS 38.57 criteria checklist, a memo amortisation schedule (straight-line or declining balance, C157) and asset link or creation on approval (C158). Workflow: a 10th finance process `finance.capitalisation_approval` (21 processes in total, C155).
+- **Reports:** 4 new (14 total): `cloud_spend`, `showback_statement`, `application_tco` and `capitalisation_register`.
+- **P5 carry-overs adopted:** investment reassignment as an investment change of kind `reassign`, always through the `change` gate (C168); L2 (tolerance tested against the baselined BAC, negative BAC refused); L6 (`is_capitalisable` / IAS 38 flag); security M1 (approval trail amount band masked), M2 (untagging scoped to the editor's cost centres and budget status) and M5 (one pending request per investment).
+- **Demo data:** `FinanceFinOpsDemoSeeder` for both banks (cloud accounts, imports, tag rules, anomalies, allocation rules and runs, a chargeback run, capitalisations with schedules). The seeder tags budget lines directly before the allocation run (see domain H1).
+
+### Tests
+New: `CloudCostTest`, `ShowbackAndAllocationTest`, `CapitalisationTest`, `ApplicationTcoTest`, `FinOpsBackendSmokeTest`, `FinOpsWorkflowIntegrationTest`, `FinanceP5CarryOverTest`, `P6ReviewHighFixesTest` (regression tests for the review Highs below), `Unit/Finance/AmortisationScheduleTest`, `CloudAnomalyEvaluateTest`, `CloudExportParserTest`, on the `BuildsFinOps` fixture trait and `tests/Fixtures`; plus the FinOps estate test in `RouteSmokeTest`. Counts updated in the Workflow Studio, finance Workflow Studio and tenancy/routes tests (21 processes, 10 finance, P6 page routes).
+
+### Decisions
+P6-1 … P6-22 and C145 … C172 as written in the plan §0/§10. Sign-off items (C145, C149, C155, C156, C159, C162, C168) were **accepted with the plan's recommended option**:
+- **C145 / P6-1:** cloud cost is a FinOps sub-ledger reconciled to the ledger, never posted to actuals (invoices already post them; posting both would double count).
+- **C149 / P6-5:** the P1 allocation tables were empty and unused, so a guarded migration drops and recreates them in the spec shape.
+- **C155 / P6-11:** capitalisation approval goes through Workflow Studio as `finance.capitalisation_approval`, not a module-private maker-checker.
+- **C156 / P6-12:** capitalisation cost basis and IAS 38 checklist as in the plan (hardened by domain H2 below).
+- **C159 / P6-15:** TCO is direct + allocated + FinOps cloud; ledger cloud is excluded on the actual basis, labour is a breakdown and contracts are memo.
+- **C162 / P6-17:** line classification may set application and business-service tags on lines of any budget status, without a revision, audited (as C134).
+- **C168 / P6-22:** reassignment of frozen investment fields is an investment change, always approved, SoD on old and new holders.
+
+Other settled decisions: tag attribution order account rule → org rule → built-in code/name match (C147); anomalies tested by rolling baseline and week-on-week with an absolute floor (C148, C172); overlapping sources resolved by most-specific source (C150); `forecast` amount type deferred (C151); showback units live in `fin_settings.showback_units` (C153); masking of deviation, untagged and coverage percentages is not applied (C163); cloud uses `import it-finance` (C164); scoped viewers see visible cost centres only (C165); FIN-03.11 commitment and discount utilisation out of scope (C166).
+
+### P5 deferrals
+- **Adopted in P6:** investment reassignment (C168), domain L2, domain L6, security M1, M2, M5.
+- **Still open from P5:** domain M1–M14, L1, L3–L5, L7–L9; security M4, M6, M7, L1–L10 (see the P5 section).
+
+### Fixes during the build
+- QA found two production bugs: `ChargebackService::preview` used `whereKey()` with a subquery (now `whereIn`), and `AllocationService` called an undefined `sameBank()`.
+
+### Review fixes applied
+- **Domain H1 (reclassification double counts closed periods):** classification is refused for budget lines that have actuals in closed or locked periods; the seeder tags lines directly before the allocation run.
+- **Domain H2 (capitalisation cost basis):** leases are excluded; `excluded_amount` counts as consumed; optional recoverable-VAT setting `fin_settings.capitalisation_vat_recoverable` (default off, no UI yet); `recognition_date`; a `consumed_actual_ids` overlap guard, which also closes domain M2 (sources can overlap).
+- **Domain H3 (TCO ledger cloud):** the ledger cloud pool is dropped only where FinOps covers the subject; `unattributed` is `it_total − tco_total`; the detail ties to the row.
+- **Domain H4 / security H2 (EA TCO performance):** `ApplicationTcoService` is a scoped singleton and EA `tco()` no longer calls finance.
+- **Security H1 (EA disclosure):** EA `tco()` is pure; `tcoWithFinance()` is gated by `view it-finance`, amounts and cost-centre scope; the GraphQL cost output uses a `COST_KEYS` whitelist.
+- **Security H3 (chargeback controls):** create, download and void need `close it-finance-periods`; void has SoD (exporter ≠ voider); runs are hidden without `can.run`.
+- **Domain M5:** declining balance under 24 months without a rate is a validation error, not a 500.
+
+### Deferred / logged (not fixed; P6.1 / P7)
+- **Domain M (integrity and controls):** M1 "reconciles to the cent" is circular and open-period figures mix stored and live data; M3 capitalisation criteria need no evidence document; M4 amortisation and asset lifecycle gaps (prior-year catch-up warning, no cancel, impairment, disposal or life change on a capitalised row); M6 allocation rules starting before the open floor cannot be edited (blocks chargeback); M7 period re-open ignores exported chargeback runs, `is_frozen` and capitalisations; M14 no maker-checker on allocation methodology or the chargeback journal.
+- **Domain M (cloud and data):** M8 restatement deletes manual attributions and other batches' lines with no before/after record; M9 one spike creates up to three anomalies (account, service, application) and inflates `KRI-FIN-CLD`; M10 hard-coded local assumptions (GL 6302, `CP-CLD`/`CP-LAB`, annualisation `* 12`, CFO threshold from config only); M11 scope gaps for cost-centre-limited users on tag rules and anomaly handling; M12 ingestion fidelity (Tax, Credit, Refund and fee lines included, no billed vs effective cost, no FOCUS); M13 the linked Asset has no cost, life or depreciation method (spec FIN-03.13, recorded as C158).
+- **Domain M (masking):** M15 amounts leak through free text (activity description, error text, `blocked_reason`); M16 approvers can decide a capitalisation without `view it-finance-amounts`.
+- **Domain L:** L1 allocation rules apply by period start day only; L2 straight-line schedule with a tiny amount ends negative; L3 tag-rule precedence is per tag, not per scope; L4 rule `hits` inflate on restatement; L5 capitalisation register grouped under Cloud and skips earlier-FY catch-up; L6 migration `…000005` `down()` leaves two columns; L7 no account confirmation for files without an account column; L8 `KRI-FIN-CLD` and the other finance KRIs defined only by the demo seeder; L9 `ea.cost` config block under the wrong comment; L10 chargeback downloads not audited, no tax treatment; L11 no SoD between importer and anomaly dismisser; L12 `is_capitalisable` is a project-manager toggle; L13 FinOps maturity gaps (unit economics, tower dimension, cloud budget, commitments); L14 rejected-row line numbers refer to aggregated rows; L15 dashboard open-anomaly count and the anomalies list scope differently.
+- **Domain, new follow-up (Medium):** after H3, `unattributed` can go negative when FinOps cloud exceeds ledger cloud; needs a presentation rule or a reconciling line.
+- **Security M:** M1 tag rules, account creation and anomaly handling not cost-centre scoped; M2 closed-period showback and TCO only half frozen (direct pool computed live); M3 re-open then allocation run diverges from an exported chargeback journal; M4 amounts in capitalisation activity descriptions and no amounts check on submit; M5 anomaly sweep not failure-isolated per account and loses notifications; M6 bulk cloud writes lack before/after audit; M7 scoped viewers receive bank-wide dropdown lists and the user directory; M8 cloud CSV parsing memory-unbounded and `base_cost` can overflow; M9 dashboard `investments_by_stage.bac` shown without amounts; M10 capitalisation index loads everything in memory.
+- **Security L:** L1 `authorize(): true` on four form requests; L2 `$guarded = []` on the new models; L3 anomaly account subquery without organisation filter; L4 capitalisation SoD snapshot omits the sponsor and survives a reassignment; L5 chargeback void race and `file_name` in Content-Disposition; L6 approval trail still shows `requires_cfo` / `requires_board` values; L7 no throttle on allocation runs, code and unique-key collisions under concurrency; L8 client-supplied cloud import `file_name`; L9 cloud batch detail visible outside the viewer's cost centres.
+- Also deferred from scope: FIN-03.11 commitment and discount utilisation (C166), allocation `forecast` amount type (C151), investment API endpoints (P7), spec §6 update for the new finance process.
+
+### Review verdicts
+Domain: NO-GO before fixes (0 Critical, 4 High, 16 Medium, 15 Low). Security: 0 Critical, 3 High, 10 Medium, 9 Low. All Highs and domain M2 and M5 are fixed and covered by `P6ReviewHighFixesTest`.
+
+### Gate (PostgreSQL)
+Gate: after review fixes, 875 passed / 8 skipped on PostgreSQL (`it_security_risk_test`, 29 min); `migrate:fresh --seed` + SMOKE `RouteSmokeTest` (8 passed, 4,226 assertions) on `it_security_risk_scratch` with no seeder warnings; `npm run build` passes; pint clean on all touched PHP files. Pre-fix gate: 863 passed / 8 skipped.

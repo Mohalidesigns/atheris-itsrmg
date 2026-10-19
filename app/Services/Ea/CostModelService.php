@@ -5,8 +5,12 @@ namespace App\Services\Ea;
 use App\Models\Ea\ApplicationCapability;
 use App\Models\Ea\Capability;
 use App\Models\Ea\EaApplication;
+use App\Models\Ea\EaInterface;
 use App\Models\Ea\Process;
 use App\Models\Ea\TechComponent;
+use App\Models\User;
+use App\Policies\Finance\FinancePolicy;
+use App\Services\Finance\ApplicationTcoService;
 use Illuminate\Support\Collection;
 
 /**
@@ -41,9 +45,8 @@ class CostModelService
     private ?Collection $applications = null;
 
     public function __construct(
-        private FxExposureService $fx = new FxExposureService(),
-    ) {
-    }
+        private FxExposureService $fx = new FxExposureService,
+    ) {}
 
     /**
      * TCO uplift factors, as multiples of recorded licence/subscription cost.
@@ -116,6 +119,49 @@ class CostModelService
      */
     public function tco(EaApplication $application): array
     {
+        return $this->tcoModel($application);
+    }
+
+    /**
+     * Opt-in finance feed: the modelled TCO plus measured_ngn / measured_basis. Callers must pass the viewing user; the figure is
+     * only returned when that user holds `view it-finance` and `view it-finance-amounts`, and is limited to the cost centres they may see.
+     *
+     * @return array<string,mixed>
+     */
+    public function tcoWithFinance(EaApplication $application, ?User $viewer): array
+    {
+        return $this->tcoModel($application) + $this->measured($application, $viewer);
+    }
+
+    /**
+     * Additive finance feed (ATH-FIN P6-16), opt-in via tcoWithFinance(): the measured, annualised year-to-date TCO from IT Financial Management. It never
+     * alters total_ngn. Null when the flag is off, the bank has no fiscal year or spend, or the finance module is absent.
+     *
+     * @return array{measured_ngn: ?float, measured_basis: ?string}
+     */
+    private function measured(EaApplication $application, ?User $viewer): array
+    {
+        $none = ['measured_ngn' => null, 'measured_basis' => null];
+        $class = ApplicationTcoService::class;
+        if (! config('ea.cost.finance_tco', true) || ! class_exists($class) || ! $application->organization_id) {
+            return $none;
+        }
+        if (! $viewer || (int) $viewer->organization_id !== (int) $application->organization_id || ! $viewer->can('view it-finance') || ! $viewer->can('view it-finance-amounts')) {
+            return $none;
+        }
+        try {
+            $v = app($class)->measuredFor((int) $application->organization_id, (int) $application->id, FinancePolicy::visibleCostCentreIds($viewer));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $none;
+        }
+
+        return $v === null ? $none : ['measured_ngn' => (float) $v, 'measured_basis' => 'it_finance_ytd_annualised'];
+    }
+
+    private function tcoModel(EaApplication $application): array
+    {
         $factors = $this->factors();
         $licence = $this->licenceCost($application);
 
@@ -186,7 +232,7 @@ class CostModelService
         }
 
         $counts = [];
-        foreach (\App\Models\Ea\EaInterface::query()->get(['source_app_id', 'target_app_id']) as $row) {
+        foreach (EaInterface::query()->get(['source_app_id', 'target_app_id']) as $row) {
             foreach ([$row->source_app_id, $row->target_app_id] as $id) {
                 if ($id) {
                     $counts[(int) $id] = ($counts[(int) $id] ?? 0) + 1;
@@ -399,7 +445,7 @@ class CostModelService
      */
     public function costPerCapability(): array
     {
-        $hierarchy = new HierarchyIndex();
+        $hierarchy = new HierarchyIndex;
         $capabilities = Capability::query()->get(['id', 'code', 'name', 'level', 'parent_id', 'criticality']);
         $links = ApplicationCapability::query()->get(['application_id', 'capability_id', 'allocation_weight']);
 

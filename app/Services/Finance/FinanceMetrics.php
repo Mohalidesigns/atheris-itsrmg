@@ -6,6 +6,8 @@ use App\Models\Approvals\ApprovalRequest;
 use App\Models\Finance\Actual;
 use App\Models\Finance\Benefit;
 use App\Models\Finance\Category;
+use App\Models\Finance\CloudAccount;
+use App\Models\Finance\CloudAnomaly;
 use App\Models\Finance\Contract;
 use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\FiscalYear;
@@ -25,7 +27,7 @@ class FinanceMetrics
 {
     /** Keys of boardFigures() that are money or derived from money; nulled for a viewer without `view it-finance-amounts` (plan P4-11). */
     public const BOARD_MONEY_KEYS = ['budget_total', 'budget_ytd', 'actual_ytd', 'variance_pct', 'forecast_fy', 'forecast_variance_pct', 'committed', 'available',
-        'unbudgeted_amount', 'capex_opex_split', 'rgt_split', 'actual_unallocated'];
+        'unbudgeted_amount', 'capex_opex_split', 'rgt_split', 'actual_unallocated', 'cloud_mtd'];
 
     public function __construct(
         private readonly MonitoringService $monitoring,
@@ -58,6 +60,11 @@ class FinanceMetrics
         ] + $this->contractFigures($orgId, $costCentreIds);
         $inv = $this->portfolio->summary($orgId, $costCentreIds);
         $out['investments_by_stage'] = $inv['by_stage'];
+        if (CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->exists()) {
+            $out['cloud_mtd'] = app(CloudCostService::class)->mtd($orgId, $costCentreIds)['mtd'];
+            $out['cloud_anomalies_open'] = CloudAnomaly::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', CloudAnomaly::OPEN)
+                ->when($costCentreIds !== null, fn ($q) => $q->whereIn('cloud_account_id', CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('default_cost_centre_id', $costCentreIds ?: [0])->select('id')))->count();
+        }
         $out['benefits_realised_pct'] = $inv['benefits_realised_pct'];
         if (! $fy) {
             return $out;

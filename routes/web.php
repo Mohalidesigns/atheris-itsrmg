@@ -35,6 +35,7 @@ use App\Http\Controllers\EaController;
 use App\Http\Controllers\EvidenceController;
 use App\Http\Controllers\Finance\AccrualController;
 use App\Http\Controllers\Finance\ActualsController;
+use App\Http\Controllers\Finance\AllocationController;
 use App\Http\Controllers\Finance\BenefitController;
 use App\Http\Controllers\Finance\BudgetController;
 use App\Http\Controllers\Finance\BudgetCycleController;
@@ -44,6 +45,13 @@ use App\Http\Controllers\Finance\BudgetTargetController;
 use App\Http\Controllers\Finance\BudgetTransferController;
 use App\Http\Controllers\Finance\BudgetWorkbookController;
 use App\Http\Controllers\Finance\BusinessCaseController;
+use App\Http\Controllers\Finance\CapitalisationController;
+use App\Http\Controllers\Finance\ChargebackController;
+use App\Http\Controllers\Finance\CloudAccountController;
+use App\Http\Controllers\Finance\CloudAnomalyController;
+use App\Http\Controllers\Finance\CloudCostController;
+use App\Http\Controllers\Finance\CloudImportController;
+use App\Http\Controllers\Finance\CloudTagRuleController;
 use App\Http\Controllers\Finance\ContractController;
 use App\Http\Controllers\Finance\ContractRelationsController;
 use App\Http\Controllers\Finance\DoaBandController;
@@ -66,8 +74,10 @@ use App\Http\Controllers\Finance\PortfolioController;
 use App\Http\Controllers\Finance\PurchaseOrderController;
 use App\Http\Controllers\Finance\RecurringExpenseController;
 use App\Http\Controllers\Finance\RenewalController;
+use App\Http\Controllers\Finance\ShowbackController;
 use App\Http\Controllers\Finance\StageGateController;
 use App\Http\Controllers\Finance\SupplementaryRequestController;
+use App\Http\Controllers\Finance\TcoController;
 use App\Http\Controllers\Finance\TerminationController;
 use App\Http\Controllers\Finance\ValueReviewController;
 use App\Http\Controllers\GapController;
@@ -1017,6 +1027,58 @@ Route::middleware('auth')->group(function () {
         Route::middleware('permission:approve it-finance-investments')->group(function () {
             Route::post('/stage-gates/{stageGate}/approve', [StageGateController::class, 'approve'])->whereNumber('stageGate')->name('stage-gates.approve');
             Route::post('/stage-gates/{stageGate}/reject', [StageGateController::class, 'reject'])->whereNumber('stageGate')->name('stage-gates.reject');
+        });
+
+        // P6: cloud cost / FinOps, allocation and showback, capitalisation, application TCO (ATH-FIN-001 §3.3, §9)
+        Route::get('/cloud/accounts', [CloudAccountController::class, 'index'])->name('cloud.accounts.index');
+        Route::get('/cloud/costs', [CloudCostController::class, 'index'])->name('cloud.costs');
+        Route::get('/cloud/anomalies', [CloudAnomalyController::class, 'index'])->name('cloud.anomalies.index');
+        Route::get('/allocations', [AllocationController::class, 'index'])->name('allocations.index');
+        Route::get('/monitor/showback', [ShowbackController::class, 'index'])->name('monitor.showback');
+        Route::get('/monitor/tco', [TcoController::class, 'index'])->name('monitor.tco');
+        Route::get('/monitor/tco/detail', [TcoController::class, 'detail'])->name('monitor.tco.detail');
+        Route::get('/capitalisations', [CapitalisationController::class, 'index'])->name('capitalisations.index');
+        Route::get('/capitalisations/{capitalisation}', [CapitalisationController::class, 'show'])->whereNumber('capitalisation')->name('capitalisations.show');
+        Route::middleware('permission:export it-finance')->group(function () {
+            Route::get('/monitor/showback/export', [ShowbackController::class, 'export'])->name('monitor.showback.export');
+        });
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/chargeback-runs', [ChargebackController::class, 'store'])->name('chargeback.store');
+            Route::get('/chargeback-runs/{chargebackRun}/download', [ChargebackController::class, 'download'])->whereNumber('chargebackRun')->name('chargeback.download');
+        });
+        Route::post('/chargeback-runs/{chargebackRun}/void', [ChargebackController::class, 'void'])->whereNumber('chargebackRun')->middleware('permission:close it-finance-periods')->name('chargeback.void');
+        Route::middleware('permission:import it-finance')->group(function () {
+            Route::post('/cloud/accounts', [CloudAccountController::class, 'store'])->name('cloud.accounts.store');
+            Route::put('/cloud/accounts/{cloudAccount}', [CloudAccountController::class, 'update'])->whereNumber('cloudAccount')->name('cloud.accounts.update');
+            Route::delete('/cloud/accounts/{cloudAccount}', [CloudAccountController::class, 'destroy'])->whereNumber('cloudAccount')->name('cloud.accounts.destroy');
+            Route::post('/cloud/accounts/{cloudAccount}/reallocate', [CloudAccountController::class, 'reallocate'])->whereNumber('cloudAccount')->name('cloud.accounts.reallocate');
+            Route::post('/cloud/import', [CloudImportController::class, 'store'])->name('cloud.import');
+            Route::post('/cloud/tag-rules', [CloudTagRuleController::class, 'store'])->name('cloud.tag-rules.store');
+            Route::put('/cloud/tag-rules/{cloudTagRule}', [CloudTagRuleController::class, 'update'])->whereNumber('cloudTagRule')->name('cloud.tag-rules.update');
+            Route::delete('/cloud/tag-rules/{cloudTagRule}', [CloudTagRuleController::class, 'destroy'])->whereNumber('cloudTagRule')->name('cloud.tag-rules.destroy');
+            Route::post('/cloud/untagged/assign', [CloudCostController::class, 'assignUntagged'])->name('cloud.untagged.assign');
+        });
+        Route::middleware('permission:edit it-finance')->group(function () {
+            foreach (['acknowledge', 'resolve', 'dismiss'] as $action) {
+                Route::post("/cloud/anomalies/{cloudAnomaly}/{$action}", [CloudAnomalyController::class, $action])->whereNumber('cloudAnomaly')->name("cloud.anomalies.{$action}");
+            }
+            Route::post('/budgets/lines/classify', [TcoController::class, 'classify'])->name('budgets.lines.classify');
+            Route::post('/capitalisations', [CapitalisationController::class, 'store'])->name('capitalisations.store');
+            Route::put('/capitalisations/{capitalisation}', [CapitalisationController::class, 'update'])->whereNumber('capitalisation')->name('capitalisations.update');
+            foreach (['submit', 'withdraw', 'cancel'] as $action) {
+                Route::post("/capitalisations/{capitalisation}/{$action}", [CapitalisationController::class, $action])->whereNumber('capitalisation')->name("capitalisations.{$action}");
+            }
+        });
+        Route::middleware('permission:manage it-finance-settings')->group(function () {
+            Route::post('/allocations', [AllocationController::class, 'store'])->name('allocations.store');
+            Route::post('/allocations/run', [AllocationController::class, 'run'])->name('allocations.run');
+            Route::put('/allocations/{allocation}', [AllocationController::class, 'update'])->whereNumber('allocation')->name('allocations.update');
+            Route::post('/allocations/{allocation}/end', [AllocationController::class, 'end'])->whereNumber('allocation')->name('allocations.end');
+            Route::delete('/allocations/{allocation}', [AllocationController::class, 'destroy'])->whereNumber('allocation')->name('allocations.destroy');
+        });
+        Route::middleware('permission:approve it-finance')->group(function () {
+            Route::post('/capitalisations/{capitalisation}/approve', [CapitalisationController::class, 'approve'])->whereNumber('capitalisation')->name('capitalisations.approve');
+            Route::post('/capitalisations/{capitalisation}/reject', [CapitalisationController::class, 'reject'])->whereNumber('capitalisation')->name('capitalisations.reject');
         });
     });
 

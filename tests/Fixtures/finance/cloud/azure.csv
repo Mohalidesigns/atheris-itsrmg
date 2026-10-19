@@ -1,0 +1,6 @@
+SubscriptionId,Date,ServiceName,ResourceId,ResourceLocation,CostInBillingCurrency,BillingCurrencyCode,Tags
+11111111-2222-3333-4444-555555555555,08/03/2026,Virtual Machines,/subscriptions/1111/vm-analytics,westeurope,12.500000,USD,"""Application"": ""Finacle"", ""CostCentre"": ""KHB-IT-DC"""
+11111111-2222-3333-4444-555555555555,08/03/2026,Storage,/subscriptions/1111/stg-data,westeurope,3.250000,USD,"""Service"": ""internet-banking"""
+11111111-2222-3333-4444-555555555555,08/03/2026,Azure Databricks,/subscriptions/1111/dbx-1,westeurope,20.000000,USD,
+11111111-2222-3333-4444-555555555555,08/04/2026,Virtual Machines,/subscriptions/1111/vm-analytics,westeurope,12.750000,USD,"""Application"": ""Finacle"", ""CostCentre"": ""KHB-IT-DC"""
+11111111-2222-3333-4444-555555555555,2026-08-04,Storage,/subscriptions/1111/stg-data,westeurope,3.250000,USD,"""Service"": ""internet-banking"""

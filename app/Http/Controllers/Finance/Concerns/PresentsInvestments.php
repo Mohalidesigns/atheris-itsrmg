@@ -7,6 +7,7 @@ use App\Models\Finance\BusinessCase;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\Investment;
+use App\Models\Finance\InvestmentChange;
 use App\Models\Finance\InvestmentLink;
 use App\Models\Finance\StageGate;
 use App\Models\Finance\ValueReview;
@@ -14,6 +15,8 @@ use App\Models\User;
 use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\FinanceSettings;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Spatie\Activitylog\Models\Activity;
 
@@ -88,8 +91,53 @@ trait PresentsInvestments
             'stages' => $this->opts(Investment::STAGES, ['business_case' => 'Business case', 'in_delivery' => 'In delivery', 'benefits_tracking' => 'Benefits tracking']),
             'statuses' => $this->opts(Investment::STATUSES), 'criteria' => $this->opts(Investment::CRITERIA, ['delivery_risk' => 'Delivery risk (5 = high risk)']),
             'benefitTypes' => $this->opts(Benefit::TYPES), 'units' => $this->opts(Benefit::UNITS), 'reviewTypes' => $this->opts(ValueReview::TYPES, ValueReview::TYPE_LABELS),
+            'reassignFields' => $this->opts(InvestmentChange::REASSIGN_FIELDS, ['sponsor_id' => 'Sponsor', 'manager_id' => 'Manager', 'cost_centre_id' => 'Cost centre', 'rgt' => 'Run / grow / transform', 'is_regulatory' => 'Regulatory']),
+            'capitalisationStandards' => $this->opts(Investment::CAPITALISATION_STANDARDS, ['ias_38' => 'IAS 38 intangible', 'ias_16' => 'IAS 16 PPE']),
             'linkTypes' => $this->opts(array_keys(InvestmentLink::TYPES), ['ea_application' => 'EA application', 'business_service' => 'Business service']),
         ];
+    }
+
+    /**
+     * Reassignment diff rows with names instead of ids: [{field,label,from,to}].
+     *
+     * @return list<array{field:string,label:string,from:?string,to:?string}>
+     */
+    protected function fieldChangeRows(?array $fieldChanges): array
+    {
+        if (! $fieldChanges) {
+            return [];
+        }
+        $label = ['sponsor_id' => 'Sponsor', 'manager_id' => 'Manager', 'cost_centre_id' => 'Cost centre', 'rgt' => 'Run / grow / transform', 'is_regulatory' => 'Regulatory'];
+        $users = User::query()->whereIn('id', collect($fieldChanges)->only(['sponsor_id', 'manager_id'])->flatMap(fn ($f) => [$f['from'] ?? null, $f['to'] ?? null])->filter()->all())->pluck('name', 'id');
+        $ccs = CostCentre::withoutGlobalScopes()->whereIn('id', collect($fieldChanges['cost_centre_id'] ?? [])->filter()->all())->pluck('code', 'id');
+        $show = fn (string $k, $v) => match (true) {
+            $v === null => null,
+            in_array($k, ['sponsor_id', 'manager_id'], true) => $users[$v] ?? "#{$v}",
+            $k === 'cost_centre_id' => $ccs[$v] ?? "#{$v}",
+            $k === 'is_regulatory' => $v ? 'Yes' : 'No',
+            default => ucfirst((string) $v),
+        };
+
+        return collect($fieldChanges)->map(fn ($f, $k) => ['field' => $k, 'label' => $label[$k] ?? $k, 'from' => $show($k, $f['from'] ?? null), 'to' => $show($k, $f['to'] ?? null)])->values()->all();
+    }
+
+    /**
+     * Capitalisations of the investment (Task A model); empty until it exists.
+     *
+     * @return list<array<string,mixed>>
+     */
+    protected function capitalisationRows(Investment $i): array
+    {
+        $class = 'App\\Models\\Finance\\Capitalisation';
+        if (! class_exists($class) || ! Schema::hasTable('fin_capitalisations')) {
+            return [];
+        }
+
+        return $class::withoutGlobalScopes()->where('investment_id', $i->id)->orderByDesc('id')->get()->map(fn ($c) => [
+            'id' => $c->id, 'capitalisation_code' => $c->capitalisation_code, 'status' => $c->status, 'amount' => (string) $c->amount,
+            'available_for_use_on' => $c->available_for_use_on?->toDateString(),
+            'href' => Route::has('finance.capitalisations.show') ? route('finance.capitalisations.show', $c->id) : null,
+        ])->values()->all();
     }
 
     protected function userMini(?User $u): ?array
@@ -130,6 +178,7 @@ trait PresentsInvestments
         return [
             'id' => $i->id, 'investment_code' => $i->investment_code, 'title' => $i->title, 'type' => $i->type, 'rgt' => $i->rgt, 'driver' => $i->driver, 'stage' => $i->stage,
             'status' => $i->status, 'health' => $fin['health'] ?? null, 'is_regulatory' => (bool) $i->is_regulatory,
+            'is_capitalisable' => (bool) $i->is_capitalisable, 'capitalisation_standard' => $i->capitalisation_standard,
             'sponsor' => $this->userMini($i->sponsor), 'manager' => $this->userMini($i->manager),
             'cost_centre' => $i->costCentre ? ['id' => $i->costCentre->id, 'code' => $i->costCentre->code, 'name' => $i->costCentre->name] : null,
             'fiscal_year' => $i->fiscalYear ? ['id' => $i->fiscalYear->id, 'year_label' => $i->fiscalYear->year_label] : null,

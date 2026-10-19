@@ -21,7 +21,7 @@ class InvestmentChangeController extends Controller
         $c = $this->changes->request($investment, $request->validated(), $request->user());
 
         return redirect()->route('finance.investments.show', ['investment' => $investment->id, 'tab' => 'changes'])
-            ->with('success', $c->requires_approval ? "Change {$c->change_code} is beyond tolerance and awaits approval." : "Change {$c->change_code} applied within tolerance.");
+            ->with('success', $c->kind === 'reassign' ? "Reassignment {$c->change_code} awaits approval." : ($c->requires_approval ? "Change {$c->change_code} is beyond tolerance and awaits approval." : "Change {$c->change_code} applied within tolerance."));
     }
 
     public function withdraw(Request $request, InvestmentChange $investmentChange)

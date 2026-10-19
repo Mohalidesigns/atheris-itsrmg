@@ -24,7 +24,7 @@ class InvestmentFormRequest extends FormRequest
             'legal_entity_id' => ['nullable', 'integer'], 'fiscal_year_id' => ['nullable', 'integer'],
             'starts_on' => ['nullable', 'date'], 'planned_ends_on' => ['nullable', 'date'],
             'description' => ['nullable', 'string', 'max:10000'], 'strategic_objective' => ['nullable', 'string', 'max:2000'],
-            'is_regulatory' => ['sometimes', 'boolean'], 'regulatory_reference' => ['nullable', 'string', 'max:200'],
+            'is_regulatory' => ['sometimes', 'boolean'], 'is_capitalisable' => ['sometimes', 'boolean'], 'capitalisation_standard' => ['nullable', Rule::in(Investment::CAPITALISATION_STANDARDS)], 'regulatory_reference' => ['nullable', 'string', 'max:200'],
             'cost_tolerance_pct' => ['nullable', 'numeric', 'between:0,100'], 'external_reference' => ['nullable', 'string', 'max:100'],
         ];
     }

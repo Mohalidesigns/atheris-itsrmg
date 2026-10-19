@@ -27,7 +27,7 @@ use Inertia\Inertia;
 /** Finance Settings page and the four settings sections (ATH-FIN-001 §3.1, §9). */
 class FinanceSettingsController extends Controller
 {
-    public const TABS = ['general', 'calendar', 'cost-centres', 'categories', 'gl-accounts', 'currencies', 'taxes', 'drivers', 'doa', 'variance', 'renewal', 'investments'];
+    public const TABS = ['general', 'calendar', 'cost-centres', 'categories', 'gl-accounts', 'currencies', 'taxes', 'drivers', 'doa', 'variance', 'renewal', 'investments', 'finops'];
 
     public function __construct(private readonly FinanceSettings $settings, private readonly CurrencyService $currency, private readonly DoaBandService $doa) {}
 
@@ -85,6 +85,14 @@ class FinanceSettingsController extends Controller
                 'value_review_lead_days' => $setting->value_review_lead_days,
                 'defaults' => ['discount_rate_pct' => (string) config('finance.investments.default_discount_rate_pct'), 'cost_tolerance_pct' => (string) config('finance.investments.default_cost_tolerance_pct'),
                     'value_review_lead_days' => (int) config('finance.investments.value_review_lead_days'), 'weights' => (array) config('finance.settings_defaults.investment_score_weights')],
+            ],
+            'finopsPolicy' => [
+                'cloud_anomaly_pct' => $setting->cloud_anomaly_pct === null ? null : (string) $setting->cloud_anomaly_pct,
+                'cloud_anomaly_abs_floor' => $setting->cloud_anomaly_abs_floor === null ? null : (string) $setting->cloud_anomaly_abs_floor,
+                'showback_units' => $this->settings->showbackUnits($orgId), 'chargeback_debit_gl' => $setting->chargeback_debit_gl, 'chargeback_credit_gl' => $setting->chargeback_credit_gl,
+                'showback_enabled' => (bool) $setting->showback_enabled,
+                'defaults' => ['cloud_anomaly_pct' => (string) config('finance.cloud.anomaly.default_pct'), 'cloud_anomaly_abs_floor' => (string) config('finance.cloud.anomaly.default_abs_floor'),
+                    'chargeback_debit_gl' => (string) config('finance.showback.chargeback_debit_gl'), 'chargeback_credit_gl' => (string) config('finance.showback.chargeback_credit_gl')],
             ],
             'fiscalYears' => $fiscalYears,
             'costCentres' => $costCentres,
@@ -159,6 +167,16 @@ class FinanceSettingsController extends Controller
                 'investment_discount_rate_pct' => ['nullable', 'numeric', 'between:0,100'],
                 'investment_cost_tolerance_pct' => ['nullable', 'numeric', 'between:0,100'],
                 'value_review_lead_days' => ['nullable', 'integer', 'between:0,365'],
+            ],
+            'finops' => [
+                'cloud_anomaly_pct' => ['nullable', 'numeric', 'between:0.01,1000'],
+                'cloud_anomaly_abs_floor' => ['nullable', 'numeric', 'min:0', 'max:9999999999999999'],
+                'showback_units' => ['present', 'array', 'max:50'],
+                'showback_units.*.code' => ['required', 'string', 'regex:/^[A-Za-z0-9_-]{2,16}$/'],
+                'showback_units.*.name' => ['required', 'string', 'max:120'],
+                'showback_units.*.erp_cost_centre_code' => ['nullable', 'string', 'max:32'],
+                'chargeback_debit_gl' => ['nullable', 'string', 'max:32'],
+                'chargeback_credit_gl' => ['nullable', 'string', 'max:32'],
             ],
             'renewal' => [
                 'renewal_lead_days' => ['required', 'integer', 'between:1,730'],

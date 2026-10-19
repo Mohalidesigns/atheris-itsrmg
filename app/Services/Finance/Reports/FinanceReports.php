@@ -4,13 +4,17 @@ namespace App\Services\Finance\Reports;
 
 use App\Models\User;
 use App\Policies\Finance\FinancePolicy;
+use App\Services\Finance\Reports\Definitions\ApplicationTcoReport;
 use App\Services\Finance\Reports\Definitions\BenefitsRegisterReport;
 use App\Services\Finance\Reports\Definitions\BudgetBookReport;
 use App\Services\Finance\Reports\Definitions\BvaReport;
+use App\Services\Finance\Reports\Definitions\CapitalisationRegisterReport;
+use App\Services\Finance\Reports\Definitions\CloudSpendReport;
 use App\Services\Finance\Reports\Definitions\CommitmentsReport;
 use App\Services\Finance\Reports\Definitions\ContractRegisterReport;
 use App\Services\Finance\Reports\Definitions\InvestmentPortfolioReport;
 use App\Services\Finance\Reports\Definitions\InvoiceAgeingReport;
+use App\Services\Finance\Reports\Definitions\ShowbackStatementReport;
 use App\Services\Finance\Reports\Definitions\UnbudgetedSpendReport;
 use App\Services\Finance\Reports\Definitions\VarianceCommentaryReport;
 use App\Services\Finance\Reports\Definitions\VendorSpendReport;
@@ -24,6 +28,8 @@ class FinanceReports
         'invoice_ageing' => InvoiceAgeingReport::class, 'unbudgeted' => UnbudgetedSpendReport::class,
         'contract_register' => ContractRegisterReport::class, 'vendor_spend' => VendorSpendReport::class,
         'investment_portfolio' => InvestmentPortfolioReport::class, 'benefits_register' => BenefitsRegisterReport::class,
+        'cloud_spend' => CloudSpendReport::class, 'showback_statement' => ShowbackStatementReport::class,
+        'capitalisation_register' => CapitalisationRegisterReport::class, 'application_tco' => ApplicationTcoReport::class,
     ];
 
     /** @return array<string, class-string<FinanceReport>> the definitions that exist (others land with later work packages) */

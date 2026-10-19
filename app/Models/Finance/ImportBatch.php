@@ -20,7 +20,7 @@ class ImportBatch extends Model
 
     protected $guarded = [];
 
-    protected $casts = ['report' => 'array', 'completed_at' => 'datetime'];
+    protected $casts = ['report' => 'array', 'completed_at' => 'datetime', 'date_from' => 'date', 'date_to' => 'date'];
 
     public function importedBy(): BelongsTo
     {
@@ -30,6 +30,16 @@ class ImportBatch extends Model
     public function mapping(): BelongsTo
     {
         return $this->belongsTo(ImportMapping::class, 'mapping_id');
+    }
+
+    public function cloudAccount(): BelongsTo
+    {
+        return $this->belongsTo(CloudAccount::class, 'cloud_account_id');
+    }
+
+    public function cloudLines(): HasMany
+    {
+        return $this->hasMany(CloudCostLine::class, 'import_batch_id');
     }
 
     public function actuals(): HasMany

@@ -14,7 +14,7 @@ class Setting extends Model
 
     public const EAC_METHODS = ['remaining_budget', 'run_rate'];
 
-    public const SECTIONS = ['general', 'doa', 'variance', 'renewal', 'investments'];
+    public const SECTIONS = ['general', 'doa', 'variance', 'renewal', 'investments', 'finops'];
 
     protected $table = 'fin_settings';
 
@@ -35,7 +35,10 @@ class Setting extends Model
         'investment_discount_rate_pct' => 'decimal:3',
         'investment_cost_tolerance_pct' => 'decimal:2',
         'value_review_lead_days' => 'integer',
-        'showback_enabled' => 'boolean',
+        'showback_units' => 'array',
+        'cloud_anomaly_pct' => 'decimal:2',
+        'cloud_anomaly_abs_floor' => 'decimal:2',
+        'showback_enabled' => 'boolean', 'capitalisation_vat_recoverable' => 'boolean',
         'fiscal_year_start_month' => 'integer',
         'renewal_lead_days' => 'integer',
         'digest_hour' => 'integer',

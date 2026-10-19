@@ -5,6 +5,8 @@ namespace App\Services\Finance;
 use App\Events\Finance\PeriodCloseBlocked;
 use App\Models\Finance\Accrual;
 use App\Models\Finance\Actual;
+use App\Models\Finance\CloudAccount;
+use App\Models\Finance\CloudCostLine;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
@@ -107,7 +109,18 @@ class PeriodCloseService
             $vs === 'pass' ? 'No unexplained variance.' : "{$red} red and {$amber} amber variance(s) await an explanation.",
             route('finance.monitor.variances', ['fiscal_year_id' => $p->fiscal_year_id, 'period_id' => $p->id, 'needs_explanation' => 1], false));
 
-        $items[] = $item('cloud_imported', 'Cloud costs are imported', 'n_a', 0, 'Cloud cost import arrives with a later phase.');
+        $accounts = CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_active', true)->whereNull('deleted_at')->orderBy('id')->get(['id', 'name']);
+        $cloudHref = route('finance.cloud.costs', ['to' => $p->ends_on->toDateString()], false);
+        if ($accounts->isEmpty()) {
+            $items[] = $item('cloud_imported', 'Cloud costs are imported', 'n_a', 0, 'No active cloud account.', $cloudHref);
+        } else {
+            $covered = CloudCostLine::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('cloud_account_id', $accounts->pluck('id'))
+                ->whereDate('usage_date', '>=', $p->ends_on->toDateString())->distinct()->pluck('cloud_account_id')->all();
+            $missing = $accounts->reject(fn ($a) => in_array($a->id, $covered, true));
+            $status = $missing->isEmpty() ? 'pass' : (config('finance.cloud.close_requires_import') ? 'fail' : 'warn');
+            $items[] = $item('cloud_imported', 'Cloud costs are imported', $status, $missing->count(),
+                $missing->isEmpty() ? 'Every active cloud account has usage through the period end.' : 'No usage on or after '.$p->ends_on->toDateString().' for: '.$missing->pluck('name')->implode(', ').'.', $cloudHref);
+        }
 
         $blockers = [];
         foreach ($items as $i) {
@@ -139,6 +152,7 @@ class PeriodCloseService
         }
 
         return DB::transaction(function () use ($p, $by, $list) {
+            app(AllocationService::class)->freeze($p, $by);
             $closed = $this->calendar->closePeriod($p, $by);
             $c = PeriodClose::withoutGlobalScopes()->create([
                 'organization_id' => $p->organization_id, 'created_by_id' => $by->id, 'fiscal_year_id' => $p->fiscal_year_id, 'period_id' => $p->id,

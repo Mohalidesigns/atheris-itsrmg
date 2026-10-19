@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Finance;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Finance\Concerns\PresentsMonitoring;
 use App\Http\Requests\Finance\MonitorFilterRequest;
+use App\Models\Finance\CloudAccount;
 use App\Models\Finance\Contract;
 use App\Models\Finance\Period;
 use App\Policies\Finance\FinancePolicy;
+use App\Services\Finance\CloudCostService;
 use App\Services\Finance\FinanceClock;
 use App\Services\Finance\FinanceMetrics;
 use App\Services\Finance\MonitoringService;
@@ -37,7 +39,14 @@ class FinanceDashboardController extends Controller
         $renewals = Contract::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->dueWithin(90)
             ->when($ids !== null, fn ($q) => $q->whereIn('cost_centre_id', $ids ?: [0]))->with('vendor:id,name')->orderByRaw('coalesce(notice_deadline_on, ends_on)')->limit(10)->get();
 
+        $cloudTrend = [];
+        $canAmounts = $user->can('view it-finance-amounts');
+        if ($canAmounts && CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->exists()) {
+            $cloudTrend = app(CloudCostService::class)->mtd($orgId, $ids)['trend'];
+        }
+
         return $this->renderMonitoring('Finance/Dashboard', [
+            'cloudTrend' => $cloudTrend, 'cloudTrendMasked' => ! $canAmounts,
             'fiscalYears' => $this->fiscalYearsMini($orgId),
             'selectedFiscalYear' => $fy ? ['id' => $fy->id, 'year_label' => $fy->year_label, 'starts_on' => $fy->starts_on->toDateString(), 'ends_on' => $fy->ends_on->toDateString()] : null,
             'asOfPeriod' => $asOf ? ['id' => $asOf->id, 'name' => $asOf->name, 'sequence' => $asOf->sequence] : null,

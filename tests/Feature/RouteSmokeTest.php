@@ -5,12 +5,15 @@ namespace Tests\Feature;
 use App\Http\Controllers\Finance\BudgetController;
 use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalWorkflow;
+use App\Models\Asset;
 use App\Models\BoardPackRun;
 use App\Models\BoardPackTemplate;
 use App\Models\Ea\BusinessService;
 use App\Models\Ea\EaApplication;
 use App\Models\Finance\Accrual;
 use App\Models\Finance\Actual;
+use App\Models\Finance\Allocation;
+use App\Models\Finance\AllocationRun;
 use App\Models\Finance\Benefit;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetAdjustment;
@@ -20,6 +23,12 @@ use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetScenario;
 use App\Models\Finance\BudgetTarget;
 use App\Models\Finance\BudgetTransfer;
+use App\Models\Finance\Capitalisation;
+use App\Models\Finance\ChargebackRun;
+use App\Models\Finance\CloudAccount;
+use App\Models\Finance\CloudAnomaly;
+use App\Models\Finance\CloudCostLine;
+use App\Models\Finance\CloudTagRule;
 use App\Models\Finance\Contract;
 use App\Models\Finance\ContractDocument;
 use App\Models\Finance\ContractEvent;
@@ -55,10 +64,12 @@ use App\Policies\Finance\FinancePolicy;
 use App\Services\Approvals\ApprovalEngine;
 use App\Services\Finance\BudgetCycleService;
 use App\Services\Finance\BudgetService;
+use App\Services\Finance\CapitalisationService;
 use App\Services\Finance\FinanceCalendarService;
 use App\Services\Finance\FinanceClock;
 use App\Services\Finance\MonitoringService;
 use App\Services\Finance\Reports\FinanceReports;
+use App\Services\Finance\ShowbackService;
 use App\Services\Finance\StageGateService;
 use Carbon\Carbon;
 use Illuminate\Routing\Route as RouteDefinition;
@@ -134,7 +145,7 @@ class RouteSmokeTest extends TestCase
         }
 
         $urls = collect(Route::getRoutes()->getRoutes())
-            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && ! in_array($r->getName(), ['finance.calendar.ics', 'finance.expenses.availability'], true) && in_array('GET', $r->methods(), true) && ! str_contains($r->uri(), '{'))
+            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && ! in_array($r->getName(), ['finance.calendar.ics', 'finance.expenses.availability', 'finance.monitor.tco.detail', 'finance.monitor.showback.export'], true) && in_array('GET', $r->methods(), true) && ! str_contains($r->uri(), '{'))
             ->map(fn (RouteDefinition $r) => route($r->getName()))->values()->all();
         $this->assertNotEmpty($urls);
 
@@ -268,7 +279,7 @@ class RouteSmokeTest extends TestCase
                     $this->assertGreaterThan(0, $deciders->count(), "{$slug}: nobody can decide \"{$step->name}\" of {$request->subject_label}");
                 }
             }
-            $this->assertSame(9, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
+            $this->assertSame(10, ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $org)->where('process', 'like', 'finance.%')->count());
 
             // DoA versions: the bank's own bands are active and each step is audited
             $active = DoaBandVersion::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'active')->firstOrFail();
@@ -594,7 +605,7 @@ class RouteSmokeTest extends TestCase
             $this->assertSame(2, collect($forecast['lines'])->filter(fn ($l) => $l['manual'] !== null)->count(), "{$slug} two manual forecasts");
             $this->assertNotEmpty($forecast['history'], "{$slug} forecast history from the close snapshots");
             $this->get(route('finance.monitor.period-close'))->assertOk();
-            $this->get(route('finance.reports.index', ['report' => 'bva']))->assertOk()->assertInertia(fn (Assert $p) => $p->has('reports', 10)->where('schedules', fn ($s) => count($s) >= 2));
+            $this->get(route('finance.reports.index', ['report' => 'bva']))->assertOk()->assertInertia(fn (Assert $p) => $p->has('reports', 14)->where('schedules', fn ($s) => count($s) >= 2));
             $first = Budget::withoutGlobalScopes()->where('organization_id', $org)->where('fiscal_year_id', $fy->id)->where('status', 'baseline')->first();
             $line = BudgetLine::withoutGlobalScopes()->where('budget_id', $first->id)->orderBy('line_no')->first();
             $this->getJson(route('finance.monitor.transactions', $line))->assertOk()->assertJsonStructure(['line', 'actuals', 'commitments', 'totals']);
@@ -747,5 +758,128 @@ class RouteSmokeTest extends TestCase
         $this->actingAs($acme);
         $this->get(route('finance.investments.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('investments.data', []));
         $this->get(route('finance.portfolio'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('ranking', []));
+    }
+
+    /**
+     * IT Financial Management P6 (plan §5.2): the seeded FinOps, showback and capitalisation estate of each bank, and the pages that show it.
+     */
+    public function test_finance_finops_estate_is_seeded_and_renders_for_every_demo_tenant(): void
+    {
+        if (env('SMOKE') !== '1') {
+            $this->markTestSkipped('Set SMOKE=1 and use a seeded database to run the route smoke test.');
+        }
+
+        $engine = app(ApprovalEngine::class);
+        $banks = [
+            'kano-heritage-bank' => ['admin' => 'admin@kanoheritage.ng', 'spike' => 2, 'subject' => 'business_service', 'prefix' => 'KHB'],
+            'first-bank-nigeria' => ['admin' => 'admin@firstbanknigeria.ng', 'spike' => 3, 'subject' => 'ea_application', 'prefix' => 'FBN'],
+        ];
+        foreach ($banks as $slug => $b) {
+            $admin = User::where('email', $b['admin'])->firstOrFail();
+            $org = (int) $admin->organization_id;
+            $domain = substr($b['admin'], strpos($b['admin'], '@') + 1);
+            $finance = User::where('email', "finance@{$domain}")->firstOrFail();
+            $this->actingAs($admin);
+            $today = FinanceClock::today();
+            $fy = FiscalYear::withoutGlobalScopes()->where('organization_id', $org)->where('is_current', true)->firstOrFail();
+
+            // cloud: two accounts with about 90 days of cost, an untagged queue, rules, and a spike that was detected
+            $accounts = CloudAccount::withoutGlobalScopes()->where('organization_id', $org)->get();
+            $this->assertCount(2, $accounts, "{$slug} cloud accounts");
+            foreach ($accounts as $a) {
+                $days = CloudCostLine::withoutGlobalScopes()->where('cloud_account_id', $a->id)->distinct()->count(DB::raw('usage_date'));
+                $this->assertGreaterThanOrEqual(85, $days, "{$slug} {$a->name} days of cost");
+                $this->assertNotNull($a->owner_id, "{$slug} {$a->name} owner");
+                $this->assertTrue(User::find($a->owner_id)->can('view it-finance'), "{$slug} {$a->name} owner can view it-finance");
+            }
+            $this->assertTrue(CloudCostLine::withoutGlobalScopes()->where('organization_id', $org)->where('is_untagged', true)->exists(), "{$slug} untagged queue");
+            $this->assertGreaterThan(0, CloudTagRule::withoutGlobalScopes()->where('organization_id', $org)->count(), "{$slug} tag rules");
+            $spike = CloudAnomaly::withoutGlobalScopes()->where('organization_id', $org)->whereIn('status', ['open', 'acknowledged'])->whereDate('detected_on', $today->subDays($b['spike'])->toDateString())->exists();
+            $this->assertTrue($spike, "{$slug} an open anomaly on the spike day");
+            $this->assertTrue(CloudAnomaly::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'resolved')->exists(), "{$slug} a resolved anomaly");
+            $this->assertTrue(CloudAnomaly::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'false_positive')->exists(), "{$slug} a dismissed anomaly");
+            $cloudBatch = ImportBatch::withoutGlobalScopes()->where('organization_id', $org)->where('type', 'cloud')->first();
+            $this->assertNotNull($cloudBatch, "{$slug} a cloud import batch");
+            $this->assertSame(2, (int) $cloudBatch->rejected_count, "{$slug} cloud batch rejected rows");
+
+            // KRI-FIN-CLD: category finance, platform source, higher is worse, measured at least once to a value of 1 or more
+            $kri = Kri::withoutGlobalScopes()->where('organization_id', $org)->where('code', 'KRI-FIN-CLD')->firstOrFail();
+            $this->assertSame('finance', $kri->category);
+            $this->assertSame('platform', $kri->source);
+            $this->assertSame('higher_worse', $kri->direction);
+            $this->assertGreaterThanOrEqual(1.0, (float) $kri->readings()->latest('id')->value('value'), "{$slug} KRI-FIN-CLD value");
+
+            // allocation: at least 8 rules using all three methods, results for every closed period, a reconciling statement
+            $rules = Allocation::withoutGlobalScopes()->where('organization_id', $org)->get();
+            $this->assertGreaterThanOrEqual(8, $rules->count(), "{$slug} allocation rules");
+            $this->assertEqualsCanonicalizing(['direct', 'driver', 'percentage'], $rules->pluck('method')->unique()->values()->all(), "{$slug} allocation methods");
+            $closed = Period::withoutGlobalScopes()->where('organization_id', $org)->where('fiscal_year_id', $fy->id)->where('is_adjustment', false)->whereIn('status', ['closed', 'locked'])->orderBy('sequence')->get();
+            foreach ($closed as $p) {
+                $this->assertTrue(AllocationRun::withoutGlobalScopes()->where('organization_id', $org)->where('period_id', $p->id)->where('amount_type', 'actual')->where('is_frozen', true)->exists(), "{$slug} frozen results for {$p->name}");
+            }
+            $first = Period::withoutGlobalScopes()->where('organization_id', $org)->where('fiscal_year_id', $fy->id)->where('is_adjustment', false)->orderBy('sequence')->firstOrFail();
+            $latestClosed = $closed->last();
+            $statement = app(ShowbackService::class)->statement($org, 'business_unit', $fy->id, $first->id, $latestClosed->id, 'actual', null, $finance);
+            $this->assertTrue($statement['totals']['reconciles'], "{$slug} showback statement reconciles ({$statement['totals']['difference']})");
+            $this->assertGreaterThan(0, count($statement['rows']), "{$slug} showback rows");
+
+            // chargeback: one exported run whose journal balances; First Bank also has a voided one
+            $run = ChargebackRun::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'exported')->firstOrFail();
+            $this->assertSame((string) $run->total_debit, (string) $run->total_credit, "{$slug} chargeback balances");
+            $this->assertSame(hash('sha256', $run->content), $run->file_sha256);
+            $slug === 'first-bank-nigeria' && $this->assertTrue(ChargebackRun::withoutGlobalScopes()->where('organization_id', $org)->where('status', 'voided')->exists());
+
+            // capitalisations: capitalised with an asset and a schedule that sums, submitted with a decider, draft, rejected
+            $caps = Capitalisation::withoutGlobalScopes()->where('organization_id', $org)->get();
+            $done = $caps->where('status', 'capitalised');
+            $this->assertGreaterThanOrEqual(2, $done->count(), "{$slug} capitalised");
+            foreach ($done as $c) {
+                $this->assertTrue(Asset::withoutGlobalScopes()->where('organization_id', $org)->whereKey($c->asset_id)->exists(), "{$slug} {$c->capitalisation_code} asset");
+                $this->assertSame(bcsub((string) $c->amount, (string) $c->residual_value, 2), bcadd((string) $c->lines()->sum('amount'), '0', 2), "{$slug} {$c->capitalisation_code} schedule sums");
+            }
+            $this->assertTrue($done->contains(fn ($c) => $c->lines()->where('is_catch_up', true)->exists()), "{$slug} a capitalisation with catch-up lines");
+            foreach (['draft', 'rejected'] as $status) {
+                $this->assertTrue($caps->contains('status', $status), "{$slug} a {$status} capitalisation");
+            }
+            $pending = $caps->where('status', 'submitted');
+            $this->assertGreaterThanOrEqual(1, $pending->count(), "{$slug} a pending capitalisation");
+            foreach ($pending as $c) {
+                $request = $engine->current(CapitalisationService::PROCESS, $c);
+                $step = $request->currentStep();
+                $this->assertTrue($engine->canDecide($step, $request, $c, $finance) && $finance->can('approve it-finance'), "{$slug}: finance@ can decide \"{$step->name}\" of {$c->capitalisation_code}");
+            }
+
+            // pages
+            $props = fn ($response) => $response->viewData('page')['props'];
+            $this->get(route('finance.cloud.accounts.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Cloud/Accounts')->has('accounts', 2));
+            $this->get(route('finance.cloud.costs', ['from' => $today->subDays(30)->toDateString(), 'to' => $today->subDay()->toDateString()]))->assertOk();
+            $this->get(route('finance.cloud.costs', ['tab' => 'untagged']))->assertOk();
+            $anom = $props($this->get(route('finance.cloud.anomalies.index'))->assertOk());
+            $this->assertGreaterThanOrEqual(1, $anom['counts']['open']);
+            $this->get(route('finance.allocations.index'))->assertOk();
+            $this->get(route('finance.monitor.showback'))->assertOk();
+            foreach (['csv', 'xlsx', 'pdf'] as $format) {
+                $this->get(route('finance.monitor.showback.export', ['format' => $format]))->assertOk();
+            }
+            $this->get(route('finance.imports.show', $cloudBatch))->assertOk();
+            $this->get(route('finance.capitalisations.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->component('Finance/Capitalisations/Index'));
+            $this->get(route('finance.capitalisations.show', $done->first()))->assertOk();
+            $this->get(route('finance.capitalisations.show', $pending->first()))->assertOk();
+            $tco = $props($this->get(route('finance.monitor.tco', ['subject' => $b['subject'], 'basis' => 'actual']))->assertOk());
+            $this->assertGreaterThanOrEqual(5, collect($tco['rows'])->filter(fn ($r) => bccomp((string) $r['total'], '0', 2) > 0)->count(), "{$slug} TCO subjects with cost");
+            $this->assertGreaterThan(0, (float) $tco['totals']['tco_total']);
+            $this->get(route('finance.monitor.tco', ['subject' => $b['subject'], 'basis' => 'budget']))->assertOk();
+        }
+
+        // a bank with no finance data renders every P6 page empty, not broken
+        $acme = User::where('email', 'admin@acme.ng')->firstOrFail();
+        $this->actingAs($acme);
+        $this->get(route('finance.cloud.accounts.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('accounts', 0));
+        $this->get(route('finance.cloud.costs'))->assertOk();
+        $this->get(route('finance.cloud.anomalies.index'))->assertOk();
+        $this->get(route('finance.allocations.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->has('rules', 0));
+        $this->get(route('finance.monitor.showback'))->assertOk();
+        $this->get(route('finance.monitor.tco'))->assertOk();
+        $this->get(route('finance.capitalisations.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('capitalisations.data', []));
     }
 }

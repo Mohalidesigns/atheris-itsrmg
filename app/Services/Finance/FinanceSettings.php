@@ -2,6 +2,7 @@
 
 namespace App\Services\Finance;
 
+use App\Models\Finance\Allocation;
 use App\Models\Finance\Currency;
 use App\Models\Finance\GlAccount;
 use App\Models\Finance\Investment;
@@ -26,6 +27,7 @@ class FinanceSettings
         'variance' => ['variance_amber_pct', 'variance_red_pct', 'variance_abs_floor'],
         'renewal' => ['renewal_lead_days', 'renewal_notice_offsets', 'escalation_role', 'renewal_cfo_from', 'renewal_cfo_uplift_pct'],
         'investments' => ['investment_score_weights', 'investment_discount_rate_pct', 'investment_cost_tolerance_pct', 'value_review_lead_days'],
+        'finops' => ['cloud_anomaly_pct', 'cloud_anomaly_abs_floor', 'showback_units', 'chargeback_debit_gl', 'chargeback_credit_gl'],
     ];
 
     /** @var array<int, Setting> memoised per request (the service is a container singleton) */
@@ -68,6 +70,10 @@ class FinanceSettings
             $data['renewal_notice_offsets'] = $offsets;
         }
 
+        if ($section === 'finops' && array_key_exists('showback_units', $data)) {
+            $data['showback_units'] = $this->normaliseUnits($data['showback_units'], (int) $setting->organization_id);
+        }
+
         $weightsChanged = false;
         if ($section === 'investments' && array_key_exists('investment_score_weights', $data)) {
             $weights = $this->normaliseWeights($data['investment_score_weights']);
@@ -80,6 +86,70 @@ class FinanceSettings
         $weightsChanged && app(InvestmentScoring::class)->rescore((int) $setting->organization_id);
 
         return $setting->refresh();
+    }
+
+    /**
+     * The bank's showback business units (plan P6-9): at most 50, unique upper-case codes. A unit still used by an active allocation cannot be removed.
+     *
+     * @return list<array{code:string,name:string,erp_cost_centre_code:?string}>
+     */
+    public function normaliseUnits(mixed $units, int $orgId): array
+    {
+        $fail = fn (string $m) => throw ValidationException::withMessages(['showback_units' => $m]);
+        $units = is_array($units) ? array_values($units) : [];
+        count($units) <= 50 || $fail('Define at most 50 business units.');
+        $out = [];
+        $seen = [];
+        foreach ($units as $u) {
+            $code = strtoupper(trim((string) ($u['code'] ?? '')));
+            $name = trim((string) ($u['name'] ?? ''));
+            $erp = trim((string) ($u['erp_cost_centre_code'] ?? ''));
+            preg_match('/^[A-Z0-9_-]{2,16}$/', $code) || $fail("Unit code \"{$code}\" must be 2 to 16 letters, digits, dash or underscore.");
+            isset($seen[$code]) && $fail("Unit code {$code} is used twice.");
+            ($name !== '' && mb_strlen($name) <= 120) || $fail("Give unit {$code} a name (max 120 characters).");
+            mb_strlen($erp) <= 32 || $fail("The ERP cost centre of {$code} is too long (max 32 characters).");
+            $seen[$code] = true;
+            $out[] = ['code' => $code, 'name' => $name, 'erp_cost_centre_code' => $erp === '' ? null : $erp];
+        }
+        $used = Allocation::withoutGlobalScopes()->where('organization_id', $orgId)->where('target_type', 'business_unit')->where('is_active', true)->whereNull('deleted_at')
+            ->whereNotNull('target_ref')->distinct()->pluck('target_ref')->all();
+        foreach ($used as $code) {
+            isset($seen[$code]) || $fail("Unit {$code} is used by an active allocation rule and cannot be removed.");
+        }
+
+        return $out;
+    }
+
+    /** Cloud anomaly thresholds: the bank's setting, else the config default (plan P6-4). @return array{pct:string,abs_floor:string,baseline_days:int,min_baseline_days:int,lookback_days:int} */
+    public function cloudAnomalyThresholds(int $orgId): array
+    {
+        $s = $this->for($orgId);
+        $c = (array) config('finance.cloud.anomaly');
+
+        return [
+            'pct' => (string) ($s->cloud_anomaly_pct ?? $c['default_pct']),
+            'abs_floor' => (string) ($s->cloud_anomaly_abs_floor ?? $c['default_abs_floor']),
+            'baseline_days' => (int) $c['baseline_days'], 'min_baseline_days' => (int) $c['min_baseline_days'], 'lookback_days' => (int) $c['lookback_days'],
+        ];
+    }
+
+    /** @return list<array{code:string,name:string,erp_cost_centre_code:?string}> */
+    public function showbackUnits(int $orgId): array
+    {
+        $units = $this->for($orgId)->showback_units;
+
+        return array_values(is_array($units) ? $units : (array) config('finance.showback.default_units'));
+    }
+
+    /** @return array{debit:string,credit:string} */
+    public function chargebackGl(int $orgId): array
+    {
+        $s = $this->for($orgId);
+
+        return [
+            'debit' => (string) ($s->chargeback_debit_gl ?: config('finance.showback.chargeback_debit_gl')),
+            'credit' => (string) ($s->chargeback_credit_gl ?: config('finance.showback.chargeback_credit_gl')),
+        ];
     }
 
     /**

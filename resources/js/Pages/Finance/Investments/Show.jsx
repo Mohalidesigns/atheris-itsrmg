@@ -21,7 +21,7 @@ import InvestmentsNav from '@/Components/Finance/Investments/InvestmentsNav';
 import DocumentsPanel from '@/Components/Finance/Expenses/DocumentsPanel';
 import ReasonModal from '@/Components/Finance/Expenses/ReasonModal';
 import { Card, Empty } from '@/Components/Finance/Settings/ui';
-import { BTN_PRIMARY, BTN_SECONDARY, formatPct, humanize, invMoney, isoDate, localDate } from '@/Utils/finance';
+import { BTN_PRIMARY, BTN_SECONDARY, FIELD, LABEL, capStatusTone, formatPct, humanize, invMoney, isoDate, localDate } from '@/Utils/finance';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -32,7 +32,22 @@ function Fact({ label, children }) {
     return <div className="min-w-0"><dt className="text-xs text-[#718096]">{label}</dt><dd className="break-words text-sm text-[#2D3748]">{children || '—'}</dd></div>;
 }
 
-function Overview({ i, links, linkOptions, documents, baseCurrency, can }) {
+function CapitalisationFlag({ i, options, can }) {
+    const standards = options.capitalisationStandards ?? [];
+    const save = (patch) => router.put(route('finance.investments.update', i.id), patch, { preserveScroll: true });
+    return (
+        <Card title="Capitalisation">
+            <div className="grid grid-cols-1 gap-4 px-5 py-4 sm:grid-cols-2">
+                <label className="flex items-center gap-2 text-sm text-[#2D3748]"><input type="checkbox" disabled={!can.edit} checked={!!i.is_capitalisable} onChange={(e) => save({ is_capitalisable: e.target.checked, ...(e.target.checked ? {} : { capitalisation_standard: null }) })} className="rounded border-gray-300" /> Capitalisable: delivered cost can move to the asset register</label>
+                {i.is_capitalisable && (
+                    <div><label className={LABEL} htmlFor="iv-cs">Standard</label><select id="iv-cs" disabled={!can.edit} value={i.capitalisation_standard ?? ''} onChange={(e) => save({ capitalisation_standard: e.target.value || null })} className={FIELD}><option value="">Decide at capitalisation</option>{standards.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
+                )}
+            </div>
+        </Card>
+    );
+}
+
+function Overview({ i, links, linkOptions, documents, baseCurrency, can, options }) {
     const money = can.viewAmounts !== false;
     return (
         <div className="space-y-4">
@@ -59,6 +74,7 @@ function Overview({ i, links, linkOptions, documents, baseCurrency, can }) {
                     {i.cancel_reason && <div className="col-span-2 lg:col-span-4"><dt className="text-xs text-[#718096]">Cancelled because</dt><dd className="text-sm text-[#B3261E]">{i.cancel_reason}</dd></div>}
                 </dl>
             </Card>
+            <CapitalisationFlag i={i} options={options} can={can} />
             <InvestmentLinksPanel investment={i} links={links} linkOptions={linkOptions} can={can} />
             <DocumentsPanel subject="investment" subjectId={i.id} documents={documents} kinds={DOC_KINDS} canAttach={can.edit} defaultKind="business_case" />
         </div>
@@ -83,7 +99,7 @@ function Activity({ activity }) {
 }
 
 export default function Show(props) {
-    const { investment: i, businessCases, businessCase, scores, weights, gates, nextGate, evm, lines, lineOptions, benefits, reviews, changes, links, linkOptions, documents, activity, users, periods, options, baseCurrency, can, errors } = props;
+    const { investment: i, businessCases, businessCase, scores, weights, gates, nextGate, evm, lines, lineOptions, benefits, reviews, changes, capitalisations = [], links, linkOptions, documents, activity, users, periods, options, baseCurrency, can, errors } = props;
     const money = can.viewAmounts !== false;
     const [tab, setTab] = useState(TABS.includes(props.tab) ? props.tab : 'overview');
     const [gateModal, setGateModal] = useState(null); // { routeName, routeParams, nextGate }
@@ -141,7 +157,7 @@ export default function Show(props) {
                 ))}
             </div>
 
-            {tab === 'overview' && <Overview i={i} links={links} linkOptions={linkOptions} documents={documents} baseCurrency={baseCurrency} can={can} />}
+            {tab === 'overview' && <Overview i={i} links={links} linkOptions={linkOptions} documents={documents} baseCurrency={baseCurrency} can={can} options={options} />}
             {tab === 'business-case' && <BusinessCaseEditor investment={i} businessCases={businessCases} businessCase={businessCase} baseCurrency={baseCurrency} can={can} errors={errors} onSubmit={submitBc} />}
             {tab === 'scoring' && <ScoringPanel investment={i} scores={scores} weights={weights} criteria={options.criteria} can={can} />}
             {tab === 'gates' && <GatesPanel investment={i} gates={gates} nextGate={nextGate} baseCurrency={baseCurrency} can={can} errors={errors} onAdvance={() => setGateModal({ routeName: 'finance.investments.advance-gate', routeParams: i.id, nextGate })} />}
@@ -149,11 +165,25 @@ export default function Show(props) {
                 <div className="space-y-4">
                     <EvmPanel investment={i} evm={evm} baseCurrency={baseCurrency} can={can} onProgress={() => setProgress(true)} />
                     <LinkedLinesPanel investment={i} lines={lines} lineOptions={lineOptions} baseCurrency={baseCurrency} can={can} />
+                    {i.is_capitalisable && (
+                        <Card title="Capitalisations" right={can.edit && <Link className={BTN_SECONDARY} href={route('finance.capitalisations.index', { source: 'investment', id: i.id })}>Capitalise</Link>}>
+                            {capitalisations.length === 0 ? <Empty>Nothing capitalised yet. Delivered capex can be moved to the asset register.</Empty> : (
+                                <ul className="divide-y divide-gray-50">{capitalisations.map((c) => (
+                                    <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2 text-sm">
+                                        <Link className="font-mono text-xs text-[#0A1F44] hover:underline" href={c.href}>{c.capitalisation_code}</Link>
+                                        <Chip size="xs" tone={capStatusTone(c.status)}>{humanize(c.status)}</Chip>
+                                        <span className="tabular-nums">{invMoney(c.amount, baseCurrency, money, { decimals: 0 })}</span>
+                                        <span className="text-xs text-[#718096]">{localDate(c.available_for_use_on)}</span>
+                                    </li>
+                                ))}</ul>
+                            )}
+                        </Card>
+                    )}
                 </div>
             )}
             {tab === 'benefits' && <BenefitsPanel investment={i} benefits={benefits} users={users} periods={periods} options={options} baseCurrency={baseCurrency} can={can} />}
             {tab === 'reviews' && <ValueReviewsPanel investment={i} reviews={reviews} users={users} options={options} today={today} can={can} errors={errors} />}
-            {tab === 'changes' && <ChangesPanel investment={i} changes={changes} baseCurrency={baseCurrency} can={can} />}
+            {tab === 'changes' && <ChangesPanel investment={i} changes={changes} baseCurrency={baseCurrency} can={can} users={users} costCentres={props.costCentres ?? []} options={options} />}
             {tab === 'activity' && <Activity activity={activity} />}
 
             {gateModal && <AdvanceGateModal show onClose={() => setGateModal(null)} investment={i} nextGate={gateModal.nextGate} routeName={gateModal.routeName} routeParams={gateModal.routeParams} errors={errors} />}

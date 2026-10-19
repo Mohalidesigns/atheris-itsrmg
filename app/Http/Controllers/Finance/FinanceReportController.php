@@ -33,7 +33,7 @@ class FinanceReportController extends Controller
         $filters = [
             'report' => $selected, 'fiscal_year_id' => $fy?->id, 'from_period_id' => $v['from_period_id'] ?? null, 'to_period_id' => $v['to_period_id'] ?? null,
             'cost_centre_id' => $v['cost_centre_id'] ?? null, 'window' => $window && $window !== 'all' ? $window : null, 'as_of' => $v['as_of'] ?? null,
-        ];
+        ] + array_intersect_key($v, array_flip(['account_id', 'from', 'to', 'target_type', 'basis', 'subject']));
         $schedules = ScheduledReport::withoutGlobalScopes()->where('organization_id', $orgId)->where(fn ($q) => $q->where('report_type', 'finance')->orWhere('report_type', 'like', 'finance.%'))
             ->orderBy('name')->get();
 

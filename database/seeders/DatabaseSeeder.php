@@ -155,6 +155,11 @@ class DatabaseSeeder extends Seeder
         // IT Financial Management P2, second pass: First Bank's contracts link the business services created just above
         $this->call(FinanceContractDemoSeeder::class);
 
+        // IT Financial Management P6 (FinOps, showback, capitalisation): cloud accounts with 90 days of cost, tag rules, detected anomalies, allocation
+        // rules and runs, a chargeback journal, tagged budget lines for Application TCO, capitalisations in mixed states and KRI-FIN-CLD. After the
+        // second contract pass (assets and First Bank's business-service links exist) and before the KRI seeder, which measures the new KRI
+        $this->call(FinanceFinOpsDemoSeeder::class);
+
         // Vendor Management: NDPA processor and CBN outsourcing facts, owners, computed tiers and
         // review clocks, Shared Directory links, six months of sandbox ratings and a triaged breach
         // watch (ATH-VAL-008; before Regulatory Intelligence so vendor return figures are final)

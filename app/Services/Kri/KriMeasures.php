@@ -30,6 +30,7 @@ class KriMeasures
         'KRI-FIN-UNB' => 'financeUnbudgetedSpend',
         'KRI-FIN-INV' => 'financeOverdueInvoices',
         'KRI-FIN-NOT' => 'financeContractsPastNotice',
+        'KRI-FIN-CLD' => 'financeCloudAnomalies',
     ];
 
     public function supports(string $code): bool
@@ -155,6 +156,11 @@ class KriMeasures
     private function financeContractsPastNotice(int $orgId): array
     {
         return app(FinanceKriSource::class)->contractsPastNotice($orgId);
+    }
+
+    private function financeCloudAnomalies(int $orgId): array
+    {
+        return app(FinanceKriSource::class)->cloudAnomalies($orgId);
     }
 
     private function failedChanges(int $orgId): array

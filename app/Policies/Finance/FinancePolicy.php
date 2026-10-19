@@ -12,6 +12,11 @@ use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetScenario;
 use App\Models\Finance\BudgetTransfer;
 use App\Models\Finance\BusinessCase;
+use App\Models\Finance\Capitalisation;
+use App\Models\Finance\ChargebackRun;
+use App\Models\Finance\CloudAccount;
+use App\Models\Finance\CloudAnomaly;
+use App\Models\Finance\CloudCostLine;
 use App\Models\Finance\Contract;
 use App\Models\Finance\ContractDocument;
 use App\Models\Finance\ContractEvent;
@@ -265,6 +270,63 @@ class FinancePolicy
             && ($this->updateInvestment($user, $review) || (int) $review->reviewer_id === (int) $user->id);
     }
 
+    /* Cloud FinOps, allocation, showback and capitalisation (P6). */
+
+    public function manageCloud(User $user): bool
+    {
+        return $user->can('import it-finance') && $user->can('view it-finance-amounts');
+    }
+
+    public function handleAnomaly(User $user, CloudAnomaly $anomaly): bool
+    {
+        return $user->can('edit it-finance') && $this->sameOrg($user, $anomaly)
+            && ((int) $anomaly->owner_id === (int) $user->id || $this->manageCloud($user) || $user->can('close it-finance-periods'));
+    }
+
+    public function manageAllocations(User $user): bool
+    {
+        return $this->managePlanning($user);
+    }
+
+    public function exportChargeback(User $user): bool
+    {
+        return $user->can('export it-finance') && $user->can('view it-finance-amounts');
+    }
+
+    /** The journal is a bank-wide ERP artefact: create, list and download need the period-close duty, not just the generic export permission. */
+    public function runChargeback(User $user): bool
+    {
+        return $user->can('close it-finance-periods') && $user->can('view it-finance-amounts');
+    }
+
+    public function voidChargeback(User $user, ChargebackRun $run): bool
+    {
+        return $user->can('close it-finance-periods') && $user->can('view it-finance-amounts') && $this->sameOrg($user, $run) && (int) $run->exported_by_id !== (int) $user->id;
+    }
+
+    /** Preparing a capitalisation from an investment or capex expense the user can see. */
+    public function capitalise(User $user, Model $source): bool
+    {
+        if (! ($user->can('edit it-finance') && $user->can('view it-finance-amounts') && $this->sameOrg($user, $source))) {
+            return false;
+        }
+
+        return $source instanceof Investment ? $this->investmentVisible($user, $source) : $this->costCentreVisible($user, $source);
+    }
+
+    public function updateCapitalisation(User $user, Capitalisation $cap): bool
+    {
+        return $user->can('edit it-finance') && $this->sameOrg($user, $cap)
+            && ((int) $cap->requested_by_id === (int) $user->id || (int) $cap->created_by_id === (int) $user->id
+                || $user->can('manage it-finance-settings') || $user->can('close it-finance-periods'))
+            && $this->costCentreVisible($user, $cap);
+    }
+
+    public function decideCapitalisation(User $user, Capitalisation $cap): bool
+    {
+        return $user->can('approve it-finance') && $this->sameOrg($user, $cap);
+    }
+
     private function investmentOf(Model $m): ?Investment
     {
         return match (true) {
@@ -330,6 +392,25 @@ class FinancePolicy
         if ($model instanceof Contract || $model instanceof ContractTeamMember || $model instanceof ContractLink || $model instanceof ContractDocument
             || $model instanceof ContractEvent || $model instanceof Renewal || $model instanceof Termination) {
             return $this->contractVisible($user, $model);
+        }
+        if ($model instanceof Capitalisation) {
+            $ids = self::visibleCostCentreIds($user);
+            if ($ids === null || (int) $model->requested_by_id === (int) $user->id || (int) $model->created_by_id === (int) $user->id) {
+                return true;
+            }
+            $source = $model->source();
+
+            return $source instanceof Investment ? $this->investmentVisible($user, $source) : ($model->cost_centre_id && in_array((int) $model->cost_centre_id, $ids, true));
+        }
+        if ($model instanceof CloudAccount || $model instanceof CloudCostLine || $model instanceof CloudAnomaly) {
+            $ids = self::visibleCostCentreIds($user);
+            if ($ids === null) {
+                return true;
+            }
+            $account = $model instanceof CloudAccount ? $model : CloudAccount::withoutGlobalScopes()->find($model->cloud_account_id);
+            $cc = $model instanceof CloudCostLine ? $model->cost_centre_id : $account?->default_cost_centre_id;
+
+            return ($cc && in_array((int) $cc, $ids, true)) || ($account && (int) $account->owner_id === (int) $user->id);
         }
         if ($this->isInvestmentRecord($model)) {
             return $this->investmentVisible($user, $model);

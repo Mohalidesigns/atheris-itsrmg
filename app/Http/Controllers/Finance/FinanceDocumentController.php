@@ -26,6 +26,7 @@ class FinanceDocumentController extends Controller
         Gate::authorize(match (true) {
             in_array($d['subject'], ['purchase_order', 'goods_receipt'], true) => 'procure',
             in_array($d['subject'], ['investment', 'business_case', 'benefit', 'value_review'], true) => 'updateInvestment',
+            $d['subject'] === 'capitalisation' => 'updateCapitalisation',
             default => 'updateExpense',
         }, $subject);
         $this->documents->attach($subject, $d, $request->file('file'), $request->user());

@@ -64,11 +64,23 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 - **Forecast snapshots** are never deleted on re-close: read live ones with `whereNull('superseded_at')`.
 - A running suite can be stopped with TaskStop on its background task (pkill is refused by auto mode).
 
+## State (2026-10-19, P6 done)
+
+- P6 FinOps, allocation/showback/chargeback, Application TCO, capitalisation and P5 carry-overs is committed and pushed on `feature/it-finance-p6` (branched from P5 7da2d7c). ATH-FIN-003 §P6 has what shipped, decisions P6-1..P6-22 / C145–C172, review fixes and deferrals. Plan: `docs/build/ATH-FIN-PLAN-p6.md`.
+- Gate after fixes: 875 passed / 8 skipped on Postgres (29 min), seed + SMOKE (8, 4,226 assertions) pass, build passes, pint clean.
+- **Logged for P6.1 / P7:** all domain and security Mediums and Lows except the ones fixed in the High pass (full list in ATH-FIN-003 §P6). Notably: `unattributed` TCO can go negative when FinOps cloud exceeds ledger cloud; the recoverable-VAT capitalisation setting has no UI; the anomaly sweeper only notifies anomalies it created itself.
+- **Classification is refused for budget lines with actuals in closed or locked periods** (domain H1). Seeders must tag lines directly, before allocation rules and runs (see `FinanceFinOpsDemoSeeder`).
+- **EA `CostModelService::tco()` is pure EA.** The finance-measured figure comes only from `tcoWithFinance()`, gated by `view it-finance` + amounts + cost-centre scope. `ApplicationTcoService` is a scoped singleton; never call finance per app in EA loops.
+- **Chargeback create, download and void need `close it-finance-periods`** (only the IT Finance Controller holds it), and the exporter cannot void a run. The seeder voids as `cfo`.
+- **Builders sharing a DB interfere:** the two P6 fixers both ran on `fin_test` / `fin_wf_test` at times. Give every concurrent agent its own DB, and tell it to use an explicit `DB_CONNECTION=pgsql DB_DATABASE=…` prefix on every command. One builder accidentally ran on in-memory SQLite without it.
+- **Pint on a directory** reformats unrelated files. Run it only on the touched files.
+- The P1 allocation tables were rebuilt by a guarded drop-and-recreate, because they were empty and unused (C149).
+
 ## Next session — paste this
 
 ```
-Start P6 of IT Financial Management (see ATH-FIN-002 §4 P6; includes Application TCO FIN-05.10 deferred from P5), branching feature/it-finance-p6 from feature/it-finance-p5.
-Read docs/build/ATH-FIN-HANDOVER.md (token rules + P5 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p6.md. Ask it which P5 deferrals in ATH-FIN-003 §P5 belong in P6.
-Then: builders (sonnet) on their own DBs → QA on it_security_risk_fin_qa → gate (suite on it_security_risk_test in background, about 26 min; seed + SMOKE on it_security_risk_scratch; npm run build; pint on touched files) → reviewers (sonnet, be exhaustive) on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P6, commit AND push, memory, handover.
+Start P7 Hardening & hand-off of IT Financial Management (see ATH-FIN-002 §4 P7: no new features), branching feature/it-finance-p7 from feature/it-finance-p6.
+Read docs/build/ATH-FIN-HANDOVER.md (token rules + P6 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p7.md, triaging the deferred Medium/Low items in ATH-FIN-003 §P1–§P6 into must-fix-before-UAT vs. backlog.
+Then: fixers (sonnet) on their own DBs → QA on it_security_risk_fin_qa (incl. Playwright ×3) → gate (suite on it_security_risk_test in background, about 30 min; seed + SMOKE on it_security_risk_scratch; npm run build; pint on touched files) → both reviewers on OPUS over the full module, on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P7, commit AND push, open the PR (PR only at P7), memory, handover.
 Check disk first (df -h).
 ```

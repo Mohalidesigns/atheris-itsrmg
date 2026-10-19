@@ -137,6 +137,9 @@ class GraphQlService
 
     public const MAX_DEPTH = 4;
 
+    /** Keys of the EA TCO model exposed through `cost`; finance-ledger figures are deliberately absent. */
+    public const COST_KEYS = ['application_id', 'licence_ngn', 'licence_basis', 'total_ngn', 'components', 'basis', 'modelled'];
+
     public function __construct(
         private DraftChangeService $drafts = new DraftChangeService,
     ) {}
@@ -278,7 +281,8 @@ class GraphQlService
                 min(self::MAX_DEPTH, max(1, (int) ($selection['args']['depth'] ?? 2)))
             )['summary'],
 
-            'cost' => (new CostModelService)->tco($parent) + [
+            // Whitelisted: EA-only users must never receive finance-ledger keys (measured_*), whatever tco() grows.
+            'cost' => array_intersect_key((new CostModelService)->tco($parent), array_flip(self::COST_KEYS)) + [
                 'technical_debt' => (new CostModelService)->technicalDebt($parent),
             ],
 

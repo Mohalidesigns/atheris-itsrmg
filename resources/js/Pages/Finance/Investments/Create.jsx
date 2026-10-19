@@ -13,13 +13,13 @@ export default function Create({ options, users, costCentres, legalEntities, fis
     const form = useForm({
         title: '', type: options.types[0]?.value ?? 'project', rgt: 'transform', driver: options.drivers[0]?.value ?? 'strategic', sponsor_id: '', manager_id: '',
         cost_centre_id: '', legal_entity_id: '', fiscal_year_id: fiscalYears[0]?.id ?? '', starts_on: '', planned_ends_on: '',
-        is_regulatory: false, regulatory_reference: '', strategic_objective: '', description: '', cost_tolerance_pct: defaults?.cost_tolerance_pct ?? 10, external_reference: '',
+        is_regulatory: false, regulatory_reference: '', is_capitalisable: false, capitalisation_standard: '', strategic_objective: '', description: '', cost_tolerance_pct: defaults?.cost_tolerance_pct ?? 10, external_reference: '',
     });
     const d = form.data; const e = form.errors;
     const set = (k) => (ev) => form.setData(k, ev.target.value);
     const submit = (ev) => {
         ev.preventDefault();
-        form.transform((x) => { const o = { ...x }; Object.keys(o).forEach((k) => { if (o[k] === '') o[k] = null; }); if (!o.is_regulatory) o.regulatory_reference = null; return o; });
+        form.transform((x) => { const o = { ...x }; Object.keys(o).forEach((k) => { if (o[k] === '') o[k] = null; }); if (!o.is_regulatory) o.regulatory_reference = null; if (!o.is_capitalisable) o.capitalisation_standard = null; return o; });
         form.post(route('finance.investments.store'));
     };
     const users_ = (id, value, key) => <select id={id} value={value} onChange={set(key)} className={FIELD}><option value="">Select…</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}{u.job_title ? `, ${u.job_title}` : ''}</option>)}</select>;
@@ -37,6 +37,8 @@ export default function Create({ options, users, costCentres, legalEntities, fis
                         <Field id="iv-driver" label="Driver" error={e.driver}><select id="iv-driver" value={d.driver} onChange={set('driver')} className={FIELD}>{options.drivers.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></Field>
                         <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-1"><input id="iv-reg" type="checkbox" checked={d.is_regulatory} onChange={(ev) => form.setData('is_regulatory', ev.target.checked)} className="rounded border-gray-300" /><label htmlFor="iv-reg" className="text-sm text-[#2D3748]">Regulatory mandate</label></div>
                         {d.is_regulatory && <Field id="iv-regref" label="Regulatory reference" error={e.regulatory_reference} className="sm:col-span-2"><input id="iv-regref" maxLength={200} value={d.regulatory_reference} onChange={set('regulatory_reference')} className={FIELD} placeholder="e.g. CBN circular or framework clause" /></Field>}
+                        <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-1"><input id="iv-cap" type="checkbox" checked={d.is_capitalisable} onChange={(ev) => form.setData('is_capitalisable', ev.target.checked)} className="rounded border-gray-300" /><label htmlFor="iv-cap" className="text-sm text-[#2D3748]">Capitalisable (asset on delivery)</label></div>
+                        {d.is_capitalisable && <Field id="iv-capstd" label="Capitalisation standard" error={e.capitalisation_standard} className="sm:col-span-2"><select id="iv-capstd" value={d.capitalisation_standard} onChange={set('capitalisation_standard')} className={FIELD}><option value="">Decide at capitalisation</option>{(options.capitalisationStandards ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></Field>}
                         <Field id="iv-obj" label="Strategic objective" error={e.strategic_objective} className="sm:col-span-2 lg:col-span-3"><textarea id="iv-obj" rows={2} value={d.strategic_objective} onChange={set('strategic_objective')} className={FIELD} /></Field>
                         <Field id="iv-desc" label="Description" error={e.description} className="sm:col-span-2 lg:col-span-3"><textarea id="iv-desc" rows={3} value={d.description} onChange={set('description')} className={FIELD} /></Field>
                     </div>

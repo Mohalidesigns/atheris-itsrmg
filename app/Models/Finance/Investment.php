@@ -33,6 +33,8 @@ class Investment extends Model
 
     public const STATUSES = ['on_track', 'at_risk', 'off_track', 'on_hold'];
 
+    public const CAPITALISATION_STANDARDS = ['ias_38', 'ias_16'];
+
     public const CRITERIA = ['strategic_alignment', 'regulatory', 'risk_reduction', 'financial_return', 'delivery_risk'];
 
     protected $table = 'fin_investments';
@@ -43,7 +45,7 @@ class Investment extends Model
         'starts_on' => 'date', 'planned_ends_on' => 'date', 'actual_ends_on' => 'date', 'percent_complete_as_of' => 'date',
         'planned_cost' => 'decimal:2', 'bac' => 'decimal:2', 'eac' => 'decimal:2', 'percent_complete' => 'decimal:2', 'cost_tolerance_pct' => 'decimal:2',
         'priority_score' => 'decimal:2', 'is_regulatory' => 'boolean', 'value_review_dates' => 'array',
-        'bac_baselined_at' => 'datetime', 'cancelled_at' => 'datetime',
+        'bac_baselined_at' => 'datetime', 'cancelled_at' => 'datetime', 'bac_baseline_amount' => 'decimal:2', 'is_capitalisable' => 'boolean',
     ];
 
     public function sponsor(): BelongsTo

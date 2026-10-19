@@ -132,8 +132,18 @@ class StageGate extends Model
         $i = $this->inv();
         $preparer = $this->business_case_id ? BusinessCase::withoutGlobalScopes()->whereKey($this->business_case_id)->value('created_by_id') : null;
 
+        // a reassignment excludes the outgoing and the incoming sponsor and manager (P6-22)
+        $moved = [];
+        if ($this->investment_change_id) {
+            $fc = (array) InvestmentChange::withoutGlobalScopes()->whereKey($this->investment_change_id)->value('field_changes');
+            foreach (['sponsor_id', 'manager_id'] as $k) {
+                $moved[] = $fc[$k]['from'] ?? null;
+                $moved[] = $fc[$k]['to'] ?? null;
+            }
+        }
+
         return array_values(array_unique(array_map('intval', array_filter([
-            $this->requested_by_id, $this->created_by_id, $i?->manager_id, $i?->sponsor_id, $preparer,
+            $this->requested_by_id, $this->created_by_id, $i?->manager_id, $i?->sponsor_id, $preparer, ...$moved,
         ]))));
     }
 }

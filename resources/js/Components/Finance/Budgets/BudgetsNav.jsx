@@ -6,6 +6,7 @@ const TABS = [
     ['targets', 'Targets', 'finance.targets.index'],
     ['transfers', 'Transfers', 'finance.transfers.index'],
     ['supplementary', 'Supplementary', 'finance.supplementary.index'],
+    ['allocations', 'Allocations', 'finance.allocations.index'],
 ];
 
 /** Section tab bar shared by every budgeting page. */

@@ -165,6 +165,16 @@ class FinanceApprovals
         $request = ApprovalRequest::withoutGlobalScopes()->where('process', $process)->where('subject_type', $subject::class)
             ->where('subject_id', $subject->getKey())->latest('id')->first();
         $trail['context'] = $request?->context;
+        if (! app(FinanceMasking::class)->canSeeAmounts($viewer)) { // the DoA band discloses the amount (P5 security M1)
+            if (is_array($trail['context'])) {
+                foreach (['amount_band', 'amount_band_label', 'approval_base_amount', 'base_amount'] as $k) {
+                    array_key_exists($k, $trail['context']) && $trail['context'][$k] = null;
+                }
+                array_key_exists('band', $trail['context']) && $trail['context']['band'] = null;
+                isset($trail['context']['conditions']['amount_band']) && $trail['context']['conditions']['amount_band'] = null;
+            }
+            $trail['stages'] = collect($trail['stages'])->map(fn ($s) => is_array($s) && str_starts_with((string) ($s['condition'] ?? ''), 'amount_band') ? array_merge($s, ['condition' => null]) : $s)->values();
+        }
 
         return $trail;
     }

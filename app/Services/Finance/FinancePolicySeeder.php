@@ -58,6 +58,10 @@ class FinancePolicySeeder
                 self::stage(30, 'IT Steering Committee', 'role', 'IT Steering Committee', 120),
                 self::stage(40, 'Board approval (MD/CEO)', 'job_title', 'Managing Director', 168, 'requires_board', ['yes']),
             ],
+            'finance.capitalisation_approval' => [
+                self::stage(10, 'Finance Controller review', 'role', 'IT Finance Controller', 72),
+                self::stage(20, 'CFO approval', 'job_title', 'Chief Financial Officer', 72, 'requires_cfo', ['yes']),
+            ],
         ];
 
         foreach ($plans as $process => $stages) {

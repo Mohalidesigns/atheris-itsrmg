@@ -228,21 +228,30 @@ class InvestmentService
         $orgId = (int) $i->organization_id;
         $want = array_values(array_unique(array_map('intval', $lineIds)));
         $visible = FinancePolicy::visibleCostCentreIds($by);
-        $valid = [];
-        if ($want) {
-            $lines = BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('id', $want)->get(['id', 'budget_id', 'cost_centre_id', 'investment_id']);
-            $budgets = Budget::withoutGlobalScopes()->whereIn('id', $lines->pluck('budget_id'))->pluck('status', 'id');
-            foreach ($lines as $l) {
-                in_array($budgets[$l->budget_id] ?? null, ['baseline', 'draft'], true) || $this->fail('Only lines of a baseline or draft budget can be tagged.', 'line_ids');
-                $visible !== null && ! in_array((int) $l->cost_centre_id, $visible, true) && $this->fail('One of those lines belongs to a cost centre outside your access.', 'line_ids');
-                $l->investment_id && (int) $l->investment_id !== (int) $i->id && $this->fail('One of those lines is already tagged to another investment.', 'line_ids');
-                $valid[] = (int) $l->id;
-            }
-            count($valid) === count($want) || $this->fail('Unknown budget line for this bank.', 'line_ids');
-        }
         $current = BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->where('investment_id', $i->id)->pluck('id')->map(fn ($v) => (int) $v)->all();
-        $tag = array_values(array_diff($valid, $current));
-        $untag = array_values(array_diff($current, $valid));
+        $tag = array_values(array_diff($want, $current));
+        $untag = array_values(array_diff($current, $want));
+        $touch = array_merge($tag, $untag);
+        $lines = $touch ? BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('id', $touch)->get(['id', 'budget_id', 'line_no', 'description', 'cost_centre_id', 'investment_id']) : collect();
+        count(array_diff($tag, $lines->pluck('id')->map(fn ($v) => (int) $v)->all())) && $this->fail('Unknown budget line for this bank.', 'line_ids');
+        // a wanted line the editor cannot see is refused; a tagged line outside their view is left as it is, since they cannot have listed it
+        $untag = array_values(array_diff($untag, $visible === null ? [] : $lines->filter(fn ($l) => ! in_array((int) $l->cost_centre_id, $visible, true))->pluck('id')->map(fn ($v) => (int) $v)->all()));
+        $lines = $lines->whereIn('id', array_merge($tag, $untag));
+        $budgets = Budget::withoutGlobalScopes()->whereIn('id', $lines->pluck('budget_id'))->get(['id', 'budget_code', 'status', 'fiscal_year_id'])->keyBy('id');
+        $closed = FiscalYear::withoutGlobalScopes()->whereIn('id', $budgets->pluck('fiscal_year_id'))->where('status', 'closed')->pluck('id')->all();
+        $refused = [];
+        foreach ($lines as $l) {
+            $b = $budgets[$l->budget_id] ?? null;
+            $label = ($b?->budget_code ?? 'budget').' line '.$l->line_no;
+            if (! $b || ! in_array($b->status, ['draft', 'approved', 'baseline'], true) || in_array($b->fiscal_year_id, $closed, true)) {
+                $refused[] = "{$label} (its budget is not open for tagging)";
+            } elseif ($visible !== null && ! in_array((int) $l->cost_centre_id, $visible, true)) {
+                $refused[] = "{$label} (cost centre outside your access)";
+            } elseif (in_array((int) $l->id, $tag, true) && $l->investment_id && (int) $l->investment_id !== (int) $i->id) {
+                $refused[] = "{$label} (already tagged to another investment)";
+            }
+        }
+        $refused && $this->fail('These budget lines cannot be changed: '.implode('; ', $refused).'.', 'line_ids');
 
         DB::transaction(function () use ($i, $tag, $untag, $by) {
             $tag && BudgetLine::withoutGlobalScopes()->whereIn('id', $tag)->toBase()->update(['investment_id' => $i->id]);
@@ -367,6 +376,15 @@ class InvestmentService
             $v = is_scalar($data['cost_tolerance_pct']) ? trim((string) $data['cost_tolerance_pct']) : '';
             (preg_match('/^\d{1,3}(\.\d{1,2})?$/', $v) && bccomp($v, '100', 2) <= 0) || $this->fail('The cost tolerance must be a percentage from 0 to 100.', 'cost_tolerance_pct');
             $out['cost_tolerance_pct'] = bcadd($v, '0', 2);
+        }
+        if ($has('is_capitalisable')) { // not a control field: editable until the investment closes (domain L6)
+            $out['is_capitalisable'] = filter_var($data['is_capitalisable'], FILTER_VALIDATE_BOOLEAN);
+            $out['is_capitalisable'] || $out['capitalisation_standard'] = null;
+        }
+        if ($has('capitalisation_standard') && ($out['is_capitalisable'] ?? ($has('is_capitalisable') ? false : (bool) $existing?->is_capitalisable))) {
+            $std = $data['capitalisation_standard'] ?: null;
+            $std === null || in_array($std, Investment::CAPITALISATION_STANDARDS, true) || $this->fail('Choose IAS 38 or IAS 16.', 'capitalisation_standard');
+            $out['capitalisation_standard'] = $std;
         }
         if ($has('is_regulatory') || $has('regulatory_reference')) {
             $reg = $out['is_regulatory'] ?? (bool) $existing?->is_regulatory;

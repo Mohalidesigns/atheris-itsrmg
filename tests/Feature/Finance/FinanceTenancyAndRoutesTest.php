@@ -106,6 +106,9 @@ class FinanceTenancyAndRoutesTest extends TestCase
             'finance.monitor.transactions', 'finance.monitor.variances', 'finance.period-closes.show', 'finance.periods.close-checklist', 'finance.reports.index', 'finance.reports.show',
             // P5: investments and value realisation
             'finance.business-cases.show', 'finance.investments.create', 'finance.investments.index', 'finance.investments.show', 'finance.portfolio', 'finance.stage-gates.show', 'finance.value-reviews.show',
+            // P6: cloud FinOps, allocation, showback, application TCO and capitalisation
+            'finance.allocations.index', 'finance.capitalisations.index', 'finance.capitalisations.show', 'finance.chargeback.download', 'finance.cloud.accounts.index', 'finance.cloud.anomalies.index',
+            'finance.cloud.costs', 'finance.monitor.showback', 'finance.monitor.showback.export', 'finance.monitor.tco', 'finance.monitor.tco.detail',
         ];
         sort($expected);
         $this->assertSame($expected, $names);
@@ -116,6 +119,9 @@ class FinanceTenancyAndRoutesTest extends TestCase
             'finance.transfers.index' => 'Finance/Budgets/Transfers', 'finance.supplementary.index' => 'Finance/Budgets/Supplementary',
             'finance.contracts.index' => 'Finance/Contracts/Index', 'finance.contracts.create' => 'Finance/Contracts/Create', 'finance.renewals.index' => 'Finance/Renewals/Index',
             'finance.investments.index' => 'Finance/Investments/Index', 'finance.investments.create' => 'Finance/Investments/Create', 'finance.portfolio' => 'Finance/Investments/Portfolio',
+            'finance.cloud.accounts.index' => 'Finance/Cloud/Accounts', 'finance.cloud.costs' => 'Finance/Cloud/Costs', 'finance.cloud.anomalies.index' => 'Finance/Cloud/Anomalies',
+            'finance.allocations.index' => 'Finance/Budgets/Allocations', 'finance.monitor.showback' => 'Finance/Monitor/Showback', 'finance.monitor.tco' => 'Finance/Monitor/Tco',
+            'finance.capitalisations.index' => 'Finance/Capitalisations/Index',
         ];
         foreach ($components as $name => $component) {
             $this->actingAs($this->admin)->get(route($name))->assertOk()->assertInertia(fn (Assert $p) => $p->component($component, false)->has('auth.user'));

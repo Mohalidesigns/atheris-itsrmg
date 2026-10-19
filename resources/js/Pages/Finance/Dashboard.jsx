@@ -10,13 +10,14 @@ import { Card, Empty } from '@/Components/Finance/Settings/ui';
 import Chip from '@/Components/Material/Chip';
 import Icon from '@/Components/Material/Icon';
 import { CONTRACT_TONES, MASK, stageLabel, daysLabel, fmtPct, humanize, localDate, moneyOrMask } from '@/Utils/finance';
+import { Area, AreaChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 
 const HIDDEN = 'Hidden';
 
 export default function Dashboard(props) {
-    const { fiscalYears, selectedFiscalYear, asOfPeriod, audience, costCentres, filters, metrics: m, spendByCategory = [], monthlyBvA = [], topVariances = [], renewalsDue = [], pendingApprovals = [], can } = props;
+    const { fiscalYears, selectedFiscalYear, asOfPeriod, audience, costCentres, filters, metrics: m, spendByCategory = [], monthlyBvA = [], cloudTrend = [], cloudTrendMasked = false, topVariances = [], renewalsDue = [], pendingApprovals = [], can } = props;
     const baseCurrency = useBaseCurrency(props.baseCurrency);
     const money = can?.viewAmounts !== false;
     const [f, setF] = useState({ ...filters });
@@ -120,6 +121,24 @@ export default function Dashboard(props) {
                                 </dl>
                             )}
                         </Card>
+                        {(m.cloud_mtd !== null && m.cloud_mtd !== undefined || cloudTrendMasked) && (
+                            <Card title="Cloud" right={<Link href={route('finance.cloud.costs')} className="text-xs text-[#0A1F44] underline">Cloud & FinOps</Link>}>
+                                <div className="grid grid-cols-2 gap-3 px-5 py-4">
+                                    <div><p className="text-[11px] text-[#718096]">Month to date</p><p className="text-xl font-semibold tabular-nums">{cloudTrendMasked || !money ? HIDDEN : moneyOrMask(m.cloud_mtd, baseCurrency, true, { decimals: 0 })}</p></div>
+                                    <div><p className="text-[11px] text-[#718096]">Open anomalies</p>{m.cloud_anomalies_open === null || m.cloud_anomalies_open === undefined ? <p className="text-xl font-semibold">—</p> : <Link href={route('finance.cloud.anomalies.index')} className={`text-xl font-semibold tabular-nums ${m.cloud_anomalies_open > 0 ? 'text-[#B3261E]' : 'text-[#1B1B1F]'}`}>{m.cloud_anomalies_open}</Link>}</div>
+                                </div>
+                                {cloudTrendMasked || !money ? <p className="border-t border-gray-100 px-5 py-3 text-xs text-[#718096]">The trend is hidden for your role.</p> : cloudTrend.length > 1 && (
+                                    <div className="h-20 px-3 pb-2" role="img" aria-label="Cloud cost, last 30 days">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={cloudTrend.map((p) => ({ date: p.date, cost: Number(p.cost) }))}>
+                                                <Tooltip formatter={(v) => moneyOrMask(v, baseCurrency, true, { decimals: 0 })} labelFormatter={(l) => localDate(l)} />
+                                                <Area type="monotone" dataKey="cost" stroke="#0A1F44" fill="#0A1F44" fillOpacity={0.15} />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </Card>
+                        )}
                         {(m.investments_by_stage ?? []).length > 0 && (
                             <Card title="Investments" right={<Link href={route('finance.portfolio')} className="text-xs text-[#0A1F44] underline">Portfolio</Link>}>
                                 <ul className="divide-y divide-gray-50">

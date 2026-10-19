@@ -124,19 +124,23 @@ class StageGateService
     public function advance(Investment $i, string $to, array $ticked, array $payload, ?string $note, User $by): StageGate
     {
         (int) $i->organization_id === (int) $by->organization_id || $this->fail('That investment belongs to another bank.', 'gate');
-        $i->status === 'on_hold' && $this->fail('This investment is on hold; resume it first.', 'gate');
-        $next = $this->nextGate($i) ?? $this->fail("A {$i->stage} investment has no further gate.", 'gate');
-        $next['to_stage'] === $to || $this->fail("The next gate of a {$i->stage} investment is {$next['to_stage']}.", 'gate');
-        StageGate::withoutGlobalScopes()->where('investment_id', $i->id)->where('status', 'submitted')->exists() && $this->fail('A gate request for this investment is already awaiting approval.', 'gate');
-        $criteria = $this->criteria($i, $to, $ticked, $payload);
-        $unmet = array_values(array_filter($criteria, fn ($c) => ! $c['met']));
-        $unmet && $this->fail('Not every criterion is met: '.implode('; ', array_map(fn ($c) => $c['label'].($c['auto'] && $c['detail'] ? " ({$c['detail']})" : ''), $unmet)).'.', 'criteria');
 
-        $needsApproval = in_array($to, (array) config('finance.investments.approval_gates'), true);
-        $bc = $to === 'approved' ? BusinessCase::withoutGlobalScopes()->where('investment_id', $i->id)->where('status', 'draft')->orderByDesc('version_no')->first() : null;
-        $to === 'approved' && ! $bc && $this->fail('Prepare and save a draft business case first.', 'business_case');
+        return DB::transaction(function () use ($i, $to, $ticked, $payload, $note, $by) {
+            // one pending request per investment: serialise on the investment row before the check (P5 security M5)
+            Investment::withoutGlobalScopes()->whereKey($i->id)->lockForUpdate()->first();
+            $i->refresh();
+            $i->status === 'on_hold' && $this->fail('This investment is on hold; resume it first.', 'gate');
+            $next = $this->nextGate($i) ?? $this->fail("A {$i->stage} investment has no further gate.", 'gate');
+            $next['to_stage'] === $to || $this->fail("The next gate of a {$i->stage} investment is {$next['to_stage']}.", 'gate');
+            StageGate::withoutGlobalScopes()->where('investment_id', $i->id)->where('status', 'submitted')->exists() && $this->fail('A gate request for this investment is already awaiting approval.', 'gate');
+            $criteria = $this->criteria($i, $to, $ticked, $payload);
+            $unmet = array_values(array_filter($criteria, fn ($c) => ! $c['met']));
+            $unmet && $this->fail('Not every criterion is met: '.implode('; ', array_map(fn ($c) => $c['label'].($c['auto'] && $c['detail'] ? " ({$c['detail']})" : ''), $unmet)).'.', 'criteria');
 
-        return DB::transaction(function () use ($i, $to, $criteria, $note, $by, $needsApproval, $bc) {
+            $needsApproval = in_array($to, (array) config('finance.investments.approval_gates'), true);
+            $bc = $to === 'approved' ? BusinessCase::withoutGlobalScopes()->where('investment_id', $i->id)->where('status', 'draft')->orderByDesc('version_no')->first() : null;
+            $to === 'approved' && ! $bc && $this->fail('Prepare and save a draft business case first.', 'business_case');
+
             $gate = StageGate::withoutGlobalScopes()->create([
                 'organization_id' => $i->organization_id, 'created_by_id' => $by->id, 'investment_id' => $i->id, 'gate' => $to, 'from_stage' => $i->stage,
                 'status' => $needsApproval ? 'submitted' : 'passed', 'criteria' => $criteria,
@@ -279,7 +283,7 @@ class StageGateService
     {
         $bc = BusinessCase::withoutGlobalScopes()->findOrFail($g->business_case_id);
         $this->businessCases->markApproved($bc, $by);
-        $i->forceFill(['bac' => $bc->one_off_cost, 'bac_baselined_at' => now(), 'bac_baselined_tolerance_pct' => $i->cost_tolerance_pct, 'planned_cost' => $bc->one_off_cost, 'eac' => null, 'eac_reason' => null])->save();
+        $i->forceFill(['bac' => $bc->one_off_cost, 'bac_baseline_amount' => $bc->one_off_cost, 'bac_baselined_at' => now(), 'bac_baselined_tolerance_pct' => $i->cost_tolerance_pct, 'planned_cost' => $bc->one_off_cost, 'eac' => null, 'eac_reason' => null])->save();
         $this->investments->applyStage($i, 'approved', $by);
     }
 

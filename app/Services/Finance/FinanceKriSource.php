@@ -3,6 +3,7 @@
 namespace App\Services\Finance;
 
 use App\Models\Finance\Actual;
+use App\Models\Finance\CloudAnomaly;
 use App\Models\Finance\Contract;
 
 /** Measures of the finance KRIs (FIN-04.08); KriMeasures registers them. Each returns [value, note]. */
@@ -52,5 +53,15 @@ class FinanceKriSource
         $n = Contract::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->passed(FinanceClock::today())->count();
 
         return [(float) $n, 'Contracts whose notice deadline or end date has passed with no decision recorded.'];
+    }
+
+    /** @return array{0:float,1:string} open and acknowledged cloud anomalies detected in the KRI window */
+    public function cloudAnomalies(int $orgId): array
+    {
+        $days = (int) config('finance.cloud.anomaly.kri_window_days', 30);
+        $n = CloudAnomaly::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', CloudAnomaly::OPEN)
+            ->whereDate('detected_on', '>=', FinanceClock::today()->subDays($days)->toDateString())->count();
+
+        return [(float) $n, "{$n} open cloud cost anomalies in the last {$days} days (FinOps)."];
     }
 }

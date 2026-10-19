@@ -29,6 +29,7 @@ class FinanceApprovalNotifier
             'finance.expense_approval' => route('finance.expenses.show', $subject),
             'finance.invoice_approval' => route('finance.invoices.show', $subject),
             'finance.business_case_approval' => route('finance.stage-gates.show', $subject),
+            'finance.capitalisation_approval' => route('finance.capitalisations.show', $subject),
             'finance.period_reopen' => route('finance.period-closes.show', $subject),
             default => route('finance.supplementary.index', ['highlight' => $subject->getKey()]),
         };

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Finance;
 
+use App\Models\Finance\Allocation;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\VarianceNote;
 use App\Services\Finance\MonitoringService;
@@ -44,6 +45,12 @@ class MonitorFilterRequest extends FormRequest
             'status' => ['nullable', Rule::in(VarianceNote::STATUSES)],
             'needs_explanation' => ['nullable', 'boolean'],
             'report' => ['nullable', 'string', 'max:40'],
+            'account_id' => ['nullable', 'integer', $this->inOrg('fin_cloud_accounts')],
+            'from' => ['nullable', 'date_format:Y-m-d'],
+            'to' => ['nullable', 'date_format:Y-m-d'],
+            'target_type' => ['nullable', Rule::in(Allocation::TARGET_TYPES)],
+            'basis' => ['nullable', Rule::in(['actual', 'budget'])],
+            'subject' => ['nullable', Rule::in(['ea_application', 'business_service'])],
             'window' => ['nullable', Rule::in(['all', '30', '60', '90'])],
             'as_of' => ['nullable', 'date_format:Y-m-d'],
             'format' => ['nullable', 'string', 'max:8'],

@@ -20,6 +20,7 @@ use App\Listeners\Ea\RegisterEvidencePack;
 use App\Listeners\Ea\UpdateProcessCriticality;
 use App\Policies\Ea\EaPolicy;
 use App\Policies\Finance\FinancePolicy;
+use App\Services\Finance\ApplicationTcoService;
 use App\Services\Finance\FinanceSettings;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -35,6 +36,8 @@ class AppServiceProvider extends ServiceProvider
     {
         // Memoises per-bank finance settings for the life of the request.
         $this->app->singleton(FinanceSettings::class);
+        // One TCO computation per org + fiscal year per request: the memo (and the allocation items under it) is shared by every caller.
+        $this->app->scoped(ApplicationTcoService::class);
     }
 
     /**

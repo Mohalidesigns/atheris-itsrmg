@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Services\Change\ChangeWorkflow;
 use App\Services\CoreBanking\CoreBankingConnector;
 use App\Services\Ea\ArchiMateExchange;
+use App\Services\Finance\CloudAnomalySweeper;
 use App\Services\Finance\ContractSweeper;
 use App\Services\Finance\DoaBandService;
 use App\Services\Finance\FinanceApprovalSweeper;
@@ -131,6 +132,10 @@ Artisan::command('fin:value-reviews-sweep {--date= : Y-m-d, run as if today}', f
     $this->info($s->sweep($this->option('date') ? CarbonImmutable::parse($this->option('date'), config('finance.timezone'))->startOfDay() : null).' value-review notification(s) sent.');
 })->purpose('Mark value reviews due or overdue and notify the reviewer and sponsor (ATH-FIN-001 §7)');
 Schedule::command('fin:value-reviews-sweep')->dailyAt('07:45')->timezone(config('finance.timezone'))->name('finance.value-reviews-sweep')->withoutOverlapping();
+Artisan::command('fin:cloud-anomalies {--date= : Y-m-d, run as if today}', function (CloudAnomalySweeper $s) {
+    $this->info($s->sweep($this->option('date') ? CarbonImmutable::parse($this->option('date'), config('finance.timezone'))->startOfDay() : null).' cloud anomaly notice(s) sent.');
+})->purpose('Detect cloud cost anomalies and notify the account owner and Finance Controllers (ATH-FIN-001 §7)');
+Schedule::command('fin:cloud-anomalies')->dailyAt('05:45')->timezone(config('finance.timezone'))->name('finance.cloud-anomalies')->withoutOverlapping();
 Schedule::command('fin:digest')->hourly()->name('finance.digest')->withoutOverlapping();
 
 /* =====================  Policy Management ===================== */

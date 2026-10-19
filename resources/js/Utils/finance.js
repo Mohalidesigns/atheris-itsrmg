@@ -186,3 +186,26 @@ export function invNumber(value, viewAmounts = true, decimals = 2) {
     if (value === null || value === undefined || value === '' || Number.isNaN(Number(value))) return '—';
     return Number(value).toFixed(decimals);
 }
+
+/* ---------------------------------------------------------------- cloud / FinOps, allocation, showback, capitalisation (P6) */
+
+const PROVIDER_LABELS = { aws: 'AWS', azure: 'Azure', gcp: 'Google Cloud', oci: 'Oracle Cloud', other: 'Other' };
+export const providerLabel = (p) => PROVIDER_LABELS[p] ?? humanize(String(p ?? ''));
+export const ANOMALY_TONES = { open: 'error', acknowledged: 'warning', resolved: 'success', false_positive: 'muted' };
+export const anomalyTone = (s) => ANOMALY_TONES[s] ?? 'neutral';
+export const CAP_STATUS_TONES = { draft: 'neutral', submitted: 'warning', capitalised: 'success', rejected: 'error', cancelled: 'muted' };
+export const capStatusTone = (s) => CAP_STATUS_TONES[s] ?? 'neutral';
+const LENS_LABELS = { business_unit: 'Business unit', cost_centre: 'Cost centre', business_service: 'Business service', ea_application: 'Application', investment: 'Investment', legal_entity: 'Legal entity' };
+export const lensLabel = (t) => LENS_LABELS[t] ?? humanize(String(t ?? ''));
+const SOURCE_LABELS = { cost_centre: 'Cost centre', category: 'Category', budget_line: 'Budget line', contract: 'Contract', investment: 'Investment', expense: 'Capex expense' };
+export const sourceLabel = (t) => SOURCE_LABELS[t] ?? humanize(String(t ?? ''));
+
+/** FinOps / capitalisation money: masked (viewAmounts false or null from the server) renders "Hidden", absent a dash. */
+export function finMoney(value, currency, viewAmounts = true, opts = {}) {
+    if (viewAmounts === false) return 'Hidden';
+    if (value === null || value === undefined || value === '') return '—';
+    return formatMoney(value, currency, opts);
+}
+
+/** Drops empty filter values before an Inertia GET. */
+export const cleanQuery = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== null && v !== undefined && v !== '' && v !== false));
