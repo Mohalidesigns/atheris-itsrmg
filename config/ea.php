@@ -95,6 +95,11 @@ return [
     | rather than a theoretical ±10%.
     |
     */
+    'cost' => [
+        // Adds measured_ngn from IT Financial Management to the TCO model; total_ngn is never changed.
+        'finance_tco' => (bool) env('EA_FINANCE_TCO', true),
+    ],
+
     'fx' => [
         'rates' => [
             'NGN' => 1.0,

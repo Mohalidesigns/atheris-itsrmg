@@ -39,7 +39,7 @@ class KriDashboardsDemoSeeder extends Seeder
     private const OWNERS = [
         'channel' => 'digital', 'payments' => 'cro', 'fraud' => 'risk.analyst', 'infrastructure' => 'itops', 'vulnerability' => 'SECURITY',
         'iam' => 'SECURITY', 'governance' => 'policy', 'incident' => 'incident', 'tprm' => 'tprm', 'compliance' => 'compliance',
-        'resilience' => 'itops', 'security' => 'SECURITY', 'data' => 'dpco', 'operations' => 'itops',
+        'resilience' => 'itops', 'security' => 'SECURITY', 'data' => 'dpco', 'operations' => 'itops', 'finance' => 'cfo',
     ];
 
     /** KRI => risk-title fragments, first match wins. */

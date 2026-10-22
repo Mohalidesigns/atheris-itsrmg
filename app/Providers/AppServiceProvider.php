@@ -19,6 +19,9 @@ use App\Listeners\Ea\OpenVulnerability;
 use App\Listeners\Ea\RegisterEvidencePack;
 use App\Listeners\Ea\UpdateProcessCriticality;
 use App\Policies\Ea\EaPolicy;
+use App\Policies\Finance\FinancePolicy;
+use App\Services\Finance\ApplicationTcoService;
+use App\Services\Finance\FinanceSettings;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Vite;
@@ -31,7 +34,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Memoises per-bank finance settings for the life of the request.
+        $this->app->singleton(FinanceSettings::class);
+        // One TCO computation per org + fiscal year per request: the memo (and the allocation items under it) is shared by every caller.
+        $this->app->scoped(ApplicationTcoService::class);
     }
 
     /**
@@ -45,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(fn ($user, $ability) => $user->hasRole('Super Admin') ? true : null);
 
         $this->registerEaPolicies();
+        $this->registerFinancePolicies();
 
         $this->registerEaContracts();
     }
@@ -106,6 +113,24 @@ class AppServiceProvider extends ServiceProvider
             $class = 'App\\Models\\Ea\\'.basename($file, '.php');
             if (class_exists($class)) {
                 Gate::policy($class, EaPolicy::class);
+            }
+        }
+    }
+
+    /**
+     * Bind every App\Models\Finance\* model to the single FinancePolicy (ATH-FIN-001 §8).
+     */
+    private function registerFinancePolicies(): void
+    {
+        $dir = app_path('Models/Finance');
+        if (! is_dir($dir)) {
+            return;
+        }
+
+        foreach (glob($dir.'/*.php') ?: [] as $file) {
+            $class = 'App\\Models\\Finance\\'.basename($file, '.php');
+            if (class_exists($class)) {
+                Gate::policy($class, FinancePolicy::class);
             }
         }
     }

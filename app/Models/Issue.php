@@ -80,6 +80,7 @@ class Issue extends Model
         'config_drift' => ['label' => 'Configuration drift', 'model' => ConfigDriftEvent::class, 'code' => 'drift_code', 'route' => 'drift.show'],
         'kri' => ['label' => 'KRI breach', 'model' => Kri::class, 'code' => 'code', 'title' => 'name', 'route' => 'kri.show'],
         'core_banking' => ['label' => 'Core banking', 'model' => CoreBankingIntegration::class, 'code' => 'name', 'title' => 'product', 'route' => 'core-banking.show'],
+        'finance_variance' => ['label' => 'Budget variance', 'model' => null],
         'access_review' => ['label' => 'Access review', 'model' => AccessReviewCampaign::class, 'code' => 'campaign_code', 'title' => 'name', 'route' => 'access-reviews.show'],
     ];
 

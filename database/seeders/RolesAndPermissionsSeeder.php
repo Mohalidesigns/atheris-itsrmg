@@ -9,6 +9,11 @@ use Spatie\Permission\PermissionRegistrar;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
+    public const FINANCE_EXTRA_PERMISSIONS = [
+        'approve it-finance-invoices', 'approve it-finance-investments', 'approve it-finance-contracts',
+        'close it-finance-periods', 'manage it-finance-settings', 'view it-finance-amounts', 'import it-finance',
+    ];
+
     public function run(): void
     {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
@@ -49,6 +54,8 @@ class RolesAndPermissionsSeeder extends Seeder
             'platform',
             // Workflow Studio: who initiates and who approves each process (ATH-VAL-016).
             'workflows',
+            // IT Financial Management (ATH-FIN-001 §8).
+            'it-finance',
         ];
 
         $actions = ['view', 'create', 'edit', 'delete', 'approve', 'export'];
@@ -57,6 +64,11 @@ class RolesAndPermissionsSeeder extends Seeder
             foreach ($actions as $action) {
                 Permission::firstOrCreate(['name' => "{$action} {$module}"]);
             }
+        }
+
+        // IT Financial Management: permissions beyond the standard six (ATH-FIN-001 §8).
+        foreach (self::FINANCE_EXTRA_PERMISSIONS as $name) {
+            Permission::firstOrCreate(['name' => $name]);
         }
 
         // Super Admin - everything
@@ -70,11 +82,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // Risk Manager - risk + threat + treatment modules
         $riskManager = Role::firstOrCreate(['name' => 'Risk Manager']);
         $riskModules = ['risks', 'risk-assessments', 'risk-treatments', 'threats', 'issues'];
-        foreach ($riskModules as $module) {
-            foreach ($actions as $action) {
-                $riskManager->givePermissionTo("{$action} {$module}");
-            }
-        }
+        $riskManager->givePermissionTo($this->crossGrant($actions, $riskModules));
         $riskManager->givePermissionTo([
             'view controls', 'view frameworks', 'view assets', 'view reports',
             'view vulnerabilities', 'view incidents',
@@ -94,11 +102,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // Compliance Officer - compliance + controls + evidence + frameworks
         $complianceOfficer = Role::firstOrCreate(['name' => 'Compliance Officer']);
         $complianceModules = ['controls', 'frameworks', 'compliance-assessments', 'evidence', 'gap-analysis', 'policies', 'policy-attestations', 'isms', 'pci', 'issues'];
-        foreach ($complianceModules as $module) {
-            foreach ($actions as $action) {
-                $complianceOfficer->givePermissionTo("{$action} {$module}");
-            }
-        }
+        $complianceOfficer->givePermissionTo($this->crossGrant($actions, $complianceModules));
         $complianceOfficer->givePermissionTo([
             'view risks', 'view assets', 'view reports', 'view vulnerabilities',
             'view csat', 'create csat', 'edit csat',
@@ -117,11 +121,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // Security Analyst - security operations
         $securityAnalyst = Role::firstOrCreate(['name' => 'Security Analyst']);
         $secModules = ['vulnerabilities', 'vulnerability-tickets', 'incidents', 'security-alerts', 'data-breaches', 'monitoring', 'issues'];
-        foreach ($secModules as $module) {
-            foreach ($actions as $action) {
-                $securityAnalyst->givePermissionTo("{$action} {$module}");
-            }
-        }
+        $securityAnalyst->givePermissionTo($this->crossGrant($actions, $secModules));
         $securityAnalyst->givePermissionTo([
             'view risks', 'view controls', 'view assets', 'view reports',
             'view platform',
@@ -130,22 +130,18 @@ class RolesAndPermissionsSeeder extends Seeder
 
         // Auditor - view + export on everything, create/edit on evidence and issues
         $auditor = Role::firstOrCreate(['name' => 'Auditor']);
-        foreach ($modules as $module) {
-            $auditor->givePermissionTo("view {$module}");
-            $auditor->givePermissionTo("export {$module}");
-        }
-        foreach (['evidence', 'issues', 'compliance-assessments'] as $m) {
-            $auditor->givePermissionTo(["create {$m}", "edit {$m}"]);
-        }
+        $auditor->givePermissionTo(array_merge(
+            $this->crossGrant(['view', 'export'], $modules),
+            $this->crossGrant(['create', 'edit'], ['evidence', 'issues', 'compliance-assessments']),
+        ));
 
         // Viewer - view only
         $viewer = Role::firstOrCreate(['name' => 'Viewer']);
-        foreach ($modules as $module) {
-            $viewer->givePermissionTo("view {$module}");
-        }
+        $viewer->givePermissionTo($this->crossGrant(['view'], $modules));
 
         $this->seedArchitectRoles($actions);
         $this->seedChangeManagerRole($actions);
+        $this->seedFinanceRoles($actions);
     }
 
     /**
@@ -155,9 +151,7 @@ class RolesAndPermissionsSeeder extends Seeder
     private function seedChangeManagerRole(array $actions): void
     {
         $changeManager = Role::firstOrCreate(['name' => 'Change Manager']);
-        foreach ($actions as $action) {
-            $changeManager->givePermissionTo("{$action} changes");
-        }
+        $changeManager->givePermissionTo($this->crossGrant($actions, ['changes']));
         $changeManager->givePermissionTo([
             'view assets', 'view risks', 'view incidents', 'view vulnerabilities',
             'view issues', 'view ea', 'view platform',
@@ -181,9 +175,7 @@ class RolesAndPermissionsSeeder extends Seeder
         // governance loop (ARB decisions, exception approval) and the external
         // data feeds.
         $enterpriseArchitect = Role::firstOrCreate(['name' => 'Enterprise Architect']);
-        foreach ($actions as $action) {
-            $enterpriseArchitect->givePermissionTo("{$action} ea");
-        }
+        $enterpriseArchitect->givePermissionTo($this->crossGrant($actions, ['ea']));
         $enterpriseArchitect->givePermissionTo([
             'view risks', 'view controls', 'view frameworks', 'view assets',
             'view vendors', 'view vulnerabilities', 'view incidents',
@@ -223,5 +215,47 @@ class RolesAndPermissionsSeeder extends Seeder
             'view policies', 'view reports', 'view issues', 'create issues',
             'view changes', 'create changes', 'edit changes',
         ]);
+    }
+
+    /**
+     * IT Financial Management roles (ATH-FIN-001 §8). Roles are global; banks assign them to users.
+     */
+    private function seedFinanceRoles(array $actions): void
+    {
+        $grants = [
+            'IT Budget Owner' => ['view it-finance', 'create it-finance', 'edit it-finance', 'export it-finance', 'view it-finance-amounts', 'view workflows'],
+            'IT Finance Controller' => array_merge(
+                array_map(fn ($a) => "{$a} it-finance", $actions),
+                self::FINANCE_EXTRA_PERMISSIONS,
+            ),
+            'Procurement Officer' => ['view it-finance', 'create it-finance', 'edit it-finance', 'import it-finance', 'view it-finance-amounts', 'view vendors'],
+            'Investment Sponsor' => ['view it-finance', 'approve it-finance-investments', 'view it-finance-amounts'],
+            'IT Steering Committee' => ['view it-finance', 'approve it-finance-investments', 'view it-finance-amounts'],
+            'Finance Approver' => ['view it-finance', 'export it-finance', 'approve it-finance', 'approve it-finance-invoices', 'approve it-finance-contracts', 'approve it-finance-investments', 'view it-finance-amounts'],
+        ];
+        foreach ($grants as $role => $permissions) {
+            Role::firstOrCreate(['name' => $role])->givePermissionTo($permissions);
+        }
+
+        Role::firstOrCreate(['name' => 'Auditor'])->givePermissionTo('view it-finance-amounts');
+    }
+
+    /**
+     * Every "{action} {module}" pair, so each role is granted in one call. Each
+     * givePermissionTo() flushes the permission cache and the next string lookup
+     * rebuilds it, so per-permission calls made this seeder take ~15 s per test.
+     *
+     * @return list<string>
+     */
+    private function crossGrant(array $actions, array $modules): array
+    {
+        $names = [];
+        foreach ($modules as $module) {
+            foreach ($actions as $action) {
+                $names[] = "{$action} {$module}";
+            }
+        }
+
+        return $names;
     }
 }

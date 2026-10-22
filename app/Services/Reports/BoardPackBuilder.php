@@ -8,6 +8,7 @@ use App\Models\Risk;
 use App\Models\User;
 use App\Services\Approvals\ApprovalEngine;
 use App\Services\ComplianceScoreService;
+use App\Services\Finance\FinanceMetrics;
 use App\Services\Kri\KriMetrics;
 use App\Services\Monitoring\MonitoringMetrics;
 use App\Services\RiskScoringService;
@@ -44,6 +45,8 @@ class BoardPackBuilder
         'fair_summary' => 'Quantified risk (FAIR)',
         'fair_ale' => 'Quantified risk (FAIR)',
         'threat_advisories' => 'Threat advisories',
+        'it_financial_position' => 'IT financial position',
+        'it_investment_portfolio' => 'IT investment portfolio and value',
     ];
 
     public function __construct(
@@ -99,6 +102,18 @@ class BoardPackBuilder
         }
 
         return $out;
+    }
+
+    /** The IT finance section (FIN-04.11); null when the bank has no current fiscal year, so the pack shows "No data". */
+    private function sectionItFinancialPosition(int $orgId): ?array
+    {
+        return app(FinanceMetrics::class)->boardFigures($orgId) ?: null;
+    }
+
+    /** The IT investment section (FIN-07.07); null when the bank has no open investments. Money is masked on read (FinanceMasking). */
+    private function sectionItInvestmentPortfolio(int $orgId): ?array
+    {
+        return app(FinanceMetrics::class)->boardInvestmentFigures($orgId);
     }
 
     private function activeRisks(int $orgId)

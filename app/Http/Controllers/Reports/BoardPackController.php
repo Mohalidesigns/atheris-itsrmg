@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Reports;
 use App\Http\Controllers\Controller;
 use App\Models\BoardPackRun;
 use App\Models\BoardPackTemplate;
+use App\Services\Finance\FinanceMasking;
 use App\Services\Reports\BoardPackBuilder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -41,6 +42,9 @@ class BoardPackController extends Controller
     public function show(Request $request, BoardPackRun $run)
     {
         $run->load(['template:id,name,navy_variant', 'preparer:id,name', 'approver:id,name']);
+        if (is_array($run->content)) {
+            $run->content = app(FinanceMasking::class)->boardContent($run->content, $request->user());
+        }
 
         return Inertia::render('BoardPacks/Show', [
             'run' => $run,

@@ -7,10 +7,10 @@ use App\Http\Controllers\Assets\AssetDiscoveryController;
 use App\Http\Controllers\Assets\BusinessServiceMapController;
 use App\Http\Controllers\AuditTrailController;
 use App\Http\Controllers\Auth\SamlController;
-use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\Auth\ScimController;
 use App\Http\Controllers\BcpController;
 use App\Http\Controllers\BusinessAssetController;
+use App\Http\Controllers\CapaController;
 use App\Http\Controllers\Change\ChangeCabController;
 use App\Http\Controllers\Change\ChangePolicyController;
 use App\Http\Controllers\Change\ChangeRequestController as ChangeManagementController;
@@ -33,11 +33,58 @@ use App\Http\Controllers\Ea\SurveyController;
 use App\Http\Controllers\Ea\WedgeController;
 use App\Http\Controllers\EaController;
 use App\Http\Controllers\EvidenceController;
+use App\Http\Controllers\Finance\AccrualController;
+use App\Http\Controllers\Finance\ActualsController;
+use App\Http\Controllers\Finance\AllocationController;
+use App\Http\Controllers\Finance\BenefitController;
+use App\Http\Controllers\Finance\BudgetController;
+use App\Http\Controllers\Finance\BudgetCycleController;
+use App\Http\Controllers\Finance\BudgetLineController;
+use App\Http\Controllers\Finance\BudgetScenarioController;
+use App\Http\Controllers\Finance\BudgetTargetController;
+use App\Http\Controllers\Finance\BudgetTransferController;
+use App\Http\Controllers\Finance\BudgetWorkbookController;
+use App\Http\Controllers\Finance\BusinessCaseController;
+use App\Http\Controllers\Finance\CapitalisationController;
+use App\Http\Controllers\Finance\ChargebackController;
+use App\Http\Controllers\Finance\CloudAccountController;
+use App\Http\Controllers\Finance\CloudAnomalyController;
+use App\Http\Controllers\Finance\CloudCostController;
+use App\Http\Controllers\Finance\CloudImportController;
+use App\Http\Controllers\Finance\CloudTagRuleController;
+use App\Http\Controllers\Finance\ContractController;
+use App\Http\Controllers\Finance\ContractRelationsController;
+use App\Http\Controllers\Finance\DoaBandController;
+use App\Http\Controllers\Finance\ExpenseController;
+use App\Http\Controllers\Finance\FinanceCalendarController;
+use App\Http\Controllers\Finance\FinanceCurrencyController;
+use App\Http\Controllers\Finance\FinanceDashboardController;
+use App\Http\Controllers\Finance\FinanceDimensionsController;
+use App\Http\Controllers\Finance\FinanceDocumentController;
+use App\Http\Controllers\Finance\FinanceImportController;
+use App\Http\Controllers\Finance\FinanceReportController;
+use App\Http\Controllers\Finance\FinanceSettingsController;
+use App\Http\Controllers\Finance\FiscalCalendarController;
+use App\Http\Controllers\Finance\InvestmentChangeController;
+use App\Http\Controllers\Finance\InvestmentController;
+use App\Http\Controllers\Finance\InvoiceController;
+use App\Http\Controllers\Finance\MonitorController;
+use App\Http\Controllers\Finance\PeriodCloseController;
+use App\Http\Controllers\Finance\PortfolioController;
+use App\Http\Controllers\Finance\PurchaseOrderController;
+use App\Http\Controllers\Finance\RecurringExpenseController;
+use App\Http\Controllers\Finance\RenewalController;
+use App\Http\Controllers\Finance\ShowbackController;
+use App\Http\Controllers\Finance\StageGateController;
+use App\Http\Controllers\Finance\SupplementaryRequestController;
+use App\Http\Controllers\Finance\TcoController;
+use App\Http\Controllers\Finance\TerminationController;
+use App\Http\Controllers\Finance\ValueReviewController;
 use App\Http\Controllers\GapController;
+use App\Http\Controllers\IdentityController;
 use App\Http\Controllers\IncidentController;
 use App\Http\Controllers\IntegrationsController;
 use App\Http\Controllers\IsmsController;
-use App\Http\Controllers\CapaController;
 use App\Http\Controllers\IssueController;
 use App\Http\Controllers\Kri\KriController;
 use App\Http\Controllers\Monitoring\AccessReviewController;
@@ -71,6 +118,7 @@ use App\Http\Controllers\VulnerabilityController;
 use App\Http\Controllers\VulnerabilityTicketController;
 use App\Http\Controllers\Workflows\WorkflowStudioController;
 use App\Modules\CBNCSAT\Http\Controllers\CsatAssessmentController;
+use App\Services\Finance\Reports\FinanceReports;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -672,6 +720,368 @@ Route::middleware('auth')->group(function () {
         Route::post('/{change}/comment', [ChangeManagementController::class, 'comment'])->whereNumber('change')->name('comment');
     });
 
+    // IT Financial Management: foundation & configuration (ATH-FIN-001 §3.1, §9)
+    Route::middleware('permission:view it-finance')->prefix('it-finance')->name('finance.')->group(function () {
+        Route::get('/settings', [FinanceSettingsController::class, 'show'])->name('settings');
+
+        Route::middleware('permission:manage it-finance-settings')->group(function () {
+            Route::put('/settings', [FinanceSettingsController::class, 'update'])->name('settings.update');
+
+            Route::post('/fiscal-years', [FiscalCalendarController::class, 'store'])->name('fiscal-years.store');
+            Route::put('/fiscal-years/{fiscalYear}', [FiscalCalendarController::class, 'update'])->whereNumber('fiscalYear')->name('fiscal-years.update');
+            Route::delete('/fiscal-years/{fiscalYear}', [FiscalCalendarController::class, 'destroy'])->whereNumber('fiscalYear')->name('fiscal-years.destroy');
+
+            Route::middleware('permission:import it-finance')->group(function () {
+                Route::post('/cost-centres/import', [FinanceDimensionsController::class, 'costCentreImport'])->name('cost-centres.import');
+                Route::post('/fx-rates/import', [FinanceCurrencyController::class, 'fxRateImport'])->name('fx-rates.import');
+            });
+            Route::post('/cost-centres', [FinanceDimensionsController::class, 'costCentreStore'])->name('cost-centres.store');
+            Route::put('/cost-centres/{costCentre}', [FinanceDimensionsController::class, 'costCentreUpdate'])->whereNumber('costCentre')->name('cost-centres.update');
+            Route::delete('/cost-centres/{costCentre}', [FinanceDimensionsController::class, 'costCentreDestroy'])->whereNumber('costCentre')->name('cost-centres.destroy');
+
+            Route::post('/categories', [FinanceDimensionsController::class, 'categoryStore'])->name('categories.store');
+            Route::put('/categories/{category}', [FinanceDimensionsController::class, 'categoryUpdate'])->whereNumber('category')->name('categories.update');
+            Route::delete('/categories/{category}', [FinanceDimensionsController::class, 'categoryDestroy'])->whereNumber('category')->name('categories.destroy');
+
+            Route::post('/gl-accounts', [FinanceDimensionsController::class, 'glAccountStore'])->name('gl-accounts.store');
+            Route::put('/gl-accounts/{glAccount}', [FinanceDimensionsController::class, 'glAccountUpdate'])->whereNumber('glAccount')->name('gl-accounts.update');
+            Route::delete('/gl-accounts/{glAccount}', [FinanceDimensionsController::class, 'glAccountDestroy'])->whereNumber('glAccount')->name('gl-accounts.destroy');
+
+            Route::post('/currencies', [FinanceCurrencyController::class, 'currencyStore'])->name('currencies.store');
+            Route::put('/currencies/{currency}', [FinanceCurrencyController::class, 'currencyUpdate'])->whereNumber('currency')->name('currencies.update');
+            Route::post('/fx-rates', [FinanceCurrencyController::class, 'fxRateStore'])->name('fx-rates.store');
+            Route::delete('/fx-rates/{fxRate}', [FinanceCurrencyController::class, 'fxRateDestroy'])->whereNumber('fxRate')->name('fx-rates.destroy');
+
+            Route::post('/tax-types', [FinanceCurrencyController::class, 'taxTypeStore'])->name('tax-types.store');
+            Route::put('/tax-types/{taxType}', [FinanceCurrencyController::class, 'taxTypeUpdate'])->whereNumber('taxType')->name('tax-types.update');
+
+            Route::post('/drivers', [FinanceDimensionsController::class, 'driverStore'])->name('drivers.store');
+            Route::put('/drivers/{driver}', [FinanceDimensionsController::class, 'driverUpdate'])->whereNumber('driver')->name('drivers.update');
+            Route::delete('/drivers/{driver}', [FinanceDimensionsController::class, 'driverDestroy'])->whereNumber('driver')->name('drivers.destroy');
+            Route::put('/drivers/{driver}/values', [FinanceDimensionsController::class, 'driverValuesUpdate'])->whereNumber('driver')->name('drivers.values.update');
+        });
+
+        // P1 budgeting (ATH-FIN-001 §3.2, §9)
+        Route::get('/budgets', [BudgetController::class, 'index'])->name('budgets.index');
+        Route::middleware('permission:create it-finance')->group(function () {
+            Route::get('/budgets/create', [BudgetController::class, 'create'])->name('budgets.create');
+            Route::post('/budgets', [BudgetController::class, 'store'])->name('budgets.store');
+            Route::post('/transfers', [BudgetTransferController::class, 'store'])->name('transfers.store');
+            Route::post('/supplementary', [SupplementaryRequestController::class, 'store'])->name('supplementary.store');
+        });
+        Route::get('/budgets/{budget}', [BudgetController::class, 'show'])->whereNumber('budget')->name('budgets.show');
+        Route::get('/budgets/{budget}/edit', [BudgetController::class, 'edit'])->whereNumber('budget')->name('budgets.edit');
+        Route::get('/budgets/{budget}/diff', [BudgetController::class, 'diff'])->whereNumber('budget')->name('budgets.diff');
+        Route::get('/cycles', [BudgetCycleController::class, 'index'])->name('cycles.index');
+        Route::get('/targets', [BudgetTargetController::class, 'index'])->name('targets.index');
+        Route::get('/transfers', [BudgetTransferController::class, 'index'])->name('transfers.index');
+        Route::get('/supplementary', [SupplementaryRequestController::class, 'index'])->name('supplementary.index');
+        Route::get('/budgets/{budget}/workbook', [BudgetWorkbookController::class, 'export'])->whereNumber('budget')->middleware('permission:export it-finance')->name('budgets.workbook');
+
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::put('/budgets/{budget}', [BudgetController::class, 'update'])->whereNumber('budget')->name('budgets.update');
+            Route::scopeBindings()->group(function () {
+                Route::post('/budgets/{budget}/lines', [BudgetLineController::class, 'store'])->whereNumber('budget')->name('budgets.lines.store');
+                Route::put('/budgets/{budget}/lines/bulk', [BudgetLineController::class, 'bulk'])->whereNumber('budget')->name('budgets.lines.bulk');
+                Route::post('/budgets/{budget}/lines/reorder', [BudgetLineController::class, 'reorder'])->whereNumber('budget')->name('budgets.lines.reorder');
+                Route::put('/budgets/{budget}/lines/{line}', [BudgetLineController::class, 'update'])->whereNumber(['budget', 'line'])->name('budgets.lines.update');
+                Route::delete('/budgets/{budget}/lines/{line}', [BudgetLineController::class, 'destroy'])->whereNumber(['budget', 'line'])->name('budgets.lines.destroy');
+                Route::post('/budgets/{budget}/lines/{line}/phase', [BudgetLineController::class, 'phase'])->whereNumber(['budget', 'line'])->name('budgets.phase');
+                Route::post('/budgets/{budget}/scenarios', [BudgetScenarioController::class, 'store'])->whereNumber('budget')->name('budgets.scenarios.store');
+                Route::put('/budgets/{budget}/scenarios/{scenario}', [BudgetScenarioController::class, 'update'])->whereNumber(['budget', 'scenario'])->name('budgets.scenarios.update');
+                Route::delete('/budgets/{budget}/scenarios/{scenario}', [BudgetScenarioController::class, 'destroy'])->whereNumber(['budget', 'scenario'])->name('budgets.scenarios.destroy');
+                Route::post('/budgets/{budget}/scenarios/{scenario}/promote', [BudgetScenarioController::class, 'promote'])->whereNumber(['budget', 'scenario'])->name('budgets.scenarios.promote');
+            });
+            Route::post('/budgets/{budget}/workbook', [BudgetWorkbookController::class, 'import'])->whereNumber('budget')->name('budgets.workbook.import');
+            Route::post('/budgets/{budget}/comments', [BudgetController::class, 'comment'])->whereNumber('budget')->name('budgets.comments.store');
+            Route::post('/budgets/{budget}/submit', [BudgetController::class, 'submit'])->whereNumber('budget')->name('budgets.submit');
+            Route::post('/budgets/{budget}/withdraw', [BudgetController::class, 'withdraw'])->whereNumber('budget')->name('budgets.withdraw');
+            Route::post('/budgets/{budget}/revise', [BudgetController::class, 'revise'])->whereNumber('budget')->name('budgets.revise');
+            Route::put('/transfers/{transfer}', [BudgetTransferController::class, 'update'])->whereNumber('transfer')->name('transfers.update');
+            Route::post('/transfers/{transfer}/submit', [BudgetTransferController::class, 'submit'])->whereNumber('transfer')->name('transfers.submit');
+            Route::post('/transfers/{transfer}/withdraw', [BudgetTransferController::class, 'withdraw'])->whereNumber('transfer')->name('transfers.withdraw');
+            Route::put('/supplementary/{supplementary}', [SupplementaryRequestController::class, 'update'])->whereNumber('supplementary')->name('supplementary.update');
+            Route::post('/supplementary/{supplementary}/submit', [SupplementaryRequestController::class, 'submit'])->whereNumber('supplementary')->name('supplementary.submit');
+            Route::post('/supplementary/{supplementary}/withdraw', [SupplementaryRequestController::class, 'withdraw'])->whereNumber('supplementary')->name('supplementary.withdraw');
+        });
+
+        Route::middleware('permission:approve it-finance')->group(function () {
+            Route::post('/budgets/{budget}/approve', [BudgetController::class, 'approve'])->whereNumber('budget')->name('budgets.approve');
+            Route::post('/budgets/{budget}/return', [BudgetController::class, 'returnToDraft'])->whereNumber('budget')->name('budgets.return');
+            Route::post('/budgets/{budget}/reject', [BudgetController::class, 'reject'])->whereNumber('budget')->name('budgets.reject');
+            Route::post('/budgets/{budget}/baseline', [BudgetController::class, 'baseline'])->whereNumber('budget')->name('budgets.baseline');
+            foreach (['approve', 'reject', 'apply'] as $action) {
+                Route::post("/transfers/{transfer}/{$action}", [BudgetTransferController::class, $action])->whereNumber('transfer')->name("transfers.{$action}");
+                Route::post("/supplementary/{supplementary}/{$action}", [SupplementaryRequestController::class, $action])->whereNumber('supplementary')->name("supplementary.{$action}");
+            }
+        });
+
+        Route::middleware('permission:manage it-finance-settings')->group(function () {
+            Route::post('/cycles', [BudgetCycleController::class, 'store'])->name('cycles.store');
+            Route::put('/cycles/{cycle}', [BudgetCycleController::class, 'update'])->whereNumber('cycle')->name('cycles.update');
+            Route::post('/cycles/{cycle}/transition', [BudgetCycleController::class, 'transition'])->whereNumber('cycle')->name('cycles.transition');
+            Route::post('/targets', [BudgetTargetController::class, 'store'])->name('targets.store');
+            Route::put('/targets/{target}', [BudgetTargetController::class, 'update'])->whereNumber('target')->name('targets.update');
+            Route::delete('/targets/{target}', [BudgetTargetController::class, 'destroy'])->whereNumber('target')->name('targets.destroy');
+            Route::post('/doa-bands', [DoaBandController::class, 'store'])->name('doa-bands.store');
+            Route::post('/doa-bands/{doaBandVersion}/withdraw', [DoaBandController::class, 'withdraw'])->whereNumber('doaBandVersion')->name('doa-bands.withdraw');
+        });
+        Route::middleware('permission:approve it-finance|manage it-finance-settings')->group(function () {
+            Route::post('/doa-bands/{doaBandVersion}/approve', [DoaBandController::class, 'approve'])->whereNumber('doaBandVersion')->name('doa-bands.approve');
+            Route::post('/doa-bands/{doaBandVersion}/reject', [DoaBandController::class, 'reject'])->whereNumber('doaBandVersion')->name('doa-bands.reject');
+        });
+
+        // P2 contracts, subscriptions, renewals and calendar (ATH-FIN-001 §3.6, §9)
+        Route::middleware('permission:create it-finance')->group(function () {
+            Route::get('/contracts/create', [ContractController::class, 'create'])->name('contracts.create');
+            Route::post('/contracts', [ContractController::class, 'store'])->name('contracts.store');
+        });
+        Route::get('/contracts', [ContractController::class, 'index'])->name('contracts.index');
+        Route::scopeBindings()->group(function () {
+            Route::get('/contracts/{contract}', [ContractController::class, 'show'])->whereNumber('contract')->name('contracts.show');
+            Route::get('/contracts/{contract}/documents/{document}/download', [ContractRelationsController::class, 'documentDownload'])->whereNumber(['contract', 'document'])->name('contracts.documents.download');
+        });
+        Route::get('/renewals', [RenewalController::class, 'index'])->name('renewals.index');
+        Route::get('/renewals/{renewal}', [RenewalController::class, 'show'])->whereNumber('renewal')->name('renewals.show');
+        Route::get('/terminations/{termination}', [TerminationController::class, 'show'])->whereNumber('termination')->name('terminations.show');
+        Route::get('/calendar', [FinanceCalendarController::class, 'index'])->name('calendar');
+        Route::post('/calendar/feed/rotate', [FinanceCalendarController::class, 'rotateFeed'])->name('calendar.feed.rotate');
+        Route::get('/calendar/export', [FinanceCalendarController::class, 'export'])->middleware('permission:export it-finance')->name('calendar.export');
+
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::get('/contracts/{contract}/edit', [ContractController::class, 'edit'])->whereNumber('contract')->name('contracts.edit');
+            Route::put('/contracts/{contract}', [ContractController::class, 'update'])->whereNumber('contract')->name('contracts.update');
+            Route::delete('/contracts/{contract}', [ContractController::class, 'destroy'])->whereNumber('contract')->name('contracts.destroy');
+            Route::post('/contracts/{contract}/activate', [ContractController::class, 'activate'])->whereNumber('contract')->name('contracts.activate');
+            Route::post('/contracts/{contract}/recompute', [ContractController::class, 'recompute'])->whereNumber('contract')->name('contracts.recompute');
+            Route::scopeBindings()->group(function () {
+                Route::post('/contracts/{contract}/team', [ContractRelationsController::class, 'teamStore'])->whereNumber('contract')->name('contracts.team.store');
+                Route::delete('/contracts/{contract}/team/{member}', [ContractRelationsController::class, 'teamDestroy'])->whereNumber(['contract', 'member'])->name('contracts.team.destroy');
+                Route::post('/contracts/{contract}/links', [ContractRelationsController::class, 'linkStore'])->whereNumber('contract')->name('contracts.links.store');
+                Route::delete('/contracts/{contract}/links/{link}', [ContractRelationsController::class, 'linkDestroy'])->whereNumber(['contract', 'link'])->name('contracts.links.destroy');
+                Route::post('/contracts/{contract}/documents', [ContractRelationsController::class, 'documentStore'])->whereNumber('contract')->name('contracts.documents.store');
+            });
+            Route::post('/contracts/{contract}/renewals', [RenewalController::class, 'open'])->whereNumber('contract')->name('renewals.open');
+            Route::put('/renewals/{renewal}', [RenewalController::class, 'recommend'])->whereNumber('renewal')->name('renewals.recommend');
+            foreach (['submit', 'withdraw', 'execute'] as $action) {
+                Route::post("/renewals/{renewal}/{$action}", [RenewalController::class, $action])->whereNumber('renewal')->name("renewals.{$action}");
+            }
+        });
+        Route::middleware('permission:approve it-finance-contracts')->group(function () {
+            foreach (['approve', 'reject'] as $action) {
+                Route::post("/renewals/{renewal}/{$action}", [RenewalController::class, $action])->whereNumber('renewal')->name("renewals.{$action}");
+            }
+            Route::post('/contracts/{contract}/terminate', [ContractController::class, 'terminate'])->whereNumber('contract')->name('contracts.terminate');
+            foreach (['approve', 'reject', 'withdraw'] as $action) {
+                Route::post("/terminations/{termination}/{$action}", [TerminationController::class, $action])->whereNumber('termination')->name("terminations.{$action}");
+            }
+        });
+
+        // P3 expenses, procurement, invoices, actuals, recurring, accruals and imports (ATH-FIN-001 §3.3, §9)
+        Route::get('/expenses', [ExpenseController::class, 'index'])->name('expenses.index');
+        Route::get('/expenses/availability', [ExpenseController::class, 'availability'])->name('expenses.availability');
+        Route::middleware('permission:create it-finance')->group(function () {
+            Route::get('/expenses/create', [ExpenseController::class, 'create'])->name('expenses.create');
+            Route::post('/expenses', [ExpenseController::class, 'store'])->name('expenses.store');
+            Route::post('/expenses/{expense}/commit', [ExpenseController::class, 'commit'])->whereNumber('expense')->name('expenses.commit');
+            Route::get('/invoices/create', [InvoiceController::class, 'create'])->name('invoices.create');
+            Route::post('/invoices', [InvoiceController::class, 'store'])->name('invoices.store');
+            Route::post('/recurring', [RecurringExpenseController::class, 'store'])->name('recurring.store');
+        });
+        Route::middleware('permission:import it-finance')->group(function () {
+            Route::post('/expenses/import', [ExpenseController::class, 'import'])->name('expenses.import');
+            Route::post('/invoices/import', [InvoiceController::class, 'import'])->name('invoices.import');
+            Route::post('/actuals/import', [ActualsController::class, 'import'])->name('actuals.import');
+            Route::post('/actuals/auto-match', [ActualsController::class, 'autoMatch'])->name('actuals.auto-match');
+            Route::post('/actuals/mappings', [ActualsController::class, 'mappingStore'])->name('actuals.mappings.store');
+            Route::delete('/actuals/mappings/{mapping}', [ActualsController::class, 'mappingDestroy'])->whereNumber('mapping')->name('actuals.mappings.destroy');
+            Route::post('/actuals/rules', [ActualsController::class, 'ruleStore'])->name('actuals.rules.store');
+            Route::delete('/actuals/rules/{rule}', [ActualsController::class, 'ruleDestroy'])->whereNumber('rule')->name('actuals.rules.destroy');
+            foreach (['match', 'unmatch', 'unbudgeted'] as $action) {
+                Route::post("/actuals/{actual}/{$action}", [ActualsController::class, $action])->whereNumber('actual')->name("actuals.{$action}");
+            }
+        });
+        Route::get('/expenses/{expense}', [ExpenseController::class, 'show'])->whereNumber('expense')->name('expenses.show');
+        Route::get('/purchase-orders', [PurchaseOrderController::class, 'index'])->name('purchase-orders.index');
+        Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show'])->whereNumber('purchaseOrder')->name('purchase-orders.show');
+        Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->whereNumber('invoice')->name('invoices.show');
+        Route::get('/actuals', [ActualsController::class, 'index'])->name('actuals.index');
+        Route::get('/actuals/{actual}/candidates', [ActualsController::class, 'candidates'])->whereNumber('actual')->name('actuals.candidates');
+        Route::get('/recurring', [RecurringExpenseController::class, 'index'])->name('recurring.index');
+        Route::get('/accruals', [AccrualController::class, 'index'])->name('accruals.index');
+        Route::get('/imports', [FinanceImportController::class, 'index'])->name('imports.index');
+        Route::get('/imports/{importBatch}', [FinanceImportController::class, 'show'])->whereNumber('importBatch')->name('imports.show');
+        Route::get('/documents/{document}/download', [FinanceDocumentController::class, 'download'])->whereNumber('document')->name('documents.download');
+        Route::post('/documents', [FinanceDocumentController::class, 'store'])->middleware('permission:create it-finance|edit it-finance')->name('documents.store');
+        foreach (['approve', 'return', 'reject'] as $action) { // gated by FinancePolicy::decideExpense / decideInvoice (the permission, or being the owner the stage awaits)
+            Route::post("/expenses/{expense}/{$action}", [ExpenseController::class, $action])->whereNumber('expense')->name("expenses.{$action}");
+            Route::post("/invoices/{invoice}/{$action}", [InvoiceController::class, $action])->whereNumber('invoice')->name("invoices.{$action}");
+        }
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::get('/expenses/{expense}/edit', [ExpenseController::class, 'edit'])->whereNumber('expense')->name('expenses.edit');
+            Route::put('/expenses/{expense}', [ExpenseController::class, 'update'])->whereNumber('expense')->name('expenses.update');
+            Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->whereNumber('expense')->name('expenses.destroy');
+            foreach (['submit', 'withdraw', 'cancel', 'close'] as $action) {
+                Route::post("/expenses/{expense}/{$action}", [ExpenseController::class, $action])->whereNumber('expense')->name("expenses.{$action}");
+            }
+            Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update'])->whereNumber('purchaseOrder')->name('purchase-orders.update');
+            foreach (['receive', 'close', 'cancel'] as $action) {
+                Route::post("/purchase-orders/{purchaseOrder}/{$action}", [PurchaseOrderController::class, $action])->whereNumber('purchaseOrder')->name("purchase-orders.{$action}");
+            }
+            Route::get('/invoices/{invoice}/edit', [InvoiceController::class, 'edit'])->whereNumber('invoice')->name('invoices.edit');
+            Route::put('/invoices/{invoice}', [InvoiceController::class, 'update'])->whereNumber('invoice')->name('invoices.update');
+            Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy'])->whereNumber('invoice')->name('invoices.destroy');
+            foreach (['match', 'override', 'submit', 'withdraw', 'dispute', 'resolve', 'cancel'] as $action) {
+                Route::post("/invoices/{invoice}/{$action}", [InvoiceController::class, $action])->whereNumber('invoice')->name("invoices.{$action}");
+            }
+            Route::put('/recurring/{recurringExpense}', [RecurringExpenseController::class, 'update'])->whereNumber('recurringExpense')->name('recurring.update');
+            Route::delete('/recurring/{recurringExpense}', [RecurringExpenseController::class, 'destroy'])->whereNumber('recurringExpense')->name('recurring.destroy');
+            Route::post('/recurring/{recurringExpense}/generate', [RecurringExpenseController::class, 'generate'])->whereNumber('recurringExpense')->name('recurring.generate');
+        });
+        Route::middleware('permission:approve it-finance-invoices')->group(function () {
+            foreach (['schedule', 'pay'] as $action) {
+                Route::post("/invoices/{invoice}/{$action}", [InvoiceController::class, $action])->whereNumber('invoice')->name("invoices.{$action}");
+            }
+        });
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/accruals', [AccrualController::class, 'store'])->name('accruals.store');
+            Route::post('/accruals/propose', [AccrualController::class, 'propose'])->name('accruals.propose');
+            Route::post('/accruals/release-prepayments', [AccrualController::class, 'releasePrepayments'])->name('accruals.release-prepayments');
+            foreach (['post', 'reverse', 'cancel'] as $action) {
+                Route::post("/accruals/{accrual}/{$action}", [AccrualController::class, $action])->whereNumber('accrual')->name("accruals.{$action}");
+            }
+        });
+
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/periods/{period}/close', [FiscalCalendarController::class, 'closePeriod'])->whereNumber('period')->name('periods.close');
+            Route::post('/periods/{period}/lock', [FiscalCalendarController::class, 'lockPeriod'])->whereNumber('period')->name('periods.lock');
+        });
+
+        // P4: monitoring, variance, period close and reports (ATH-FIN-001 §3.4, §9)
+        Route::get('/', [FinanceDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/monitor/bva', [MonitorController::class, 'bva'])->name('monitor.bva');
+        Route::get('/monitor/bva/export', [MonitorController::class, 'bvaExport'])->middleware('permission:export it-finance')->name('monitor.bva.export');
+        Route::get('/monitor/lines/{line}/transactions', [MonitorController::class, 'transactions'])->whereNumber('line')->name('monitor.transactions');
+        Route::get('/monitor/forecast', [MonitorController::class, 'forecast'])->name('monitor.forecast');
+        Route::get('/monitor/variances', [MonitorController::class, 'variances'])->name('monitor.variances');
+        Route::get('/monitor/period-close', [PeriodCloseController::class, 'index'])->name('monitor.period-close');
+        Route::get('/periods/{period}/close-checklist', [PeriodCloseController::class, 'checklist'])->whereNumber('period')->name('periods.close-checklist');
+        Route::get('/period-closes/{periodClose}', [PeriodCloseController::class, 'show'])->whereNumber('periodClose')->name('period-closes.show');
+        Route::get('/reports', [FinanceReportController::class, 'index'])->name('reports.index');
+        Route::get('/reports/{report}', [FinanceReportController::class, 'show'])->whereIn('report', array_keys(FinanceReports::DEFINITIONS))
+            ->middleware('permission:export it-finance')->name('reports.show');
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::post('/monitor/forecast/{line}', [MonitorController::class, 'forecastOverride'])->whereNumber('line')->name('monitor.forecast.override');
+            Route::delete('/monitor/forecast/{line}', [MonitorController::class, 'forecastClear'])->whereNumber('line')->name('monitor.forecast.clear');
+            Route::post('/monitor/variances/{note}/explain', [MonitorController::class, 'explain'])->whereNumber('note')->name('monitor.variances.explain');
+            Route::post('/monitor/variances/{note}/comment', [MonitorController::class, 'comment'])->whereNumber('note')->name('monitor.variances.comment');
+            Route::post('/monitor/variances/{note}/raise-issue', [MonitorController::class, 'raiseIssue'])->whereNumber('note')->name('monitor.variances.raise-issue');
+        });
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/monitor/variances/{note}/acknowledge', [MonitorController::class, 'acknowledge'])->whereNumber('note')->name('monitor.variances.acknowledge');
+            Route::post('/periods/{period}/evaluate-variances', [MonitorController::class, 'evaluate'])->whereNumber('period')->name('periods.evaluate-variances');
+            Route::post('/periods/{period}/reopen', [PeriodCloseController::class, 'requestReopen'])->whereNumber('period')->name('periods.reopen');
+            Route::post('/period-closes/{periodClose}/withdraw', [PeriodCloseController::class, 'withdraw'])->whereNumber('periodClose')->name('period-closes.withdraw');
+        });
+        Route::middleware('permission:approve it-finance')->group(function () {
+            Route::post('/period-closes/{periodClose}/approve', [PeriodCloseController::class, 'approve'])->whereNumber('periodClose')->name('period-closes.approve');
+            Route::post('/period-closes/{periodClose}/reject', [PeriodCloseController::class, 'reject'])->whereNumber('periodClose')->name('period-closes.reject');
+        });
+
+        // P5: IT investment and value realisation (ATH-FIN-001 §3.5, §9)
+        Route::get('/investments', [InvestmentController::class, 'index'])->name('investments.index');
+        Route::get('/investments/create', [InvestmentController::class, 'create'])->middleware('permission:create it-finance')->name('investments.create');
+        Route::get('/investments/{investment}', [InvestmentController::class, 'show'])->whereNumber('investment')->name('investments.show');
+        Route::get('/portfolio', [PortfolioController::class, 'index'])->name('portfolio');
+        Route::get('/stage-gates/{stageGate}', [StageGateController::class, 'show'])->whereNumber('stageGate')->name('stage-gates.show');
+        Route::get('/business-cases/{businessCase}', [BusinessCaseController::class, 'show'])->whereNumber('businessCase')->name('business-cases.show');
+        Route::get('/value-reviews/{valueReview}', [ValueReviewController::class, 'show'])->whereNumber('valueReview')->name('value-reviews.show');
+        Route::post('/business-cases/evaluate', [BusinessCaseController::class, 'evaluate'])->name('business-cases.evaluate');
+        Route::post('/investments/{investment}/score', [InvestmentController::class, 'score'])->whereNumber('investment')->name('investments.score');
+        Route::post('/benefits/{benefit}/readings', [BenefitController::class, 'storeReading'])->whereNumber('benefit')->name('benefits.readings.store');
+        Route::post('/value-reviews/{valueReview}/complete', [ValueReviewController::class, 'complete'])->whereNumber('valueReview')->name('value-reviews.complete');
+        Route::middleware('permission:create it-finance')->group(function () {
+            Route::post('/investments', [InvestmentController::class, 'store'])->name('investments.store');
+        });
+        Route::middleware('permission:edit it-finance')->group(function () {
+            Route::put('/investments/{investment}', [InvestmentController::class, 'update'])->whereNumber('investment')->name('investments.update');
+            Route::delete('/investments/{investment}', [InvestmentController::class, 'destroy'])->whereNumber('investment')->name('investments.destroy');
+            foreach (['advance-gate' => 'advanceGate', 'hold' => 'hold', 'resume' => 'resume', 'cancel' => 'cancel', 'progress' => 'progress', 'budget-lines' => 'syncLines'] as $uri => $method) {
+                Route::post("/investments/{investment}/{$uri}", [InvestmentController::class, $method])->whereNumber('investment')->name('investments.'.($uri === 'budget-lines' ? 'lines.sync' : $uri));
+            }
+            Route::post('/investments/{investment}/links', [InvestmentController::class, 'storeLink'])->whereNumber('investment')->name('investments.links.store');
+            Route::delete('/investments/{investment}/links/{link}', [InvestmentController::class, 'destroyLink'])->whereNumber('investment')->whereNumber('link')->name('investments.links.destroy');
+            Route::post('/investments/{investment}/business-cases', [BusinessCaseController::class, 'store'])->whereNumber('investment')->name('business-cases.store');
+            Route::put('/business-cases/{businessCase}', [BusinessCaseController::class, 'update'])->whereNumber('businessCase')->name('business-cases.update');
+            Route::post('/business-cases/{businessCase}/submit', [BusinessCaseController::class, 'submit'])->whereNumber('businessCase')->name('business-cases.submit');
+            Route::post('/investments/{investment}/benefits', [BenefitController::class, 'store'])->whereNumber('investment')->name('benefits.store');
+            Route::put('/benefits/{benefit}', [BenefitController::class, 'update'])->whereNumber('benefit')->name('benefits.update');
+            Route::post('/benefits/{benefit}/cancel', [BenefitController::class, 'cancel'])->whereNumber('benefit')->name('benefits.cancel');
+            Route::post('/investments/{investment}/value-reviews', [ValueReviewController::class, 'store'])->whereNumber('investment')->name('value-reviews.store');
+            Route::put('/value-reviews/{valueReview}', [ValueReviewController::class, 'update'])->whereNumber('valueReview')->name('value-reviews.update');
+            Route::post('/investments/{investment}/changes', [InvestmentChangeController::class, 'store'])->whereNumber('investment')->name('investment-changes.store');
+            Route::post('/investment-changes/{investmentChange}/withdraw', [InvestmentChangeController::class, 'withdraw'])->whereNumber('investmentChange')->name('investment-changes.withdraw');
+            Route::post('/stage-gates/{stageGate}/withdraw', [StageGateController::class, 'withdraw'])->whereNumber('stageGate')->name('stage-gates.withdraw');
+        });
+        Route::middleware('permission:approve it-finance-investments')->group(function () {
+            Route::post('/stage-gates/{stageGate}/approve', [StageGateController::class, 'approve'])->whereNumber('stageGate')->name('stage-gates.approve');
+            Route::post('/stage-gates/{stageGate}/reject', [StageGateController::class, 'reject'])->whereNumber('stageGate')->name('stage-gates.reject');
+        });
+
+        // P6: cloud cost / FinOps, allocation and showback, capitalisation, application TCO (ATH-FIN-001 §3.3, §9)
+        Route::get('/cloud/accounts', [CloudAccountController::class, 'index'])->name('cloud.accounts.index');
+        Route::get('/cloud/costs', [CloudCostController::class, 'index'])->name('cloud.costs');
+        Route::get('/cloud/anomalies', [CloudAnomalyController::class, 'index'])->name('cloud.anomalies.index');
+        Route::get('/allocations', [AllocationController::class, 'index'])->name('allocations.index');
+        Route::get('/monitor/showback', [ShowbackController::class, 'index'])->name('monitor.showback');
+        Route::get('/monitor/tco', [TcoController::class, 'index'])->name('monitor.tco');
+        Route::get('/monitor/tco/detail', [TcoController::class, 'detail'])->name('monitor.tco.detail');
+        Route::get('/capitalisations', [CapitalisationController::class, 'index'])->name('capitalisations.index');
+        Route::get('/capitalisations/{capitalisation}', [CapitalisationController::class, 'show'])->whereNumber('capitalisation')->name('capitalisations.show');
+        Route::middleware('permission:export it-finance')->group(function () {
+            Route::get('/monitor/showback/export', [ShowbackController::class, 'export'])->name('monitor.showback.export');
+        });
+        Route::middleware('permission:close it-finance-periods')->group(function () {
+            Route::post('/chargeback-runs', [ChargebackController::class, 'store'])->name('chargeback.store');
+            Route::get('/chargeback-runs/{chargebackRun}/download', [ChargebackController::class, 'download'])->whereNumber('chargebackRun')->name('chargeback.download');
+        });
+        Route::post('/chargeback-runs/{chargebackRun}/void', [ChargebackController::class, 'void'])->whereNumber('chargebackRun')->middleware('permission:close it-finance-periods')->name('chargeback.void');
+        Route::middleware('permission:import it-finance')->group(function () {
+            Route::post('/cloud/accounts', [CloudAccountController::class, 'store'])->name('cloud.accounts.store');
+            Route::put('/cloud/accounts/{cloudAccount}', [CloudAccountController::class, 'update'])->whereNumber('cloudAccount')->name('cloud.accounts.update');
+            Route::delete('/cloud/accounts/{cloudAccount}', [CloudAccountController::class, 'destroy'])->whereNumber('cloudAccount')->name('cloud.accounts.destroy');
+            Route::post('/cloud/accounts/{cloudAccount}/reallocate', [CloudAccountController::class, 'reallocate'])->whereNumber('cloudAccount')->name('cloud.accounts.reallocate');
+            Route::post('/cloud/import', [CloudImportController::class, 'store'])->name('cloud.import');
+            Route::post('/cloud/tag-rules', [CloudTagRuleController::class, 'store'])->name('cloud.tag-rules.store');
+            Route::put('/cloud/tag-rules/{cloudTagRule}', [CloudTagRuleController::class, 'update'])->whereNumber('cloudTagRule')->name('cloud.tag-rules.update');
+            Route::delete('/cloud/tag-rules/{cloudTagRule}', [CloudTagRuleController::class, 'destroy'])->whereNumber('cloudTagRule')->name('cloud.tag-rules.destroy');
+            Route::post('/cloud/untagged/assign', [CloudCostController::class, 'assignUntagged'])->name('cloud.untagged.assign');
+        });
+        Route::middleware('permission:edit it-finance')->group(function () {
+            foreach (['acknowledge', 'resolve', 'dismiss'] as $action) {
+                Route::post("/cloud/anomalies/{cloudAnomaly}/{$action}", [CloudAnomalyController::class, $action])->whereNumber('cloudAnomaly')->name("cloud.anomalies.{$action}");
+            }
+            Route::post('/budgets/lines/classify', [TcoController::class, 'classify'])->name('budgets.lines.classify');
+            Route::post('/capitalisations', [CapitalisationController::class, 'store'])->name('capitalisations.store');
+            Route::put('/capitalisations/{capitalisation}', [CapitalisationController::class, 'update'])->whereNumber('capitalisation')->name('capitalisations.update');
+            foreach (['submit', 'withdraw', 'cancel'] as $action) {
+                Route::post("/capitalisations/{capitalisation}/{$action}", [CapitalisationController::class, $action])->whereNumber('capitalisation')->name("capitalisations.{$action}");
+            }
+        });
+        Route::middleware('permission:manage it-finance-settings')->group(function () {
+            Route::post('/allocations', [AllocationController::class, 'store'])->name('allocations.store');
+            Route::post('/allocations/run', [AllocationController::class, 'run'])->name('allocations.run');
+            Route::put('/allocations/{allocation}', [AllocationController::class, 'update'])->whereNumber('allocation')->name('allocations.update');
+            Route::post('/allocations/{allocation}/end', [AllocationController::class, 'end'])->whereNumber('allocation')->name('allocations.end');
+            Route::delete('/allocations/{allocation}', [AllocationController::class, 'destroy'])->whereNumber('allocation')->name('allocations.destroy');
+        });
+        Route::middleware('permission:approve it-finance')->group(function () {
+            Route::post('/capitalisations/{capitalisation}/approve', [CapitalisationController::class, 'approve'])->whereNumber('capitalisation')->name('capitalisations.approve');
+            Route::post('/capitalisations/{capitalisation}/reject', [CapitalisationController::class, 'reject'])->whereNumber('capitalisation')->name('capitalisations.reject');
+        });
+    });
+
     /* ========================================================
      |  Atheris Platform Routes (Phases 0-8)
      |========================================================*/
@@ -1146,6 +1556,10 @@ Route::middleware('auth')->group(function () {
  |      so a token holder cannot write arbitrary columns;
  |    · stops working once submitted, declined, or the campaign closes.
  |========================================================*/
+// IT Finance calendar feed: outside auth by design; signed per-user URL (plan C55), tenant resolved from the signed user in the controller.
+Route::get('/it-finance/calendar.ics', [FinanceCalendarController::class, 'ics'])
+    ->middleware(['signed', 'throttle:30,1'])->name('finance.calendar.ics');
+
 Route::prefix('ea/respond')->name('ea.portal.')->group(function () {
     Route::get('/{token}', [PortalController::class, 'respond'])->name('respond');
     Route::post('/{token}', [PortalController::class, 'submit'])->name('submit');

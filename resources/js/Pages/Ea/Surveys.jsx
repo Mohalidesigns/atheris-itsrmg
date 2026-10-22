@@ -75,18 +75,17 @@ function SurveyBuilder({ show, onClose, options }) {
             .filter(Boolean)
             .map((email) => ({ email, name: null }));
 
-        form.transform((data) => ({ ...data, fields, additional_recipients: extra })).post(
-            route('ea.surveys.store'),
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    form.reset();
-                    setSelected([]);
-                    setRecipients('');
-                    onClose();
-                },
+        // Inertia 2.3: transform() returns undefined, so it cannot be chained.
+        form.transform((data) => ({ ...data, fields, additional_recipients: extra }));
+        form.post(route('ea.surveys.store'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                form.reset();
+                setSelected([]);
+                setRecipients('');
+                onClose();
             },
-        );
+        });
     };
 
     return (

@@ -72,6 +72,45 @@ function Section({ s }) {
             return <Table head={['Scenario', 'Risk', 'Expected annual loss', '95th percentile', 'Last run']} rows={d.map((f) => [f.name, f.risk || '—', ngn(f.ale_mean_ngn), ngn(f.ale_p95_ngn), fmtDate(f.ran_at)])} />;
         case 'threat_advisories':
             return <Table head={['Source', 'Advisory', 'Title', 'Published']} rows={d.map((a) => [a.source, a.advisory_id, a.title, fmtDate(a.published_at)])} />;
+        case 'it_financial_position': {
+            const cur = d.currency || 'NGN';
+            const m = (v) => (v === null || v === undefined ? 'Hidden' : new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 1 }).format(Number(v)));
+            const p = (v) => (v === null || v === undefined ? 'Hidden' : `${Number(v).toFixed(1)}%`);
+            return (
+                <div className="space-y-3">
+                    <p className="text-xs text-[#718096]">{d.fiscal_year}{d.as_of_period ? `, as of ${d.as_of_period}` : ''} · {cur}</p>
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        <Stat label="Budget" value={m(d.budget_total)} /><Stat label="Actual YTD" value={m(d.actual_ytd)} />
+                        <Stat label="Variance YTD" value={p(d.variance_pct)} alert={Number(d.variance_pct) > 0} /><Stat label="Forecast" value={m(d.forecast_fy)} />
+                        <Stat label="Committed" value={m(d.committed)} /><Stat label="Available" value={m(d.available)} />
+                        <Stat label="Unbudgeted" value={`${d.unbudgeted_count ?? 0} (${m(d.unbudgeted_amount)})`} alert={d.unbudgeted_count > 0} /><Stat label="Variances red / amber" value={`${d.red ?? 0} / ${d.amber ?? 0}`} alert={d.red > 0} />
+                        <Stat label="Red, unexplained" value={d.unexplained_red} alert={d.unexplained_red > 0} /><Stat label="Renewals due (90d)" value={d.renewals_due_90} />
+                        <Stat label="Contracts past notice" value={d.contracts_passed} alert={d.contracts_passed > 0} /><Stat label="Overdue invoices" value={d.invoices_overdue} alert={d.invoices_overdue > 0} />
+                    </div>
+                    <Table head={['Top variances', 'Cost centre', 'Severity', 'Variance %', 'Explained']} rows={(d.top_variances || []).map((v) => [v.label, v.cost_centre, <b style={{ color: tone[v.severity] }}>{v.severity}</b>, p(v.variance_pct), v.explained ? 'yes' : 'no'])} />
+                </div>
+            );
+        }
+        case 'it_investment_portfolio': {
+            const cur = d.currency || 'NGN';
+            const m = (v) => (v === null || v === undefined ? 'Hidden' : new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, notation: 'compact', maximumFractionDigits: 1 }).format(Number(v)));
+            const p = (v) => (v === null || v === undefined ? 'Hidden' : `${Number(v).toFixed(1)}%`);
+            return (
+                <div className="space-y-3">
+                    <p className="text-xs text-[#718096]">{d.as_of ? `As of ${fmtDate(d.as_of)} · ` : ''}{cur}</p>
+                    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                        <Stat label="Open investments" value={d.count_open} /><Stat label="Budget at completion" value={m(d.bac_total)} />
+                        <Stat label="Actual cost" value={m(d.ac_total)} /><Stat label="Estimate at completion" value={m(d.eac_total)} />
+                        <Stat label="Portfolio CPI" value={d.cpi_portfolio === null || d.cpi_portfolio === undefined ? 'Hidden' : Number(d.cpi_portfolio).toFixed(2)} />
+                        <Stat label="Benefits realised" value={p(d.benefits_realised_pct)} />
+                        <Stat label="Reviews due / overdue" value={`${d.reviews_due ?? 0} / ${d.reviews_overdue ?? 0}`} alert={d.reviews_overdue > 0} />
+                        <Stat label="Regulatory share" value={p(d.regulatory_share_pct)} />
+                    </div>
+                    <Table head={['Stage', 'Investments', 'BAC']} rows={(d.by_stage || []).map((r) => [String(r.stage).replace(/_/g, ' '), r.count, m(r.bac)])} />
+                    <Table head={['At risk', 'Status', 'Health']} rows={(d.at_risk || []).map((r) => [`${r.code} ${r.title}`, String(r.status).replace(/_/g, ' '), String(r.health ?? '').replace(/_/g, ' ')])} />
+                </div>
+            );
+        }
         default:
             return <pre className="text-[10px]">{JSON.stringify(d, null, 2)}</pre>;
     }

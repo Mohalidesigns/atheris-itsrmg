@@ -120,11 +120,45 @@ class DatabaseSeeder extends Seeder
         // change register per bank linked to the records above (ATH-CHG-001 §10)
         $this->call(ChangeManagementDemoSeeder::class);
 
+        // IT Financial Management foundation: settings, TBM taxonomy, chart of accounts, currencies & FX, taxes,
+        // fiscal calendar, cost centres, drivers and finance users per bank (ATH-FIN-001 §3.1, §13)
+        $this->call(FinanceFoundationSeeder::class);
+
+        // IT Financial Management P1 (budgeting): DoA band versions, budget FX rates, cycles, FY baselines, a mid-year
+        // revision, Workflow Studio default stages, transfers, supplementary requests, ceilings and next-year budgets
+        $this->call(FinanceDemoSeeder::class);
+
+        // IT Financial Management P2 (contracts): the contract register of each bank with every status, a contract in every
+        // calendar lane, renewals in every stage with workflow approvals, team, links, documents and T-minus history
+        $this->call(FinanceContractDemoSeeder::class);
+
+        // IT Financial Management P3 (expenses): requests, POs, receipts and invoices in every status, recurring expenses,
+        // accruals, nine months of GL actuals with a September batch to reconcile, and an invoices import with rejected rows
+        $this->call(FinanceExpenseDemoSeeder::class);
+
+        // IT Financial Management P4 (monitoring): variance notes with commentary, forecasts and snapshots, close history, Kano's
+        // blocked re-opened September and First Bank's pending re-open, the finance KRIs and the finance board-pack section.
+        // Separate seeder: the P1-P3 ones skip a bank once seeded
+        $this->call(FinanceMonitoringDemoSeeder::class);
+
+        // IT Financial Management P5 (investment and value realisation): the investment portfolio of each bank in every stage with
+        // business cases through the Studio chain, scores and ranks, tagged budget lines, EVM, benefits with readings, value reviews
+        // (one due, one overdue), a gate waiting at the CFO and an over-tolerance change waiting at Head of IT
+        $this->call(FinanceInvestmentDemoSeeder::class);
+
         // Asset Management: coherent owners and departments, provenance from real sandbox connector
         // runs and a CSV import, business services and dependency chains per bank, asset → service
         // links, inherited criticality, and First Bank's EA applications tied to their assets
         // (ATH-VAL-007; after EA stewardship, written without model events so seals are untouched)
         $this->call(AssetManagementDemoSeeder::class);
+
+        // IT Financial Management P2, second pass: First Bank's contracts link the business services created just above
+        $this->call(FinanceContractDemoSeeder::class);
+
+        // IT Financial Management P6 (FinOps, showback, capitalisation): cloud accounts with 90 days of cost, tag rules, detected anomalies, allocation
+        // rules and runs, a chargeback journal, tagged budget lines for Application TCO, capitalisations in mixed states and KRI-FIN-CLD. After the
+        // second contract pass (assets and First Bank's business-service links exist) and before the KRI seeder, which measures the new KRI
+        $this->call(FinanceFinOpsDemoSeeder::class);
 
         // Vendor Management: NDPA processor and CBN outsourcing facts, owners, computed tiers and
         // review clocks, Shared Directory links, six months of sandbox ratings and a triaged breach
@@ -178,6 +212,10 @@ class DatabaseSeeder extends Seeder
         // One test login per role (password: Password@123) — attached to
         // Kano Heritage Bank so every role sees populated modules
         $this->call(ReportsIntegrationsSettingsDemoSeeder::class);
+
+        // IT Financial Management P4, second pass: scheduled finance reports (the reports seeder above skips a bank that already
+        // has a schedule, so these can only be created after it)
+        $this->call(FinanceMonitoringDemoSeeder::class);
 
         $this->call(RoleDemoUsersSeeder::class);
 

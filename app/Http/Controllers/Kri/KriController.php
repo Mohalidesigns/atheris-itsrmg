@@ -7,6 +7,7 @@ use App\Models\Kri;
 use App\Models\KriBreach;
 use App\Models\Risk;
 use App\Models\User;
+use App\Services\Finance\FinanceMasking;
 use App\Services\Kri\KriMeasures;
 use App\Services\Kri\KriMetrics;
 use App\Services\Kri\KriService;
@@ -27,6 +28,7 @@ class KriController extends Controller
             'readings' => fn ($q) => $q->orderByDesc('recorded_at')->limit(12)])
             ->when($request->category, fn ($q, $c) => $q->where('category', $c))
             ->orderBy('category')->orderBy('code')->get();
+        app(FinanceMasking::class)->maskKriModels($kris, $request->user()); // finance KRI values need `view it-finance-amounts` (security M2)
         $rows = $kris->map(fn ($k) => [
             'id' => $k->id, 'code' => $k->code, 'name' => $k->name, 'category' => $k->category, 'unit' => $k->unit, 'direction' => $k->direction,
             'threshold_green' => $k->threshold_green, 'threshold_amber' => $k->threshold_amber, 'threshold_red' => $k->threshold_red,
@@ -53,11 +55,18 @@ class KriController extends Controller
     {
         $kri->load(['owner:id,name', 'risk:id,risk_id_code,title']);
         $orgId = (int) $request->user()->organization_id;
+        $masked = app(FinanceMasking::class)->kriValueMasked((string) $kri->code, $request->user());
+        $readings = $kri->readings()->with('recorder:id,name')->orderByDesc('recorded_at')->limit(52)->get();
+        $breaches = $kri->breaches()->with(['acknowledger:id,name', 'issue:id,issue_code,status'])->orderByDesc('occurred_at')->get();
+        if ($masked) { // values (and the notes that quote them) are hidden; level, period and status stay
+            $readings->each(fn ($r) => $r->setAttribute('value', null)->setAttribute('note', null));
+            $breaches->each(fn ($b) => $b->setAttribute('notes', null));
+        }
 
         return Inertia::render('Kri/Show', [
             'kri' => $kri->toArray() + ['stale' => $kri->isStale(), 'measurable' => app(KriMeasures::class)->supports($kri->code), 'period' => $kri->periodFor(now())],
-            'readings' => $kri->readings()->with('recorder:id,name')->orderByDesc('recorded_at')->limit(52)->get(),
-            'breaches' => $kri->breaches()->with(['acknowledger:id,name', 'issue:id,issue_code,status'])->orderByDesc('occurred_at')->get(),
+            'readings' => $readings,
+            'breaches' => $breaches,
             'users' => User::where('organization_id', $orgId)->orderBy('name')->get(['id', 'name']),
             'risks' => Risk::query()->active()->orderBy('risk_id_code')->get(['id', 'risk_id_code', 'title']),
             'options' => ['frequencies' => array_keys(Kri::FREQUENCIES), 'sources' => Kri::SOURCES],

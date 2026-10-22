@@ -8,9 +8,22 @@ use App\Models\BiaRecord;
 use App\Models\BoardPackRun;
 use App\Models\ConfigDriftEvent;
 use App\Models\Ea\MaturityAssessment;
+use App\Models\Finance\Budget;
+use App\Models\Finance\BudgetTransfer;
+use App\Models\Finance\Capitalisation;
+use App\Models\Finance\Category;
+use App\Models\Finance\CostCentre;
+use App\Models\Finance\ExpenseRequest;
+use App\Models\Finance\Invoice;
+use App\Models\Finance\PeriodClose;
+use App\Models\Finance\Renewal;
+use App\Models\Finance\StageGate;
+use App\Models\Finance\SupplementaryRequest;
+use App\Models\Finance\Termination;
 use App\Models\Policy;
 use App\Models\PolicyException;
 use App\Models\SoaVersion;
+use App\Services\Finance\DoaBandService;
 
 /**
  * Every process in the platform that needs an approval (ATH-VAL-016), and what Workflow Studio
@@ -112,6 +125,147 @@ class ApprovalProcesses
             'title' => ['title'], 'route' => 'ea.maturity.show', 'initiate' => 'Submitting the assessment',
             'default' => 'One approval by anyone with "approve ea" other than the submitter.',
         ],
+        'finance.budget_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Budget version approval', 'engine' => 'generic', 'owner_cannot_approve' => true,
+            'description' => 'A budget version is approved before Finance baselines it (COBIT APO06.03).',
+            'permission' => 'approve it-finance', 'model' => Budget::class, 'initiator' => 'submitted_by_id', 'owner' => 'owner_id',
+            'title' => ['budget_code', 'version_label', 'title'], 'route' => 'finance.budgets.show', 'initiate' => 'Submitting a budget version',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'cost_centre_id' => ['label' => 'Cost centre', 'values' => 'finance.cost_centres'],
+                'cycle_type' => ['label' => 'Cycle type', 'values' => ['annual' => 'Annual', 'mid_year_reforecast' => 'Mid-year reforecast', 'rolling_forecast' => 'Rolling forecast', 'supplementary' => 'Supplementary']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the submitter and the budget owner.',
+        ],
+        'finance.budget_transfer' => [
+            'module' => 'IT Financial Management', 'label' => 'Budget transfer (virement)', 'engine' => 'generic',
+            'description' => 'Moving approved budget between lines, cost centres or periods is approved before it is applied.',
+            'permission' => 'approve it-finance', 'model' => BudgetTransfer::class, 'initiator' => 'requested_by_id',
+            'title' => ['transfer_code'], 'route' => 'finance.transfers.index', 'initiate' => 'Submitting a budget transfer',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'crosses_cost_centre' => ['label' => 'Crosses cost centres', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'capex_opex' => ['label' => 'CapEx / OpEx', 'values' => ['capex' => 'CapEx', 'opex' => 'OpEx', 'mixed' => 'Mixed']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the requester.',
+        ],
+        'finance.supplementary_budget' => [
+            'module' => 'IT Financial Management', 'label' => 'Supplementary budget', 'engine' => 'generic',
+            'description' => 'A mid-year top-up of the approved budget is approved before it is applied.',
+            'permission' => 'approve it-finance', 'model' => SupplementaryRequest::class, 'initiator' => 'requested_by_id',
+            'title' => ['request_code', 'title'], 'route' => 'finance.supplementary.index', 'initiate' => 'Submitting a supplementary request',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'category_id' => ['label' => 'TBM category', 'values' => 'finance.categories'],
+                'capex_opex' => ['label' => 'CapEx / OpEx', 'values' => ['capex' => 'CapEx', 'opex' => 'OpEx']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the requester.',
+        ],
+        'finance.contract_renewal' => [
+            'module' => 'IT Financial Management', 'label' => 'Contract renewal decision', 'engine' => 'generic', 'owner_cannot_approve' => true,
+            'description' => 'A renewal recommendation (renew, renegotiate, replace, terminate, extend) is approved before the next term is created (FIN-06.05).',
+            'permission' => 'approve it-finance-contracts', 'view_permission' => 'view it-finance', 'model' => Renewal::class, 'initiator' => 'requested_by_id', 'owner' => 'contract_owner_id',
+            'title' => ['renewal_code', 'contract_label'], 'route' => 'finance.renewals.show', 'initiate' => 'Submitting a renewal recommendation',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA, proposed value)', 'values' => 'finance.doa_bands'],
+                'decision' => ['label' => 'Recommendation', 'values' => ['renew_as_is' => 'Renew as is', 'renew_renegotiated' => 'Renew (renegotiated)', 'replace' => 'Replace', 'terminate' => 'Terminate', 'extend_short_term' => 'Short-term extension']],
+                'contract_type' => ['label' => 'Contract type', 'values' => self::CONTRACT_TYPE_LABELS],
+                'uplift_band' => ['label' => 'Price uplift', 'values' => ['decrease' => 'Decrease or flat', '0-5' => 'Up to 5 %', '5-10' => '5 % to 10 %', '10+' => 'Above 10 %']],
+                'requires_cfo' => ['label' => 'Needs CFO (high value or uplift above threshold)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance-contracts" other than the requester and the contract owner.',
+        ],
+        'finance.contract_termination' => [
+            'module' => 'IT Financial Management', 'label' => 'Contract early termination', 'engine' => 'generic', 'owner_cannot_approve' => true,
+            'description' => 'Ending a contract before its end date is approved before the termination is applied (FIN-06, plan H2).',
+            'permission' => 'approve it-finance-contracts', 'view_permission' => 'view it-finance', 'model' => Termination::class, 'initiator' => 'requested_by_id', 'owner' => 'contract_owner_id',
+            'title' => ['termination_code', 'contract_label'], 'route' => 'finance.terminations.show', 'initiate' => 'Requesting an early termination',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA, contract value)', 'values' => 'finance.doa_bands'],
+                'contract_type' => ['label' => 'Contract type', 'values' => self::CONTRACT_TYPE_LABELS],
+                'requires_cfo' => ['label' => 'Needs CFO (high value or after the notice deadline)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance-contracts" other than the requester, the contract owner and its creator.',
+        ],
+        'finance.business_case_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Business case / stage gate', 'engine' => 'generic', 'owner_cannot_approve' => true,
+            'description' => 'An investment passes its business-case and delivery gates, and changes beyond tolerance, only with approval (FIN-05.04, FIN-05.11; COBIT APO05, BAI01).',
+            'permission' => 'approve it-finance-investments', 'view_permission' => 'view it-finance', 'model' => StageGate::class,
+            'initiator' => 'requested_by_id', 'owner' => 'sponsor_id', 'title' => ['gate_title'], 'route' => 'finance.stage-gates.show',
+            'initiate' => 'Requesting an investment gate',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA, BAC)', 'values' => 'finance.doa_bands'],
+                'rgt' => ['label' => 'Run / grow / transform', 'values' => ['run' => 'Run', 'grow' => 'Grow', 'transform' => 'Transform']],
+                'is_regulatory' => ['label' => 'Regulatory mandate', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'gate' => ['label' => 'Gate', 'values' => ['approved' => 'Business case approval', 'delivered' => 'Delivery acceptance', 'change' => 'Change beyond tolerance']],
+                'requires_cfo' => ['label' => 'Needs CFO (business case or change)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'requires_board' => ['label' => 'Needs the board (high value)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance-investments" other than the requester, the manager, the sponsor and the business case preparer.',
+        ],
+        'finance.period_reopen' => [
+            'module' => 'IT Financial Management', 'label' => 'Re-open a closed period', 'engine' => 'generic',
+            'description' => 'A closed or locked accounting period is re-opened only with approval (FIN-04.05, ICFR).',
+            'permission' => 'approve it-finance', 'view_permission' => 'view it-finance', 'model' => PeriodClose::class,
+            'initiator' => 'reopen_requested_by_id', 'title' => ['period_label'], 'route' => 'finance.period-closes.show',
+            'initiate' => 'Requesting a period re-open',
+            'conditions' => ['period_status' => ['label' => 'Period status', 'values' => ['closed' => 'Closed', 'locked' => 'Locked']]],
+            'default' => 'One approval by anyone with "approve it-finance" other than the requester and whoever created the close record.',
+        ],
+        'finance.expense_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Expense request', 'engine' => 'generic', 'owner_cannot_approve' => true, 'owner_stage_without_permission' => true,
+            'description' => 'An expense request is approved against the delegation of authority before it is committed (FIN-03.02).',
+            'permission' => 'approve it-finance', 'view_permission' => 'view it-finance', 'model' => ExpenseRequest::class, 'initiator' => 'requested_by_id', 'owner' => 'endorser_id',
+            'title' => ['request_code', 'title'], 'route' => 'finance.expenses.show', 'initiate' => 'Submitting an expense request',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'effective_band' => ['label' => 'DoA band after unbudgeted / over-budget escalation', 'values' => 'finance.doa_bands'],
+                'capex_opex' => ['label' => 'CapEx / OpEx', 'values' => ['capex' => 'CapEx', 'opex' => 'OpEx']],
+                'is_unbudgeted' => ['label' => 'Unbudgeted (no budget line)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'emergency' => ['label' => 'Emergency', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'overspend' => ['label' => 'Over the available budget', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'has_endorser' => ['label' => 'Has a cost-centre endorser', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'category_id' => ['label' => 'TBM category', 'values' => 'finance.categories'],
+                'cost_centre_id' => ['label' => 'Cost centre', 'values' => 'finance.cost_centres'],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the requester and whoever created the request.',
+        ],
+        'finance.invoice_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Invoice approval', 'engine' => 'generic', 'owner_cannot_approve' => true, 'owner_stage_without_permission' => true,
+            'description' => 'A vendor invoice is approved, after the three-way match, before the actual is posted (FIN-03.04).',
+            'permission' => 'approve it-finance-invoices', 'view_permission' => 'view it-finance', 'model' => Invoice::class, 'initiator' => 'submitted_by_id', 'owner' => 'endorser_id',
+            'title' => ['invoice_code', 'vendor_invoice_no'], 'route' => 'finance.invoices.show', 'initiate' => 'Submitting an invoice',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'match_status' => ['label' => 'Three-way match', 'values' => ['matched' => 'Matched', 'variance' => 'Variance', 'override' => 'Variance overridden', 'unmatched' => 'No PO (not matched)']],
+                'has_po' => ['label' => 'Has a purchase order', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'high_value' => ['label' => 'High value (invoice SoD band)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'has_endorser' => ['label' => 'Has a cost-centre endorser', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+                'cost_centre_id' => ['label' => 'Cost centre', 'values' => 'finance.cost_centres'],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance-invoices" other than the submitter, and above the SoD band not an approver of the purchase order.',
+        ],
+        'finance.capitalisation_approval' => [
+            'module' => 'IT Financial Management', 'label' => 'Capitalisation (IAS 38 / IAS 16)', 'engine' => 'generic', 'owner_cannot_approve' => false,
+            'description' => 'Investment or capex spend is capitalised as an asset, and amortisation starts, only with approval (FIN-03.13; IAS 38, IAS 16).',
+            'permission' => 'approve it-finance', 'view_permission' => 'view it-finance', 'model' => Capitalisation::class,
+            'initiator' => 'requested_by_id', 'title' => ['capitalisation_title'], 'route' => 'finance.capitalisations.show',
+            'initiate' => 'Submitting a capitalisation',
+            'conditions' => [
+                'amount_band' => ['label' => 'Amount band (DoA)', 'values' => 'finance.doa_bands'],
+                'standard' => ['label' => 'Standard', 'values' => ['ias_38' => 'IAS 38 intangible', 'ias_16' => 'IAS 16 PP&E']],
+                'source_type' => ['label' => 'Source', 'values' => ['investment' => 'Investment', 'expense' => 'Capex expense']],
+                'requires_cfo' => ['label' => 'Needs the CFO (high value)', 'values' => ['yes' => 'Yes', 'no' => 'No']],
+            ],
+            'default' => 'One approval by anyone with "approve it-finance" other than the preparer and the investment manager or expense requester.',
+        ],
+    ];
+
+    /** @var array<string,string> Contract::TYPES humanised, for the renewal process's contract_type condition. */
+    public const CONTRACT_TYPE_LABELS = [
+        'licence' => 'Licence', 'subscription' => 'Subscription', 'saas' => 'SaaS', 'support_maintenance' => 'Support and maintenance',
+        'managed_service' => 'Managed service', 'professional_services' => 'Professional services', 'lease' => 'Lease', 'telecom' => 'Telecom',
+        'cloud_commitment' => 'Cloud commitment', 'hardware_warranty' => 'Hardware warranty', 'other' => 'Other',
     ];
 
     public const APPROVER_TYPES = [
@@ -125,6 +279,33 @@ class ApprovalProcesses
     public static function get(string $process): array
     {
         return self::PROCESSES[$process] ?? throw new \InvalidArgumentException("Unknown approval process {$process}.");
+    }
+
+    /**
+     * Stage-condition options with per-bank value lists resolved (plan C28): a process may name a
+     * marker such as `finance.doa_bands` instead of a fixed list.
+     *
+     * @return array<string, array{label:string, values: array<string,string>}>
+     */
+    public static function conditions(string $process, ?int $orgId = null): array
+    {
+        $out = [];
+        foreach ((self::PROCESSES[$process]['conditions'] ?? []) as $field => $c) {
+            $values = $c['values'];
+            if (is_string($values)) {
+                $values = $orgId === null ? [] : match ($values) {
+                    'finance.doa_bands' => app(DoaBandService::class)->conditionValues($orgId),
+                    'finance.cost_centres' => CostCentre::withoutGlobalScopes()->where('organization_id', $orgId)->orderBy('code')->get()
+                        ->mapWithKeys(fn ($c) => [(string) $c->id => $c->code.' '.$c->name])->all(),
+                    'finance.categories' => Category::withoutGlobalScopes()->where('organization_id', $orgId)->orderBy('kind')->orderBy('code')->get()
+                        ->mapWithKeys(fn ($c) => [(string) $c->id => $c->code.' '.$c->name])->all(),
+                    default => [],
+                };
+            }
+            $out[$field] = ['label' => $c['label'], 'values' => $values];
+        }
+
+        return $out;
     }
 
     public static function generic(): array

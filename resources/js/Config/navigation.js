@@ -27,6 +27,7 @@ import {
     ScaleIcon,
     BuildingLibraryIcon,
     UserGroupIcon,
+    CurrencyDollarIcon,
 } from '@/Components/Material/Symbols';
 
 /**
@@ -139,6 +140,28 @@ const navigation = [
             { name: 'Standard Changes', href: 'changes.templates', permission: 'view changes' },
             { name: 'Approval Policy', href: 'changes.policy', permission: 'view changes' },
             { name: 'Freeze Windows', href: 'changes.freeze.index', permission: 'view changes' },
+        ],
+    },
+    {
+        name: 'IT Financial Management',
+        icon: CurrencyDollarIcon,
+        permission: 'view it-finance',
+        children: [
+            { name: 'Dashboard', href: 'finance.dashboard', permission: 'view it-finance' },
+            { name: 'Budgets', href: 'finance.budgets.index', permission: 'view it-finance' },
+            { name: 'Expenses', href: 'finance.expenses.index', permission: 'view it-finance' },
+            { name: 'Purchase Orders', href: 'finance.purchase-orders.index', permission: 'view it-finance' },
+            { name: 'Invoices', href: 'finance.invoices.index', permission: 'view it-finance' },
+            { name: 'Actuals & Reconciliation', href: 'finance.actuals.index', permission: 'view it-finance' },
+            { name: 'Budget Monitor', href: 'finance.monitor.bva', permission: 'view it-finance' },
+            { name: 'Cloud & FinOps', href: 'finance.cloud.costs', permission: 'view it-finance' },
+            { name: 'Recurring & Accruals', href: 'finance.recurring.index', permission: 'view it-finance' },
+            { name: 'Contracts & Renewals', href: 'finance.contracts.index', permission: 'view it-finance' },
+            { name: 'Calendar', href: 'finance.calendar', permission: 'view it-finance' },
+            { name: 'Investments & Value', href: 'finance.investments.index', permission: 'view it-finance' },
+            { name: 'Capitalisation', href: 'finance.capitalisations.index', permission: 'view it-finance' },
+            { name: 'Reports', href: 'finance.reports.index', permission: 'view it-finance' },
+            { name: 'Settings', href: 'finance.settings', permission: 'view it-finance' },
         ],
     },
     {

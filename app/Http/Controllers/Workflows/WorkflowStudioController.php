@@ -18,6 +18,7 @@ use App\Services\Approvals\ApprovalEngine;
 use App\Services\Approvals\ApprovalProcesses;
 use App\Services\Change\ChangeApprovalRouter;
 use App\Services\Change\ChangePolicySeeder;
+use App\Services\Finance\FinancePolicySeeder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -71,9 +72,12 @@ class WorkflowStudioController extends Controller
     {
         $def = $this->definition($process);
         $orgId = (int) $request->user()->organization_id;
+        if (str_starts_with($process, 'finance.')) {
+            FinancePolicySeeder::ensureDefaults($orgId);
+        }
         $common = [
             'process' => ['key' => $process] + collect($def)->except(['model', 'conditions'])->all()
-                + ['conditions' => collect($def['conditions'] ?? [])->map(fn ($c, $k) => ['field' => $k, 'label' => $c['label'], 'values' => $c['values']])->values()],
+                + ['conditions' => collect(ApprovalProcesses::conditions($process, $orgId))->map(fn ($c, $k) => ['field' => $k, 'label' => $c['label'], 'values' => $c['values']])->values()],
             'workflow' => ApprovalWorkflow::query()->where('process', $process)->with('editor:id,name')->first(),
             'roles' => Role::orderBy('name')->pluck('name'),
             'rolesWithPermission' => Role::whereHas('permissions', fn ($q) => $q->where('name', $def['permission']))->orderBy('name')->pluck('name')->push('Super Admin')->unique()->values(),
@@ -112,7 +116,7 @@ class WorkflowStudioController extends Controller
         $def = $this->definition($process);
         abort_unless($def['engine'] === 'generic', 404);
         $wf = $this->workflowFor($request, $process);
-        $data = $this->validatedStage($request, $def);
+        $data = $this->validatedStage($request, $def, $process);
         $wf->stages()->create($data + ['organization_id' => $wf->organization_id,
             'sequence' => (int) ($data['sequence'] ?? (($wf->stages()->max('sequence') ?? 0) + 10))]);
         $wf->update(['updated_by' => $request->user()->id]);
@@ -123,7 +127,7 @@ class WorkflowStudioController extends Controller
     public function stageUpdate(Request $request, $stage)
     {
         $stage = ApprovalWorkflowStage::findOrFail($stage);
-        $stage->update($this->validatedStage($request, ApprovalProcesses::get($stage->workflow->process)));
+        $stage->update($this->validatedStage($request, ApprovalProcesses::get($stage->workflow->process), $stage->workflow->process));
         $stage->workflow->update(['updated_by' => $request->user()->id]);
 
         return back()->with('success', "Stage \"{$stage->name}\" saved.");
@@ -205,7 +209,7 @@ class WorkflowStudioController extends Controller
                     'step' => $step?->name, 'who' => $step ? $this->engine->describe($step) : null, 'due_at' => $step?->due_at,
                     'overdue' => $step?->due_at?->isPast() ?? false,
                     'progress' => $r->steps->where('status', 'approved')->count().'/'.$r->steps->count(),
-                    'mine' => $step && $this->engine->canDecide($step, $r, $r->subject, $user) && $user->can($def['permission'] ?? ''),
+                    'mine' => $step && $this->engine->canDecide($step, $r, $r->subject, $user) && ($user->can($def['permission'] ?? '') || (! empty($def['owner_stage_without_permission']) && $step->approver_type === 'owner')),
                 ];
             });
         $changes = ChangeApproval::query()->where('status', 'pending')->with('change:id,change_code,title,status,requester_id')->orderBy('sequence')->get()
@@ -237,7 +241,7 @@ class WorkflowStudioController extends Controller
         $data = $request->validate(['process' => ['required', Rule::in(array_keys(ApprovalProcesses::generic()))], 'id' => 'required|integer']);
         $def = ApprovalProcesses::get($data['process']);
         $subject = $def['model']::findOrFail($data['id']);
-        abort_unless($request->user()->can(str_replace('approve ', 'view ', $def['permission'])), 403);
+        abort_unless($request->user()->can($def['view_permission'] ?? str_replace('approve ', 'view ', $def['permission'])), 403);
 
         return response()->json($this->engine->trail($data['process'], $subject, $request->user()));
     }
@@ -293,9 +297,10 @@ class WorkflowStudioController extends Controller
             ['is_active' => true, 'updated_by' => $request->user()->id]);
     }
 
-    private function validatedStage(Request $request, array $def): array
+    private function validatedStage(Request $request, array $def, string $process): array
     {
         $orgId = (int) $request->user()->organization_id;
+        $conditions = ApprovalProcesses::conditions($process, $orgId);
         $data = $request->validate([
             'name' => 'required|string|max:120',
             'sequence' => 'nullable|integer|min:1|max:999',
@@ -303,7 +308,7 @@ class WorkflowStudioController extends Controller
             'approver_ref' => 'nullable|string|max:255',
             'min_approvals' => 'required|integer|min:1|max:10',
             'sla_hours' => 'required|integer|min:1|max:2160',
-            'condition_field' => ['nullable', Rule::in(array_keys($def['conditions'] ?? []))],
+            'condition_field' => ['nullable', Rule::in(array_keys($conditions))],
             'condition_values' => 'nullable|array',
             'condition_values.*' => 'string|max:64',
             'is_active' => 'boolean',
@@ -321,7 +326,7 @@ class WorkflowStudioController extends Controller
             $data['approver_ref'] = null;
         }
         if (! empty($data['condition_field'])) {
-            $allowed = array_keys($def['conditions'][$data['condition_field']]['values']);
+            $allowed = array_map('strval', array_keys($conditions[$data['condition_field']]['values']));
             $values = array_values(array_intersect($data['condition_values'] ?? [], $allowed));
             $values || throw ValidationException::withMessages(['condition_values' => 'Pick the values this stage applies to.']);
             $data['condition_values'] = $values;

@@ -192,6 +192,9 @@ class ApprovalEngine
         if ($subject && ! empty($def['owner_cannot_approve']) && (int) $subject->{$def['owner']} === (int) $actor->id && $step->approver_type !== 'owner') {
             $fail('You own this record, so you cannot approve it (segregation of duties).');
         }
+        // Finance snapshots everyone who took part (owner, recommender, opener, submitter) when the request starts.
+        in_array((int) $actor->id, array_map('intval', (array) ($request->context['sod_excluded_ids'] ?? [])), true)
+            && $fail('You took part in this record (owner, recommender, opener or requester), so you cannot approve it (segregation of duties).');
 
         $this->matches($step, $actor) || $fail("This is awaiting \"{$step->name}\": ".$this->describe($step).'.');
     }

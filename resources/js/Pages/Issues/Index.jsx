@@ -13,7 +13,8 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
 const COLUMNS = ['open', 'in_progress', 'blocked', 'remediated', 'verified', 'closed'];
-const SEVERITY_COLOUR = { critical: '#B3261E', high: '#E5A100', moderate: '#1D4ED8', low: '#A0AEC0' };
+const COLUMN_LABEL = { open: 'Open', in_progress: 'In progress', blocked: 'Blocked', remediated: 'Remediated', verified: 'Verified', closed: 'Closed' };
+const COLUMN_ICON = { open: 'flag', in_progress: 'construction', blocked: 'block', remediated: 'task_alt', verified: 'verified', closed: 'inventory_2' };
 const SLA_LABEL = {
     on_track: ['On track', 'text-[#2D7D46]'], at_risk: ['At risk', 'text-[#8A6400]'], breached: ['Past SLA', 'text-[#B3261E] font-semibold'],
     paused: ['Paused', 'text-[#718096]'], met: ['Met SLA', 'text-[#2D7D46]'], missed: ['Missed SLA', 'text-[#B3261E]'], none: ['—', 'text-[#718096]'],
@@ -21,7 +22,7 @@ const SLA_LABEL = {
 
 function SlaTag({ issue }) {
     const [label, klass] = SLA_LABEL[issue.sla_state] || SLA_LABEL.none;
-    return <span className={`text-[10px] ${klass}`}>{label}{issue.sla_due_at && ['on_track', 'at_risk', 'breached'].includes(issue.sla_state) ? ` · ${formatDate(issue.sla_due_at)}` : ''}</span>;
+    return <span className={`text-[11px] ${klass}`}>{label}{issue.sla_due_at && ['on_track', 'at_risk', 'breached'].includes(issue.sla_state) ? ` · ${formatDate(issue.sla_due_at)}` : ''}</span>;
 }
 
 export default function IssuesIndex({ issues = [], counts = {}, stats = {}, filters = {}, sources = {}, owners = [], sourceRecords = null, capaKpis = null, capaConfig = null }) {
@@ -158,27 +159,14 @@ export default function IssuesIndex({ issues = [], counts = {}, stats = {}, filt
             {issues.length > 0 && view === 'board' && (
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3 xl:grid-cols-6">
                     {COLUMNS.map((c) => (
-                        <div key={c} className="min-h-[200px] rounded-xl bg-[#F7FAFC] p-3">
-                            <h3 className="mb-2 flex justify-between text-xs font-semibold uppercase text-[#718096]">
-                                <span>{humanize(c)}</span><span>{grouped[c].length}</span>
+                        <div key={c} className="min-h-[200px] rounded-2xl bg-[#F0F1F4] p-2">
+                            <h3 className="mb-2 flex items-center gap-1.5 px-1.5 pt-1 text-sm font-medium text-[#1B1B1F]">
+                                <Icon name={COLUMN_ICON[c]} size={18} className="text-[#43474E]" />
+                                <span className="truncate">{COLUMN_LABEL[c]}</span>
+                                <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[#DDE3F0] px-1.5 text-[11px] font-semibold text-[#0A1F44]">{grouped[c].length}</span>
                             </h3>
                             <div className="space-y-2">
-                                {grouped[c].map((i) => (
-                                    <Link key={i.id} href={route('issues.show', i.id)}
-                                        className="block rounded-lg border-l-4 bg-white p-3 shadow-sm hover:shadow"
-                                        style={{ borderLeftColor: SEVERITY_COLOUR[i.severity] }}>
-                                        <p className="font-mono text-[10px] text-[#718096]">{i.issue_code}{i.external_ticket_id ? ` · ${i.external_ticket_id}` : ''}</p>
-                                        <p className="line-clamp-2 text-xs font-medium text-[#2D3748]">{i.title}</p>
-                                        <div className="mt-1 flex flex-wrap items-center justify-between gap-1">
-                                            <SeverityBadge severity={i.severity} config={capaConfig} />
-                                            <SlaTag issue={i} />
-                                        </div>
-                                        {i.capa_framework && <div className="mt-1"><Chip tone="primary" size="xs" icon="account_tree" title={fwShort(i.capa_framework)}>{stageLabel(i.capa_stage).split(' ')[0]}</Chip></div>}
-                                        <p className="mt-1 truncate text-[10px] text-[#718096]">
-                                            {i.owner || 'Unassigned'}{i.escalation_level > 0 && <span className="ml-1 font-semibold text-[#8A6400]">· Escalated L{i.escalation_level}</span>}
-                                        </p>
-                                    </Link>
-                                ))}
+                                {grouped[c].map((i) => <IssueCard key={i.id} issue={i} capaConfig={capaConfig} stage={i.capa_framework ? stageLabel(i.capa_stage) : null} framework={i.capa_framework ? fwShort(i.capa_framework) : null} />)}
                             </div>
                         </div>
                     ))}
@@ -312,5 +300,28 @@ export default function IssuesIndex({ issues = [], counts = {}, stats = {}, filt
                 </form>
             </Modal>
         </AuthenticatedLayout>
+    );
+}
+
+function IssueCard({ issue: i, capaConfig, stage, framework }) {
+    const escalated = i.escalation_level > 0;
+    return (
+        <Link href={route('issues.show', i.id)}
+            className="block rounded-xl bg-white p-3 shadow-[0_1px_2px_rgba(0,0,0,0.08),0_1px_3px_1px_rgba(0,0,0,0.04)] transition hover:shadow-[0_1px_2px_rgba(0,0,0,0.1),0_2px_6px_2px_rgba(0,0,0,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#0A1F44]">
+            <span className="block truncate font-mono text-[11px] text-[#74777F]">{i.issue_code}{i.external_ticket_id ? ` · ${i.external_ticket_id}` : ''}</span>
+            <p className="mt-1 line-clamp-2 text-sm font-medium leading-snug text-[#1B1B1F]">{i.title}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-1">
+                <SeverityBadge severity={i.severity} config={capaConfig} size="xs" />
+                {stage && <Chip tone="primary" size="xs" icon="account_tree" title={framework}>{stage.split(' ')[0]}</Chip>}
+            </div>
+            <div className="mt-2"><SlaTag issue={i} /></div>
+            <div className="mt-2 flex items-center gap-1 border-t border-[#E3E4E8] pt-2 text-[11px] text-[#43474E]">
+                {escalated ? (
+                    <><Icon name="priority_high" size={16} className="text-[#8A6400]" /><span className="truncate font-medium text-[#6B5420]">Escalated L{i.escalation_level}</span><span className="ml-auto truncate">{i.owner || 'Unassigned'}</span></>
+                ) : (
+                    <><Icon name="person" size={16} /><span className={`truncate ${i.owner ? '' : 'text-[#B3261E]'}`}>{i.owner || 'Unassigned'}</span></>
+                )}
+            </div>
+        </Link>
     );
 }

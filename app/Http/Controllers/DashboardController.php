@@ -28,6 +28,7 @@ use App\Services\Change\ChangeMetrics;
 use App\Services\ComplianceScoreService;
 use App\Services\Continuity\ContinuityMetrics;
 use App\Services\CoreBanking\CoreBankingMetrics;
+use App\Services\Finance\FinanceMasking;
 use App\Services\Issues\IssueMetrics;
 use App\Services\Monitoring\MonitoringMetrics;
 use App\Services\Policies\PolicyMetrics;
@@ -66,6 +67,7 @@ class DashboardController extends Controller
         $kris = Kri::with(['readings' => fn ($q) => $q->orderByDesc('recorded_at')->limit(6)])->get()
             ->sortBy(fn ($k) => [$rank[$k->readings->first()?->status] ?? 3, $k->code])
             ->take(12)->values();
+        app(FinanceMasking::class)->maskKriModels($kris, $request->user()); // security M2
 
         // Control effectiveness donut — operational controls, in a fixed order so the colours match
         // (effective, partially effective, ineffective, not assessed).

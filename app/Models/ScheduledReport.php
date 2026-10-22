@@ -11,7 +11,17 @@ class ScheduledReport extends Model
 {
     use BelongsToOrganization;
 
-    public const TYPES = ['executive' => 'Executive summary', 'risks' => 'Risk analytics', 'compliance' => 'Compliance posture'];
+    public const TYPES = [
+        'executive' => 'Executive summary', 'risks' => 'Risk analytics', 'compliance' => 'Compliance posture',
+        'finance' => 'IT financial position',
+        'finance.budget_book' => 'IT finance: Budget book', 'finance.bva' => 'IT finance: Budget vs actual',
+        'finance.variance_commentary' => 'IT finance: Variance commentary', 'finance.commitments' => 'IT finance: Commitments',
+        'finance.invoice_ageing' => 'IT finance: Invoice ageing', 'finance.unbudgeted' => 'IT finance: Unbudgeted spend',
+        'finance.contract_register' => 'IT finance: Contract register', 'finance.vendor_spend' => 'IT finance: Vendor spend',
+        'finance.investment_portfolio' => 'IT finance: Investment portfolio', 'finance.benefits_register' => 'IT finance: Benefits register',
+        'finance.cloud_spend' => 'IT finance: Cloud spend', 'finance.showback_statement' => 'IT finance: Showback statement',
+        'finance.capitalisation_register' => 'IT finance: Capitalisation register', 'finance.application_tco' => 'IT finance: Application TCO',
+    ];
 
     public const FREQUENCIES = ['daily', 'weekly', 'monthly'];
 

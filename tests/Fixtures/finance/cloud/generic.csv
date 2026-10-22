@@ -1,0 +1,5 @@
+account_id,date,service,resource_id,region,cost,currency,tags
+ACC-001,2026-08-03,Compute,vm-1,eu,10.000000,USD,service=mobile;env=prod
+ACC-001,2026-08-03,Compute,vm-1,eu,5.000000,USD,service=mobile;env=prod
+ACC-001,2026-08-03,Storage,bucket-1,eu,2.500000,USD,CostCentre=KHB-IT-DIG
+ACC-001,2026-08-04,Compute,vm-2,eu,4.000000,USD,

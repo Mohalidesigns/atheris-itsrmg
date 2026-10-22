@@ -45,6 +45,7 @@ class SettingsController extends Controller
     public const NOTIFICATION_PREFS = [
         'email_risk_alerts' => true, 'email_compliance_deadlines' => true, 'email_incidents' => true,
         'email_weekly_digest' => false, 'inapp_task_assignments' => true, 'inapp_mentions' => true,
+        'finance_daily_digest' => false,
     ];
 
     public function notifications(Request $request)
