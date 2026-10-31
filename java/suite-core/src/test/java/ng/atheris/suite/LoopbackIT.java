@@ -103,4 +103,14 @@ class LoopbackIT extends AbstractIT {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> client.query("/api/suite/v1/missing", java.util.Map.of(), String.class))
                 .isInstanceOf(SuitePeerException.class).hasMessageContaining("404");
     }
+
+    @Test
+    void queryRepeatsParamsAndMaps204ToNull() {
+        var q = new org.springframework.util.LinkedMultiValueMap<String, String>();
+        q.add("system", "Core Banking");
+        q.add("system", "Finacle");
+        var r = client.query("/api/suite/v1/test-echo", q, com.fasterxml.jackson.databind.JsonNode.class);
+        assertThat(r.path("systems")).hasSize(2);
+        assertThat(client.query("/api/suite/v1/test-echo", java.util.Map.of(), String.class)).isNull();
+    }
 }

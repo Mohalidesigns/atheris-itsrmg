@@ -54,22 +54,33 @@ public class SuiteClient {
     /** POSTs a serialized envelope to the peer. Throws {@link SuitePeerUnavailableException} on network errors. */
     public Response postEvent(String envelopeJson) {
         byte[] body = envelopeJson.getBytes(StandardCharsets.UTF_8);
-        return exchange(eventClient, HttpMethod.POST, uri("/api/suite/v1/events", Map.of()), body);
+        return exchange(eventClient, HttpMethod.POST, uri("/api/suite/v1/events", new LinkedMultiValueMap<>()), body);
     }
 
     /**
      * Signed GET query against the peer, deserialized into {@code type}.
      *
+     * @return the body, or {@code null} when the peer answers 204 No Content
      * @throws SuitePeerUnavailableException on timeout, connection error or 5xx
      * @throws SuitePeerException on other non-2xx answers
      */
     public <T> T query(String path, Map<String, String> params, Class<T> type) {
+        MultiValueMap<String, String> q = new LinkedMultiValueMap<>();
+        params.forEach(q::add);
+        return query(path, q, type);
+    }
+
+    /** As {@link #query(String, Map, Class)}, for parameters that repeat (e.g. {@code system=a&system=b}). */
+    public <T> T query(String path, MultiValueMap<String, String> params, Class<T> type) {
         Response r = exchange(queryClient, HttpMethod.GET, uri(path, params), new byte[0]);
         if (r.status() >= 500) {
             throw new SuitePeerUnavailableException("Suite peer answered HTTP " + r.status(), null);
         }
         if (!r.ok()) {
             throw new SuitePeerException(r.status(), r.body());
+        }
+        if (r.status() == 204) {
+            return null;
         }
         try {
             return mapper.readValue(r.body(), type);
@@ -78,15 +89,13 @@ public class SuiteClient {
         }
     }
 
-    private URI uri(String path, Map<String, String> params) {
+    private URI uri(String path, MultiValueMap<String, String> params) {
         String base = props.getPeer().getUrl();
         if (base == null || base.isBlank()) {
             throw new SuitePeerUnavailableException("suite.peer.url is not configured", null);
         }
-        MultiValueMap<String, String> q = new LinkedMultiValueMap<>();
-        params.forEach(q::add);
         return UriComponentsBuilder.fromUriString(base.replaceAll("/+$", "") + path)
-                .queryParams(q).build().encode().toUri();
+                .queryParams(params).build().encode().toUri();
     }
 
     private Response exchange(RestClient client, HttpMethod method, URI uri, byte[] body) {
