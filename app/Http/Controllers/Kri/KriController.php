@@ -85,7 +85,15 @@ class KriController extends Controller
     public function update(Request $request, Kri $kri)
     {
         $kri->source === 'ea' && throw ValidationException::withMessages(['kri' => 'This KRI is published from EA; edit its definition there.']);
-        $kri->update($this->validated($request, $kri));
+        $data = $this->validated($request, $kri);
+        if (FinanceMasking::isPlatformFinanceKri($kri)) { // masking is keyed on the code and the thresholds (P7 M2)
+            $data['code'] === $kri->code || throw ValidationException::withMessages(['code' => 'The code of a platform finance KRI cannot be changed.']);
+            $changed = $data['category'] !== $kri->category || $data['unit'] !== $kri->unit || $data['direction'] !== $kri->direction
+                || array_filter(['threshold_green', 'threshold_amber', 'threshold_red'], fn ($f) => (float) $data[$f] !== (float) $kri->{$f});
+            $changed && ! $request->user()->can('manage it-finance-settings')
+                && throw ValidationException::withMessages(['kri' => 'Finance KRI definitions and thresholds are changed under IT Finance settings (needs manage it-finance-settings).']);
+        }
+        $kri->update($data);
 
         return back()->with('success', "{$kri->code} updated.");
     }
@@ -101,14 +109,14 @@ class KriController extends Controller
         ], ['commentary.required' => 'Explain an amber or red reading: cause and what is being done.']);
         $reading = $service->record($kri, (float) $data['value'], $request->user(), $data['commentary'] ?? null, $data['recorded_at'] ?? null);
 
-        return back()->with($reading->status === 'green' ? 'success' : 'warning', "{$kri->code} {$reading->period}: ".$kri->formatValue($reading->value)." ({$reading->status}).");
+        return back()->with($reading->status === 'green' ? 'success' : 'warning', "{$kri->code} {$reading->period}: ".app(FinanceMasking::class)->kriValueText($kri, $reading->value, $request->user())." ({$reading->status}).");
     }
 
     public function measure(Request $request, Kri $kri, KriService $service)
     {
         $reading = $service->measure($kri, $request->user());
 
-        return back()->with($reading->status === 'green' ? 'success' : 'warning', "{$kri->code} measured: ".$kri->formatValue($reading->value)." ({$reading->status}).");
+        return back()->with($reading->status === 'green' ? 'success' : 'warning', "{$kri->code} measured: ".app(FinanceMasking::class)->kriValueText($kri, $reading->value, $request->user())." ({$reading->status}).");
     }
 
     public function acknowledge(Request $request, KriBreach $breach, KriService $service)

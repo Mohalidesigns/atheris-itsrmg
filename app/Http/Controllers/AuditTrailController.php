@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Activity;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use Spatie\Activitylog\Models\Activity;
 
 class AuditTrailController extends Controller
 {
@@ -23,7 +24,7 @@ class AuditTrailController extends Controller
             $query->where('subject_type', $request->subject_type);
         }
         if ($request->filled('search')) {
-            $query->whereLike('description', '%' . $request->search . '%');
+            $query->whereLike('description', '%'.$request->search.'%');
         }
         if ($request->filled('date_from')) {
             $query->whereDate('created_at', '>=', $request->date_from);
@@ -34,7 +35,18 @@ class AuditTrailController extends Controller
 
         $activities = $query->paginate(25)->withQueryString();
 
-        $users = \App\Models\User::where('organization_id', auth()->user()->organization_id)
+        if (! $request->user()->can('view it-finance-amounts')) {
+            $activities->getCollection()->transform(function ($activity) {
+                if ($activity->log_name === 'it-finance') {
+                    $activity->properties = collect();
+                    $activity->setRelation('subject', null);
+                }
+
+                return $activity;
+            });
+        }
+
+        $users = User::where('organization_id', auth()->user()->organization_id)
             ->select('id', 'name')->get();
 
         $subjectTypes = Activity::distinct()->pluck('subject_type')

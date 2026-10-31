@@ -8,6 +8,7 @@ use App\Models\Finance\AllocationRun;
 use App\Models\Finance\ChargebackRun;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\Period;
+use App\Models\Finance\PeriodClose;
 use App\Models\User;
 use App\Services\Finance\Concerns\LogsFinanceEvents;
 use Illuminate\Support\Facades\DB;
@@ -42,6 +43,10 @@ class ChargebackService
         }
         if ($period->status === 'open') {
             return $empty("{$period->name} is still open; a chargeback journal is exported after the period closes.");
+        }
+        // M3: a pending re-open request means the closed figures may be about to change.
+        if (PeriodClose::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $periodId)->where('reopen_status', 'submitted')->exists()) {
+            return $empty("A re-open of {$period->name} is awaiting approval; a chargeback journal cannot be previewed or exported until it is decided.");
         }
         if (ChargebackRun::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $periodId)->where('target_type', $targetType)->where('status', 'exported')->exists()) {
             return $empty('A chargeback run is already exported for this period and lens; void it first.');

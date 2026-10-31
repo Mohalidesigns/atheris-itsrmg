@@ -29,7 +29,8 @@ export default function Index(props) {
     const [matching, setMatching] = useState(null);
     const [ack, setAck] = useState(null);
     const fmt = (v) => moneyOrMask(v, baseCurrency, money, { decimals: 0 });
-    const action = (a, kind) => (kind === 'match' ? setMatching(a) : setAck(a));
+    const [dup, setDup] = useState(null);
+    const action = (a, kind) => (kind === 'match' ? setMatching(a) : kind === 'unbudgeted' ? setAck(a) : setDup({ a, kind }));
     const select = (k) => {
         setTab(k);
         if (k !== 'import') router.get(route('finance.actuals.index'), { ...Object.fromEntries(Object.entries(f).filter(([, v]) => v)), tab: k }, { preserveState: true, preserveScroll: true, replace: true, only: ['tab', 'queue', 'actuals', 'rules', 'mappings', 'summary', 'filters'] });
@@ -87,6 +88,7 @@ export default function Index(props) {
 
             {matching && <MatchActualModal actual={matching} budgetLines={budgetLines} baseCurrency={baseCurrency} money={money} errors={errors ?? {}} onClose={() => setMatching(null)} />}
             <ReasonModal show={!!ack} onClose={() => setAck(null)} title="Acknowledge as unbudgeted spend" routeName="finance.actuals.unbudgeted" params={ack?.id} field="note" label="Note" submitLabel="Acknowledge" errors={errors ?? {}} />
+            <ReasonModal show={!!dup} onClose={() => setDup(null)} title={dup?.kind === 'confirm-duplicate' ? 'Confirm duplicate of an invoice posting' : 'Not a duplicate'} routeName={dup ? `finance.actuals.${dup.kind}` : 'finance.actuals.confirm-duplicate'} params={dup?.a?.id} field="reason" label="Reason" submitLabel={dup?.kind === 'confirm-duplicate' ? 'Confirm duplicate' : 'Clear flag'} errors={errors ?? {}} />
         </AuthenticatedLayout>
     );
 }

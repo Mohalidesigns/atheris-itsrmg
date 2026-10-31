@@ -163,6 +163,24 @@ class ActualsController extends Controller
         return back()->with('success', 'Acknowledged as unbudgeted spend.');
     }
 
+    public function confirmDuplicate(Request $request, Actual $actual)
+    {
+        Gate::authorize('view', $actual);
+        Gate::authorize('importActuals', Actual::class);
+        $this->actuals->confirmDuplicate($actual, $request->user(), (string) $request->validate(['reason' => ['required', 'string', 'max:2000']])['reason']);
+
+        return back()->with('success', 'Confirmed as a duplicate; the row is excluded from the totals.');
+    }
+
+    public function clearDuplicate(Request $request, Actual $actual)
+    {
+        Gate::authorize('view', $actual);
+        Gate::authorize('importActuals', Actual::class);
+        $this->actuals->clearDuplicateFlag($actual, $request->user(), (string) $request->validate(['reason' => ['required', 'string', 'max:2000']])['reason']);
+
+        return back()->with('success', 'Cleared: the row is treated as a normal GL posting.');
+    }
+
     public function mappingStore(Request $request)
     {
         Gate::authorize('importActuals', Actual::class);

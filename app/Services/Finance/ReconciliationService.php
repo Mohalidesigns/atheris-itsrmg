@@ -15,6 +15,7 @@ use App\Models\Finance\PurchaseOrder;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Services\Finance\Concerns\LogsFinanceEvents;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -86,7 +87,7 @@ class ReconciliationService
     {
         $n = 0;
         $open = Period::withoutGlobalScopes()->where('organization_id', $orgId)->where('status', 'open')->pluck('id')->all();
-        foreach ($this->queue($orgId, [])->whereIn('source', ['gl_import', 'manual'])->whereIn('period_id', $open ?: [0])->get() as $a) {
+        foreach ($this->queue($orgId, [])->whereIn('source', ['gl_import', 'manual'])->where(fn ($w) => $w->whereNull('match_reason')->orWhere('match_reason', '!=', 'possible_duplicate'))->whereIn('period_id', $open ?: [0])->get() as $a) {
             $r = $this->autoMatch($a);
             if ($r['line']) {
                 $a->forceFill(['budget_line_id' => $r['line']->id, 'match_status' => 'matched', 'match_reason' => $r['reason'], 'match_rule_id' => $r['rule_id'], 'matched_by_id' => $by->id, 'matched_at' => now()])->save();
@@ -125,19 +126,20 @@ class ReconciliationService
     }
 
     /**
-     * The invoice actual a GL row duplicates (plan P3-12, P7-9): the key is (reference, vendor when mapped, base amount, posted date)
-     * against approved invoice postings. Without an amount and date only the reference is compared (legacy callers).
+     * The invoice actual a GL row duplicates (plan P3-12, P7-9, P7 review H2): the key is reference + vendor (when both are mapped)
+     * + transaction-currency amount, with the posting date inside `finance.actuals.duplicate_window_days` of the invoice posting.
+     * Without an amount and date only the reference is compared (legacy callers). Anything weaker is `possibleDuplicateOf`.
      */
-    public function duplicateOf(int $orgId, ?string $reference, ?string $baseAmount = null, ?string $postedOn = null, ?int $vendorId = null): ?Actual
+    public function duplicateOf(int $orgId, ?string $reference, ?string $amount = null, ?string $currency = null, ?string $postedOn = null, ?int $vendorId = null): ?Actual
     {
         foreach ($this->referenceMatches($orgId, $reference) as $a) {
-            if ($baseAmount === null && $postedOn === null) {
+            if ($amount === null && $postedOn === null) {
                 return $a;
             }
-            $sameAmount = $baseAmount === null || bccomp((string) $a->base_amount, $baseAmount, 2) === 0;
-            $sameDate = $postedOn === null || $a->posted_on->toDateString() === $postedOn;
+            $sameAmount = $amount === null || (bccomp((string) $a->amount, $amount, 2) === 0 && ($currency === null || strtoupper((string) $a->currency) === strtoupper($currency)));
             $sameVendor = ! $vendorId || ! $a->vendor_id || (int) $a->vendor_id === (int) $vendorId;
-            if ($sameAmount && $sameDate && $sameVendor) {
+            $inWindow = $postedOn === null || abs($a->posted_on->startOfDay()->diffInDays(CarbonImmutable::parse($postedOn)->startOfDay())) <= (int) config('finance.actuals.duplicate_window_days', 31);
+            if ($sameAmount && $sameVendor && $inWindow) {
                 return $a;
             }
         }
@@ -145,7 +147,7 @@ class ReconciliationService
         return null;
     }
 
-    /** A reference that matches an approved invoice posting but not its amount or date: flagged, never excluded (P7-9). */
+    /** A reference that matches an approved invoice posting but not its amount, vendor or date window: flagged for a human, never silently excluded (P7-9). */
     public function possibleDuplicateOf(int $orgId, ?string $reference): ?Actual
     {
         return $this->referenceMatches($orgId, $reference)->first();

@@ -407,7 +407,10 @@ class InvoiceService
 
         // P7-10: invoices booked straight against an approved request may not exceed its total beyond the match tolerance.
         if ($expense) {
-            $already = (string) Invoice::withoutGlobalScopes()->where('organization_id', $orgId)->where('expense_request_id', $expense->id)->whereNull('po_id')->where('status', '!=', 'cancelled')
+            // Serialise concurrent captures on the request row, and count only live invoices (a rejected, cancelled or deleted one frees its share).
+            ExpenseRequest::withoutGlobalScopes()->where('organization_id', $orgId)->whereKey($expense->id)->lockForUpdate()->value('id');
+            $already = (string) Invoice::withoutGlobalScopes()->whereNull('deleted_at')->where('organization_id', $orgId)->where('expense_request_id', $expense->id)->whereNull('po_id')
+                ->whereIn('status', ['draft', 'submitted', 'approved', 'scheduled', 'paid', 'disputed'])
                 ->when($existing, fn ($q) => $q->where('id', '!=', $existing->id))->sum('total_amount');
             $excess = bcsub(bcadd($already, $totals['total_amount'], 2), (string) $expense->total_amount, 2);
             if (bccomp($excess, '0', 2) > 0) {

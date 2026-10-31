@@ -26,9 +26,16 @@ final class RequestMemo
         if (self::$request?->get() !== $request) {
             self::$request = WeakReference::create($request);
             self::$values = [];
+            app()->terminating(static fn () => self::flush()); // never outlive the request (P7 L1)
         }
 
         return array_key_exists($key, self::$values) ? self::$values[$key] : (self::$values[$key] = $compute());
+    }
+
+    public static function flush(): void
+    {
+        self::$request = null;
+        self::$values = [];
     }
 
     private static function active(): bool

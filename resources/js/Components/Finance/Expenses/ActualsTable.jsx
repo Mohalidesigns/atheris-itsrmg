@@ -17,6 +17,7 @@ export default function ActualsTable({ actuals, baseCurrency, money, canMatch, o
                     <td className="whitespace-nowrap px-4 py-2 text-xs">{humanize(a.source)}{a.source_ref && <span className="block font-mono text-[11px] text-[#718096]">{a.source_ref}</span>}</td>
                     <td className="min-w-[12rem] px-4 py-2 text-[#2D3748]">{a.description}
                         <div className="mt-0.5 flex flex-wrap gap-1">
+                            {a.match_reason === 'possible_duplicate' && a.match_status !== 'duplicate' && <Chip size="xs" tone="error">Possible duplicate</Chip>}
                             {a.is_capex && <Chip size="xs" tone="info">Capex</Chip>}{a.is_lease && <Chip size="xs" tone="tertiary">Lease</Chip>}
                             {a.invoice && <Link className="text-xs text-[#0A1F44] underline" href={route('finance.invoices.show', a.invoice.id)}>{a.invoice.invoice_code}</Link>}
                         </div>
@@ -28,7 +29,8 @@ export default function ActualsTable({ actuals, baseCurrency, money, canMatch, o
                     <td className="px-4 py-2"><StatusChip kind="actual" status={a.match_status} /></td>
                     {canMatch && (
                         <td className="whitespace-nowrap px-4 py-2 text-right text-xs">
-                            {['unmatched', 'unbudgeted'].includes(a.match_status) && onAction && <><button type="button" onClick={() => onAction(a, 'match')} className="text-[#0A1F44] underline">Match</button>{a.match_status === 'unmatched' && <button type="button" onClick={() => onAction(a, 'unbudgeted')} className="ml-3 text-[#8A6400] underline">Unbudgeted</button>}</>}
+                            {a.match_reason === 'possible_duplicate' && a.match_status !== 'duplicate' && onAction && <><button type="button" onClick={() => onAction(a, 'confirm-duplicate')} className="text-[#B3261E] underline">Confirm duplicate</button><button type="button" onClick={() => onAction(a, 'clear-duplicate')} className="ml-3 text-[#0A1F44] underline">Not a duplicate</button></>}
+                            {a.match_reason !== 'possible_duplicate' && ['unmatched', 'unbudgeted'].includes(a.match_status) && onAction && <><button type="button" onClick={() => onAction(a, 'match')} className="text-[#0A1F44] underline">Match</button>{a.match_status === 'unmatched' && <button type="button" onClick={() => onAction(a, 'unbudgeted')} className="ml-3 text-[#8A6400] underline">Unbudgeted</button>}</>}
                             {a.match_status === 'matched' && a.source === 'gl_import' && <button type="button" onClick={() => unmatch(a)} className="text-[#B3261E] underline">Unmatch</button>}
                         </td>
                     )}

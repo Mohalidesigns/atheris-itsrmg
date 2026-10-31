@@ -85,6 +85,10 @@ class PeriodCloseService
             $items[] = $item('actuals_posted', 'Actuals are posted and matched', 'pass', $posted, "{$posted} actual(s) posted and matched.", route('finance.actuals.index', [], false));
         }
 
+        $possibleDups = Actual::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $p->id)->where('match_reason', 'possible_duplicate')->where('match_status', '!=', 'duplicate')->count();
+        $items[] = $item('duplicates_resolved', 'Possible duplicate postings are resolved', $possibleDups === 0 ? 'pass' : 'fail', $possibleDups,
+            $possibleDups === 0 ? 'No GL row is flagged as a possible duplicate.' : "{$possibleDups} GL row(s) may duplicate an invoice posting; confirm or clear each one.", route('finance.actuals.index', ['tab' => 'queue'], false));
+
         $pending = $this->accruals->pendingFor($p);
         $n = array_sum($pending);
         $items[] = $item('accruals_done', 'Accruals and prepayment releases are done', $n === 0 ? 'pass' : 'fail', $n,
@@ -239,6 +243,9 @@ class PeriodCloseService
             $p = Period::withoutGlobalScopes()->lockForUpdate()->findOrFail($c->period_id);
             in_array($p->status, ['closed', 'locked'], true) || $this->fail("{$p->name} is already {$p->status}.");
             $this->assertLatestNonOpen($p);
+            // M3: a chargeback journal may have been exported while the request waited; re-check under the lock.
+            ChargebackRun::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('period_id', $p->id)->where('status', '!=', 'voided')->lockForUpdate()->exists()
+                && $this->fail('This period has an exported chargeback journal; void it before the re-open is approved.', 'reason');
             FiscalYear::withoutGlobalScopes()->whereKey($p->fiscal_year_id)->value('status') === 'closed' && $this->fail('The fiscal year is closed; its periods cannot be re-opened.');
             $p->forceFill(['status' => 'open', 'closed_at' => null, 'closed_by_id' => null, 'locked_at' => null, 'locked_by_id' => null])->save();
             AllocationRun::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('period_id', $p->id)->update(['is_frozen' => false]);

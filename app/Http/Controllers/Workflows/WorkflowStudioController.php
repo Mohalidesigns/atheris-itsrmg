@@ -18,6 +18,7 @@ use App\Services\Approvals\ApprovalEngine;
 use App\Services\Approvals\ApprovalProcesses;
 use App\Services\Change\ChangeApprovalRouter;
 use App\Services\Change\ChangePolicySeeder;
+use App\Services\Finance\FinanceApprovals;
 use App\Services\Finance\FinancePolicySeeder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -242,6 +243,11 @@ class WorkflowStudioController extends Controller
         $def = ApprovalProcesses::get($data['process']);
         $subject = $def['model']::findOrFail($data['id']);
         abort_unless($request->user()->can($def['view_permission'] ?? str_replace('approve ', 'view ', $def['permission'])), 403);
+        if (str_starts_with($data['process'], 'finance.')) { // cost-centre visibility and amount masking apply (P7 M1)
+            abort_unless($request->user()->can('view', $subject), 403);
+
+            return response()->json(app(FinanceApprovals::class)->trail($data['process'], $subject, $request->user()));
+        }
 
         return response()->json($this->engine->trail($data['process'], $subject, $request->user()));
     }

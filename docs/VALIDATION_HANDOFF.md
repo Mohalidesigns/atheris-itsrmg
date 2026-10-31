@@ -47,6 +47,32 @@ Validate each sidebar module end to end, in order. For every module:
 | 15 | Enterprise Architecture | `30dd1a7` | `docs/ATH-VAL-015_Enterprise_Architecture_Validation_Report.md` | `tests/Feature/Ea/EaMaturityModuleTest.php` (6) |
 | 16 | Workflow Studio | see `git log` | `docs/ATH-VAL-016_Workflow_Studio_Validation_Report.md` | `tests/Feature/Workflows/WorkflowStudioModuleTest.php` (6) |
 | — | Change Management (new module) | `f41a267` | `docs/ATH-CHG-001_…Specification_v1.0.md` (contract), `docs/ATH-CHG-002_Change_Management_Build_Update.md` | `tests/Feature/Changes/ChangeManagementModuleTest.php` (18), `ChangeTenancyAndRoutesTest.php` (3) |
+| — | IT Financial Management (new module, phases P0–P7) | `feature/it-finance-p7` (PR to main) | `docs/ATH-FIN-003_IT_Finance_Build_Update.md` §P7, plus `docs/build/ATH-FIN-REV-p7.md` | `tests/Feature/Finance/*` incl. `P7*` classes; `tests/Feature/AuditTrailTenancyTest.php`; Playwright `finance-*.spec.js` |
+
+### IT Financial Management (P7 hand-off)
+
+Built and reviewed outside the 24-module walk, in phases P0–P7 (ATH-FIN-003). Final reviews (security and domain, Opus, whole module) found one Critical, the platform audit trail showing other banks' amounts; it is fixed (`App\Models\Activity`, migration `2027_04_03_000001`). Gate before review fixes: 950 passed / 10 skipped, seed + SMOKE 10/10, Playwright 11/11. Final gate: see ATH-FIN-003 §P7.
+
+**Demo logins (all passwords `password`).** Same local parts at both banks; the domain is `@kanoheritage.ng` (org 2) or `@firstbanknigeria.ng` (org 3).
+
+| login | job title | roles | use it to |
+|---|---|---|---|
+| `admin@…` | bank admin | admin | see everything, cross-check isolation |
+| `finance@` | IT Finance Controller | IT Finance Controller | close and re-open periods, settings, chargeback, capitalise, import |
+| `procurement@` | Procurement Officer | Procurement Officer | POs, GRN, invoices, GL and cloud imports |
+| `headofit@` | Head of IT | Finance Approver | first approval stage on budgets, expenses, business cases |
+| `cfo@` | Chief Financial Officer | Finance Approver, Investment Sponsor, IT Steering Committee | CFO stages, invoices, contracts |
+| `cio@` | Chief Information Officer | Finance Approver, IT Steering Committee | CIO stage on budgets and high-value transfers |
+| `md@` | Managing Director/CEO | Finance Approver | MD/CEO and board stages (deliberately without the steering-committee role) |
+| `steerco@` | Chair, IT Steering Committee | Finance Approver, IT Steering Committee | gate decisions, independent investment scoring |
+
+`itops@` (title "Head of IT Operations") is a budget owner and must NOT be able to decide Head of IT stages (P7-3). A user with `view it-finance` only is the way to check amount masking.
+
+**What to look at.**
+- **Kano Heritage (Tier 2, `admin@kanoheritage.ng`):** the 14 finance reports and the dashboard; the FinOps estate (cloud accounts, anomalies, showback, chargeback); contracts and the renewal calendar; the platform audit trail, which must show only Kano rows. Kano has no EA applications, so application TCO is by business service.
+- **First Bank (Tier 1, `admin@firstbanknigeria.ng`):** multi-entity budgets (Ghana and UK subsidiaries; cross-entity transfers are refused), EA application TCO, the pending September re-open (no exported chargeback in that period), pending CFO-stage investment gates, and possible-duplicate GL rows to confirm.
+- **Cross-bank check:** open a record URL from one bank while logged in to the other (expect 404/403), and open the platform audit trail as a First Bank Viewer (no Kano finance rows, no amounts).
+- **Seeding:** the demo is anchored on `now()`. After 31 December 2026 a re-seed gives thin data until a `FINANCE_DEMO_TODAY` anchor is added. Tax rates are unverified (ATH-FIN-003 §P7).
 
 Last full suite: **324 tests, 323 passed, 1 skipped, 3,565 assertions (14 Oct 2026, local, PHP 8.4)**. The skip is the route smoke test, which runs separately and passed over 205 GET routes.
 

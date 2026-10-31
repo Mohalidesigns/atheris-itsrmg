@@ -85,6 +85,8 @@ class BudgetTransferService
         $this->assertApprover($t, $by);
 
         return DB::transaction(function () use ($t, $by, $note) {
+            $t = BudgetTransfer::withoutGlobalScopes()->lockForUpdate()->findOrFail($t->id); // serialise concurrent approvals (P7 M3)
+            $this->assertTransition($t, 'approve');
             $this->approvals->assertZeroStepSoD(self::PROCESS, $t, $by, 'requested_by_id');
             if (! $this->approvals->configured(self::PROCESS, (int) $t->organization_id)) {
                 $this->approvals->assertDefaultApprover($t, $by, 'requested_by_id');

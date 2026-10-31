@@ -616,6 +616,9 @@ class FinanceFinOpsDemoSeeder extends Seeder
     {
         $svc = app(ChargebackService::class);
         $closed = Period::withoutGlobalScopes()->where('organization_id', $this->orgId)->where('fiscal_year_id', $this->fyId)->where('is_adjustment', false)->where('status', 'closed')->orderByDesc('starts_on')->get();
+        // a period with a re-open request awaiting approval cannot be exported (P7 review M3)
+        $pendingReopen = DB::table('fin_period_closes')->where('organization_id', $this->orgId)->where('reopen_status', 'submitted')->pluck('period_id')->all();
+        $closed = $closed->reject(fn ($p) => in_array($p->id, $pendingReopen, true))->values();
         $latest = $closed->first();
         if (! $latest) {
             $this->warn('no closed period to export a chargeback for.');

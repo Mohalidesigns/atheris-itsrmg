@@ -214,7 +214,8 @@ class FinanceApprovals
                     array_key_exists($k, $trail['context']) && $trail['context'][$k] = null;
                 }
             }
-            $trail['stages'] = collect($trail['stages'])->map(fn ($s) => is_array($s) && str_starts_with((string) ($s['condition'] ?? ''), 'amount_band') ? array_merge($s, ['condition' => null]) : $s)->values();
+            // Conditions on the amount band or the CFO/Board flags disclose where the thresholds sit (P7 M1).
+            $trail['stages'] = collect($trail['stages'])->map(fn ($s) => is_array($s) && preg_match('/^(amount_band|requires_cfo|requires_board)\b/', (string) ($s['condition'] ?? '')) ? array_merge($s, ['condition' => null]) : $s)->values();
         }
 
         return $trail;

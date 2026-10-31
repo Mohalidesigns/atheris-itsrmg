@@ -120,7 +120,7 @@ class FinanceMetrics
             $bySeverity = $notes->selectRaw('severity, status, count(*) as c')->groupBy('severity', 'status')->get();
             $out['variances'] = [
                 'red' => (int) $bySeverity->where('severity', 'red')->sum('c'), 'amber' => (int) $bySeverity->where('severity', 'amber')->sum('c'),
-                'unexplained_red' => (int) $bySeverity->where('severity', 'red')->where('status', 'open')->sum('c'),
+                'unexplained_red' => (int) $bySeverity->where('severity', 'red')->whereIn('status', ['open', 'explained'])->sum('c'),
             ];
         }
         [$count, $amount] = $this->unbudgeted($orgId, $fy->id, $costCentreIds);

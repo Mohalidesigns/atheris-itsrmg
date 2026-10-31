@@ -35,7 +35,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         // Memoises per-bank finance settings for the life of the request.
-        $this->app->singleton(FinanceSettings::class);
+        $this->app->scoped(FinanceSettings::class); // per request/job, never across them (P7 L2)
         // One TCO computation per org + fiscal year per request: the memo (and the allocation items under it) is shared by every caller.
         $this->app->scoped(ApplicationTcoService::class);
     }

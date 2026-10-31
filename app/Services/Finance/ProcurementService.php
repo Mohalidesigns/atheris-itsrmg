@@ -84,7 +84,7 @@ class ProcurementService
             if (bccomp($excess, '0', 2) > 0) {
                 $s = $this->settings->for($orgId);
                 $this->matcher->within($excess, (string) $e->total_amount, $conv['fx_rate'], (string) $s->match_tolerance_pct, (string) $s->match_tolerance_abs)
-                    || $this->fail("The PO total ({$totals['total_amount']}) is above the approved {$e->total_amount} beyond the match tolerance; raise a new request or re-approve.", 'lines');
+                    || $this->fail("The PO total is above the approved amount of {$e->request_code} beyond the match tolerance; raise a new request or re-approve.", 'lines');
             }
 
             $po = PurchaseOrder::withoutGlobalScopes()->create([

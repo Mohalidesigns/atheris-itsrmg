@@ -2,8 +2,11 @@
 
 namespace Tests\Feature\Finance;
 
+use App\Models\Ea\BusinessService;
 use App\Models\Finance\StageGate;
 use App\Models\User;
+use App\Services\Finance\ApplicationTcoService;
+use App\Services\Finance\BudgetLineClassifier;
 use App\Services\Finance\FinanceMasking;
 use App\Services\Finance\Reports\FinanceReports;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -159,5 +162,47 @@ class FinanceMaskingSweepTest extends TestCase
         foreach (config('finance.masked_kri_codes') as $code) {
             $this->assertNull($masking->maskKriPayload(['code' => $code, 'value' => 9], null)['value']);
         }
+    }
+
+    /** P7 F4 M5: TCO totals and rows carry no money for a blind viewer, including a non-zero finops_excess. */
+    public function test_tco_page_masks_every_money_key_including_finops_excess(): void // FIN-07.10, FIN-05.10
+    {
+        $svc = BusinessService::withoutGlobalScopes()->create(['organization_id' => $this->org->id, 'code' => 'BS-001', 'name' => 'Mobile Banking']);
+        $this->actingAs($this->fin);
+        app(BudgetLineClassifier::class)->classify([$this->poolLines['CP-CLD']->id], ['business_service_id' => $svc->id], $this->fin);
+        $this->postActual($this->poolLines['CP-CLD'], $this->periodSeq(1), '500000.00');
+        $this->makeCloudAccount(['account_identifier' => '777', 'name' => 'Analytics']);
+        $this->ingest($this->cloudRows('2027-02-01', 10, ['Compute'], ['Service' => 'BS-001'], 100));
+        app(ApplicationTcoService::class)->flush();
+
+        $totals = fn (User $u) => $this->tcoProps($u, 'totals');
+        $sighted = $totals($this->sighted);
+        $this->assertTrue(bccomp((string) $sighted['finops_excess'], '0', 2) > 0, 'fixture must produce a non-zero finops_excess');
+
+        $page = $this->tcoProps($this->blind, null);
+        $nonMoney = ['coverage_pct', 'share_pct', 'id', 'label', 'code', 'contracts_count', 'kind', 'subject'];
+        $walk = function ($node, $path) use (&$walk, $nonMoney) {
+            foreach ($node as $k => $v) {
+                if (is_array($v)) {
+                    $walk($v, "{$path}.{$k}");
+                } elseif (is_string($k) && ! in_array($k, $nonMoney, true) && is_string($v) && is_numeric($v) && str_contains($v, '.')) {
+                    $this->fail("Unmasked money value at {$path}.{$k} = {$v}");
+                }
+            }
+        };
+        $walk($page['totals'], 'totals');
+        $walk($page['rows'], 'rows');
+        $this->assertNull($page['totals']['finops_excess']);
+    }
+
+    /** @return array<string,mixed> */
+    private function tcoProps(User $u, ?string $key): array
+    {
+        $this->actingAs($u);
+        $html = $this->get(route('finance.monitor.tco'))->getContent();
+        preg_match('/data-page="([^"]*)"/', $html, $m);
+        $props = json_decode(html_entity_decode($m[1]), true)['props'];
+
+        return $key ? $props[$key] : $props;
     }
 }

@@ -31,7 +31,7 @@ trait PresentsFinOps
         'cost', 'base_cost', 'total', 'untagged', 'mtd', 'prior_mtd', 'baseline_cost', 'observed_cost', 'baseline_base_cost', 'observed_base_cost', 'pool_total', 'allocated_total',
         'direct', 'allocated', 'retained', 'it_total', 'budget_total', 'variance', 'variance_pct', 'amount', 'finops_total', 'cloud_ledger_actual', 'gap', 'gap_pct', 'cloud', 'labour',
         'contracts_memo', 'ea_modelled', 'delta_vs_model_pct', 'measured', 'current_base_amount', 'total_debit', 'total_credit', 'difference', 'tco_total', 'unattributed', 'annualised',
-        'pool_base_amount', 'base_amount',
+        'pool_base_amount', 'base_amount', 'finops_excess', 'finops_untagged_cloud',
     ];
 
     /** Lists of money; an integer under one of these names (a count) is left alone. */

@@ -46,7 +46,7 @@ class BenefitsService
         in_array($b->status, Benefit::FINAL, true) && $this->fail("A {$b->status} benefit cannot be edited.", 'title');
         $inv = Investment::withoutGlobalScopes()->findOrFail($b->investment_id);
         if ($this->pastApproval($inv)) {
-            foreach (['target_value', 'baseline_value', 'unit', 'due_on'] as $k) {
+            foreach (['target_value', 'baseline_value', 'unit', 'due_on', 'aggregation', 'type', 'measurement_method'] as $k) {
                 if (! array_key_exists($k, $data)) {
                     continue;
                 }
@@ -54,10 +54,10 @@ class BenefitsService
                 $new = $data[$k];
                 $same = match ($k) {
                     'due_on' => ($old?->toDateString()) === ($new ? substr((string) $new, 0, 10) : null),
-                    'unit' => (string) $old === (string) $new,
-                    default => $new !== null && $new !== '' && is_numeric($new) && bccomp((string) $old, (string) $new, 2) === 0,
+                    'unit', 'aggregation', 'type', 'measurement_method' => (string) $old === (string) $new,
+                    default => ($old === null || $old === '') ? ($new === null || $new === '') : ($new !== null && $new !== '' && is_numeric($new) && bccomp((string) $old, (string) $new, 2) === 0),
                 };
-                $same || $this->fail('Target, baseline, unit and due date are frozen once the investment is approved; cancel this benefit and register a new one.', $k);
+                $same || $this->fail('Target, baseline, unit, due date, aggregation, type and measurement method are frozen once the investment is approved; cancel this benefit and register a new one.', $k);
             }
         }
         $b->fill($this->attributes((int) $b->organization_id, $data, $b))->save();

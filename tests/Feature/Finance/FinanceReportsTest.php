@@ -223,7 +223,7 @@ class FinanceReportsTest extends TestCase
         }
         $this->assertArrayNotHasKey('budget_total', $board, 'run summaries carry no money');
         $this->assertSame('FY2027', $board['fiscal_year']);
-        $this->assertSame(2, $board['unexplained_red'], 'lines 1 and 2 are red under-spends nobody has explained; line 0 is explained');
+        $this->assertSame(3, $board['unexplained_red'], 'lines 1 and 2 are unexplained red under-spends; line 0 is explained but not yet acknowledged, so it still counts (P7 L9, as the close checklist does)');
         $r = ReportFigures::summary('finance.bva', $this->org->id);
         $this->assertSame(['bva', 3], [$r['report'], $r['rows']]);
         $this->assertArrayNotHasKey('totals', $r, 'run summaries carry no money');

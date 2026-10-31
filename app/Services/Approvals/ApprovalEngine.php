@@ -7,6 +7,7 @@ use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalStep;
 use App\Models\Approvals\ApprovalWorkflow;
 use App\Models\User;
+use App\Services\Finance\FinanceApprovals;
 use App\Services\Finance\RequestMemo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -108,10 +109,14 @@ class ApprovalEngine
         if (! $request || $request->status === 'approved') {
             return ['final' => true, 'step' => null, 'next' => null];
         }
-        $step = $request->currentStep();
-        $this->assertEligible($step, $request, $subject, $actor);
 
-        return DB::transaction(function () use ($request, $step, $actor, $note) {
+        return DB::transaction(function () use ($request, $subject, $actor, $note) {
+            // Serialise concurrent decisions on this request (P7 M3): re-read it under a row lock, then judge eligibility on the fresh state.
+            $locked = ApprovalRequest::withoutGlobalScopes()->lockForUpdate()->find($request->id);
+            ($locked && $locked->status === 'pending') || throw ValidationException::withMessages(['approval' => 'This approval has already been decided.']);
+            $request = $locked->load('steps.decisions');
+            $step = $request->currentStep();
+            $this->assertEligible($step, $request, $subject, $actor);
             ApprovalDecision::withoutGlobalScopes()->create(['organization_id' => $request->organization_id, 'step_id' => $step->id,
                 'user_id' => $actor->id, 'decision' => 'approved', 'comment' => $note, 'decided_at' => now()]);
             if ($step->decisions()->where('decision', 'approved')->count() < $step->min_approvals) {
@@ -175,7 +180,7 @@ class ApprovalEngine
             || ($request->initiated_by && (int) $request->initiated_by === (int) $user->id)
             || ($subject && ! empty($def['owner_cannot_approve']) && (int) $subject->{$def['owner']} === (int) $user->id && $step->approver_type !== 'owner')
             || in_array((int) $user->id, array_map('intval', (array) ($request->context['sod_excluded_ids'] ?? [])), true)
-            || ! $this->matches($step, $user)) {
+            || ! $this->matchesForRequest($step, $request, $user)) {
             return false;
         }
         try {
@@ -206,7 +211,17 @@ class ApprovalEngine
         in_array((int) $actor->id, array_map('intval', (array) ($request->context['sod_excluded_ids'] ?? [])), true)
             && $fail('You took part in this record (owner, recommender, opener or requester), so you cannot approve it (segregation of duties).');
 
-        $this->matches($step, $actor) || $fail("This is awaiting \"{$step->name}\": ".$this->describe($step).'.');
+        $this->matchesForRequest($step, $request, $actor) || $fail("This is awaiting \"{$step->name}\": ".$this->describe($step).'.');
+    }
+
+    /** Finance processes match job titles by exact segment (P7 L4); every other process keeps the engine's rule. */
+    private function matchesForRequest(ApprovalStep $step, ApprovalRequest $request, User $user): bool
+    {
+        if ($step->approver_type === 'job_title' && str_starts_with((string) $request->process, 'finance.') && ! $user->hasRole('Super Admin')) {
+            return FinanceApprovals::jobTitleMatches((string) $user->job_title, (string) $step->approver_ref);
+        }
+
+        return $this->matches($step, $user);
     }
 
     /** Does $user fit the step's approver definition? */
