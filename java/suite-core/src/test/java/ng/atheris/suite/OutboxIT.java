@@ -87,12 +87,12 @@ class OutboxIT extends AbstractIT {
         assertThat(Duration.between(Instant.now(), next)).isBetween(Duration.ofSeconds(20), Duration.ofSeconds(31));
         assertThat(deliverer.deliverDue()).isZero(); // not due yet
 
-        jdbc.update("update suite_outbox set next_attempt_at = now() where id = ?", id);
+        jdbc.update("update suite_outbox set next_attempt_at = now() - interval '1 minute' where id = ?", id);
         deliverer.deliverDue();
         next = ((java.sql.Timestamp) row(id).get("next_attempt_at")).toInstant();
         assertThat(Duration.between(Instant.now(), next)).isBetween(Duration.ofSeconds(100), Duration.ofSeconds(121));
 
-        jdbc.update("update suite_outbox set next_attempt_at = now(), created_at = now() - interval '73 hours' where id = ?", id);
+        jdbc.update("update suite_outbox set next_attempt_at = now() - interval '1 minute', created_at = now() - interval '73 hours' where id = ?", id);
         deliverer.deliverDue();
         assertThat(row(id)).containsEntry("status", "failed").containsEntry("attempts", 3);
         assertThat(count("select count(*) from suite_audit_log where event_id = ? and direction = 'send' and outcome = 'retry'", id)).isEqualTo(2);
