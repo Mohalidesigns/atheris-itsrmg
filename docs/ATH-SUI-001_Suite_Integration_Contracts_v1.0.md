@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| Status | Draft v1.1 for review (31 Oct 2026) — D4, D5, D6 resolved; D1, D2, D3 open |
+| Status | Draft v1.2 for review (31 Oct 2026) — all decisions D1–D6 resolved |
 | Applies to | `IT-Governance` and `Info-Sec`, both split from `IT-Security-Risk` `main` @ `70b5e99` |
 | Referenced by | `docs/SPLIT_PRUNE_IT_GOVERNANCE.md`, `docs/SPLIT_PRUNE_INFO_SEC.md` (C1, C8, C9, C10, C12, C13, C14, C15) |
-| Backend neutrality | Contracts are HTTP + JSON. They hold whether each product stays on Laravel or moves to Java Spring Boot (decision of 25 Oct 2026 still open). §10 maps them to both stacks. |
+| Backend neutrality | Contracts are HTTP + JSON. **D2 resolved 31 Oct 2026: the products ship on Java Spring Boot.** The contracts are unchanged by that; §10 maps them to both stacks, and the Laravel column remains the reference for the current base code. |
 
 ## 1. Purpose
 
@@ -216,7 +216,7 @@ Each contract lists: direction, trigger, message, payload, consumer behaviour, l
 - **Initial load:** `GET /api/suite/v1/assets?tenant=<slug>&cursor=<…>` paged (500 per page) for first connection and for re-sync.
 - **Fallback (ISec alone):** asset register fully editable, as today.
 - **Toggle:** `SUITE_C4`.
-- **Needs decision D1** (§9): the prune checklists keep Asset Management in both products without naming an owner.
+- **Owner (D1, resolved):** IT Governance owns the IT asset register. Information Security keeps Asset Management only as the C4 mirror plus its security attributes; it does not create or edit register records while C4 is on.
 
 ### C5 — Tenants, users and roles
 
@@ -250,7 +250,7 @@ Each contract lists: direction, trigger, message, payload, consumer behaviour, l
 - **Payload:** `evidence_ref`, `title`, `control_refs[]`, `framework`, `seal_state` (`sealed` / `stale` / `unsealed`), `sealed_at`, `confidence` (0–1), `download_url` (signed, 15-minute expiry).
 - **Consumer (ITG):** stores a citation with the seal state **as captured** (same snapshot rule as today), never the file itself.
 - **Toggle:** `SUITE_C7`.
-- **Needs decision D3** (§9) on where the CSAT return is compiled.
+- **CSAT (D3, resolved):** the CBN-CSAT return belongs to Information Security and is compiled there against local evidence, so C7 does not carry CSAT evidence. C7 serves only ITG's returns (ITSB maturity, NDPC CAR, localisation gap).
 
 ### C8 — Configuration drift ↔ authorised change
 
@@ -419,16 +419,16 @@ Ownership per both checklists: Information Security owns the write surface for s
 
 ## 8. Build plan
 
-The common plumbing is built once on base `main` (both checklists say "built on `main` first where possible"), then each product pulls it from its `base` remote. Contracts are then built in the order the pruning needs them.
+The common plumbing is built once and shared by both products. Under D2 that happens in the Spring Boot stack (for example a shared `suite-core` library), not on the Laravel base `main`. Contracts are then built in the order the pruning needs them.
 
 | Phase | Scope | Unblocks |
 |---|---|---|
-| S0 — Plumbing (on base `main`) | `config/suite.php` with per-contract toggles; signature middleware; `routes/suite.php`; `suite_outbox` / `suite_inbox` tables + delivery job + retry; `SuiteClient`; `SuiteWebhookController` with handler registry by `type`; `/health`; `/suite/open`; admin "Delivery failures" page; activity log `suite`; tests including a two-app loopback test (one install talking to itself under two client IDs) | everything |
+| S0 — Plumbing (in the Spring Boot products, per D2) | `config/suite.php` with per-contract toggles; signature middleware; `routes/suite.php`; `suite_outbox` / `suite_inbox` tables + delivery job + retry; `SuiteClient`; `SuiteWebhookController` with handler registry by `type`; `/health`; `/suite/open`; admin "Delivery failures" page; activity log `suite`; tests including a two-app loopback test (one install talking to itself under two client IDs) | everything |
 | S1 — Identity & reference data | C5, C4, C14 (application catalogue direction only) | every contract that names users, assets or applications |
 | S2 — Cuts needed to remove CSAT/SecOps from ITG | C1, C2, C3, C6 | pruning SecOps/CSAT out of ITG without losing board-pack figures, CAPA or CVE flow |
 | S3 — Cuts needed to remove Change/BCP/EA from ISec | C8, C10, C13, C14 (security entities) | pruning Change, BCP, EA out of ISec |
 | S4 — Vendor and data protection | C9, C15 (after `processing_activities` exists), C12 | vendor flow of 22 Oct; ROPA |
-| S5 — Returns | C7 (after D3) | Returns Centre with remote evidence |
+| S5 — Returns | C7 | Returns Centre with remote evidence |
 
 Definition of done for each contract (in addition to the repo rule — PHP suite, `migrate:fresh --seed` and `npm run build` all pass):
 
@@ -442,16 +442,16 @@ Definition of done for each contract (in addition to the repo rule — PHP suite
 
 | # | Decision | Why it matters | Suggested answer |
 |---|---|---|---|
-| D1 | Which product owns the IT asset register? Both checklists keep Asset Management. | Two editable registers at one bank will drift apart; vulnerabilities, drift and PCI scope all point at assets. | IT Governance owns it (ITAM is a governance function); Info-Sec mirrors it and owns only security attributes (C4). |
-| D2 | Java rewrite first, or prune Laravel now? (open since 25 Oct) | Determines whether S0 is written in Laravel or Spring Boot. The contracts in this document are the same either way. | Build S0 + S1 in whichever stack the products will ship on; do not build plumbing twice. |
-| D3 | Where is the CBN-CSAT return compiled? The Info-Sec checklist removes `app/Services/Returns/**` **except** `CsatMapper`, but `CsatMapper` extends `ReturnMapper` and is driven by `ReturnCompiler`, which is removed. | As written, CSAT returns stop compiling in Info-Sec after pruning. | Keep `ReturnCompiler`, `ReturnMapper` and the citation/seal classes in Info-Sec as a slim engine for the CSAT return only; ITG keeps the full Returns Centre. Fix the Info-Sec checklist accordingly. |
+| D1 | Which product owns the IT asset register? Both checklists keep Asset Management. | Two editable registers at one bank will drift apart; vulnerabilities, drift and PCI scope all point at assets. | **Resolved 31 Oct 2026:** IT Governance owns the register. Information Security mirrors it (C4) and owns only the security attributes. |
+| D2 | Java rewrite first, or prune Laravel now? (open since 25 Oct) | Determines whether S0 is written in Laravel or Spring Boot. | **Resolved 31 Oct 2026:** Java Spring Boot. S0 and the contracts are built in the Spring Boot products; no suite plumbing is built in Laravel. |
+| D3 | Where is the CBN-CSAT return compiled? The Info-Sec checklist removed `app/Services/Returns/**` **except** `CsatMapper`, but `CsatMapper` extends `ReturnMapper` and is driven by `ReturnCompiler`. | As written, CSAT returns would stop compiling in Info-Sec after pruning. | **Resolved 31 Oct 2026:** CBN-CSAT belongs to Information Security. Info-Sec keeps a slim returns engine (`ReturnCompiler`, `ReturnMapper`, the citation/seal classes and `CsatMapper`) for the CSAT return only; ITG keeps the full Returns Centre. The Info-Sec checklist is corrected. |
 | D4 | Deployment topology | Affects mTLS and network set-up at install. | **Resolved 31 Oct 2026:** when bought together, both products are deployed on the same server (two apps, two databases). HMAC signature stays mandatory; mTLS not needed. See §3.2. |
 | D5 | Who can invoke DR (C13)? | Accountability during a live event. | **Resolved 31 Oct 2026:** by cause. Information Security for malicious incidents (compromise, loss of integrity, unsafe environment); IT/Operations for non-malicious infrastructure, hardware or environmental failures. ITG executes the runbook in both cases. See C13. |
 | D6 | Can a CISO activate a critical vendor before the CTPRA is complete (C9)? | Regulator will ask who approved an unassessed critical vendor. | **Resolved 31 Oct 2026:** yes, only through a formal risk exception / conditional approval, routed through an approval chain to senior management that each bank configures in Workflow Studio. See C9a. |
 
 ## 10. Mapping to each stack
 
-| Concern | Laravel 13 (current) | Spring Boot (if D2 goes that way) |
+| Concern | Laravel 13 (current) | Spring Boot (target stack, D2) |
 |---|---|---|
 | Routes | `routes/suite.php`, `api` middleware + `suite.signature` | `@RestController` under `/api/suite/v1`, a `OncePerRequestFilter` for the signature |
 | Outbox write | in the same `DB::transaction()` as the model save | same `@Transactional` method as the repository save |
