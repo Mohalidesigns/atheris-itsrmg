@@ -125,17 +125,16 @@ class Capitalisation extends Model
      */
     public function sodExcludedIds(): array
     {
-        if (is_array($this->sod_excluded_ids) && $this->sod_excluded_ids) {
-            return array_values(array_unique(array_map('intval', $this->sod_excluded_ids)));
-        }
         $s = $this->source();
-        $owner = match (true) {
-            $s instanceof Investment => $s->manager_id,
-            $s instanceof ExpenseRequest => $s->requested_by_id,
-            default => null,
+        // The live owners are always added to the submit-time snapshot, so reassigning the manager or sponsor never frees the new holder to approve their own spend.
+        $owners = match (true) {
+            $s instanceof Investment => [$s->manager_id, $s->sponsor_id],
+            $s instanceof ExpenseRequest => [$s->requested_by_id],
+            default => [],
         };
+        $snapshot = is_array($this->sod_excluded_ids) ? $this->sod_excluded_ids : [];
 
-        return array_values(array_unique(array_map('intval', array_filter([$this->requested_by_id, $this->created_by_id, $owner]))));
+        return array_values(array_unique(array_map('intval', array_filter(array_merge($snapshot, [$this->requested_by_id, $this->created_by_id], $owners)))));
     }
 
     public function approvalBaseAmount(): string

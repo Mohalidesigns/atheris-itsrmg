@@ -25,6 +25,7 @@ use App\Models\Risk;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Policies\Finance\FinancePolicy;
+use App\Services\Finance\BudgetLedger;
 use App\Services\Finance\ContractService;
 use App\Services\Finance\FinanceApprovals;
 use App\Services\Finance\FinanceClock;
@@ -294,6 +295,9 @@ class ContractController extends Controller
         $budgets = Budget::query()->where('status', 'baseline')->when($ids !== null, fn ($q) => $q->whereIn('cost_centre_id', $ids ?: [0]))
             ->whereIn('fiscal_year_id', FiscalYear::query()->where('status', 'open')->select('id'))->get(['id', 'budget_code'])->keyBy('id');
 
+        $budgetLines = BudgetLine::query()->whereIn('budget_id', $budgets->keys())->orderBy('budget_id')->orderBy('line_no')->get();
+        $currentBase = app(BudgetLedger::class)->currentBaseAmounts($budgetLines);
+
         return [
             'options' => $this->optionsPayload(),
             'vendors' => Vendor::query()->orderBy('name')->get(['id', 'name'])->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values(),
@@ -301,9 +305,8 @@ class ContractController extends Controller
             'costCentres' => $this->costCentresPayload($user),
             'legalEntities' => LegalEntity::withoutGlobalScopes()->where('organization_id', $orgId)->orderBy('code')->get(['id', 'code', 'name'])->map(fn ($l) => ['id' => $l->id, 'code' => $l->code, 'name' => $l->name])->values(),
             'categories' => Category::query()->where('is_active', true)->orderBy('kind')->orderBy('code')->get(['id', 'code', 'name', 'kind']),
-            'budgetLines' => BudgetLine::query()->whereIn('budget_id', $budgets->keys())->orderBy('budget_id')->orderBy('line_no')->get()
-                ->map(fn (BudgetLine $l) => ['id' => $l->id, 'label' => "{$budgets[$l->budget_id]->budget_code} #{$l->line_no} {$l->description}", 'cost_centre_id' => $l->cost_centre_id,
-                    'current_base_amount' => (string) $l->current_base_amount])->values(),
+            'budgetLines' => $budgetLines->map(fn (BudgetLine $l) => ['id' => $l->id, 'label' => "{$budgets[$l->budget_id]->budget_code} #{$l->line_no} {$l->description}", 'cost_centre_id' => $l->cost_centre_id,
+                'current_base_amount' => $currentBase[$l->id]])->values(),
             'currencies' => Currency::query()->where('is_active', true)->orderByDesc('is_base')->orderBy('code')->get()->map(fn ($c) => ['code' => $c->code, 'decimals' => $c->decimals, 'is_base' => $c->is_base])->values(),
             'defaults' => [
                 'renewal_lead_days' => (int) $setting->renewal_lead_days, 'notification_offsets' => $setting->renewal_notice_offsets ?: [],

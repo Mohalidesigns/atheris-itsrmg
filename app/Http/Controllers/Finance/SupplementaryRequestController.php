@@ -43,17 +43,20 @@ class SupplementaryRequestController extends Controller
             ->with(['fiscalYear:id,year_label', 'costCentre:id,code,name', 'costPool:id,code,name', 'tower:id,code,name', 'category:id,code,name', 'targetLine:id,line_no,description',
                 'resultingLine:id,line_no,description,budget_id', 'requestedBy:id,name', 'approvedBy:id,name'])
             ->orderByDesc('id')->get()->filter(fn ($r) => Gate::forUser($user)->allows('view', $r))->values();
-        $all = SupplementaryRequest::query()->where('fiscal_year_id', $fyId)->get();
+        $all = SupplementaryRequest::query()->where('fiscal_year_id', $fyId)->get()->filter(fn ($r) => Gate::forUser($user)->allows('view', $r))->values(); // summary counts only what the viewer may see
 
         $ids = FinancePolicy::visibleCostCentreIds($user);
         $budgets = Budget::query()->where('fiscal_year_id', $fyId)->where('status', 'baseline')->when($ids !== null, fn ($q) => $q->whereIn('cost_centre_id', $ids ?: [0]))
             ->with('costCentre:id,code')->get()->keyBy('id');
-        $lineOptions = BudgetLine::query()->whereIn('budget_id', $budgets->keys())->orderBy('budget_id')->orderBy('line_no')->get()->map(function (BudgetLine $l) use ($budgets) {
+        $optionLines = BudgetLine::query()->whereIn('budget_id', $budgets->keys())->orderBy('budget_id')->orderBy('line_no')->get();
+        $byPeriod = $this->ledger->currentByPeriodMany($optionLines);
+        $current = $this->ledger->currentBaseAmounts($optionLines);
+        $lineOptions = $optionLines->map(function (BudgetLine $l) use ($budgets, $byPeriod, $current) {
             $b = $budgets[$l->budget_id];
 
             return ['id' => $l->id, 'label' => "{$b->budget_code} {$b->version_label} · #{$l->line_no} {$l->description} ({$b->costCentre?->code})",
-                'cost_centre_id' => $l->cost_centre_id, 'is_capex' => $l->is_capex, 'current_base_amount' => $l->current_base_amount,
-                'available_by_period' => $this->ledger->currentByPeriod($l)];
+                'cost_centre_id' => $l->cost_centre_id, 'is_capex' => $l->is_capex, 'current_base_amount' => $current[$l->id],
+                'available_by_period' => $byPeriod[$l->id] ?? []];
         })->values();
 
         $mini = fn ($c) => $c ? ['id' => $c->id, 'code' => $c->code, 'name' => $c->name] : null;

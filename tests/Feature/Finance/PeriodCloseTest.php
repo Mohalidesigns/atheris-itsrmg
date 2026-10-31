@@ -10,6 +10,7 @@ use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
 use App\Models\Finance\PeriodClose;
 use App\Models\Finance\TaxType;
+use App\Models\Finance\VarianceNote;
 use App\Models\User;
 use App\Services\Finance\AccrualService;
 use App\Services\Finance\FinancePolicySeeder;
@@ -116,6 +117,13 @@ class PeriodCloseTest extends TestCase
         $this->assertSame('fail', $this->item($this->svc()->checklist($p3), 'variances_explained')['status']);
 
         $this->assertSame(1, $this->explainAll($p3));
+        // P7-5: explained is not enough for a red note; a second person must acknowledge it.
+        $item = $this->item($this->svc()->checklist($p3), 'variances_explained');
+        $this->assertSame('fail', $item['status']);
+        $this->assertStringContainsString('1 red variance(s) await acknowledgement', $item['detail']);
+        foreach (VarianceNote::withoutGlobalScopes()->where('period_id', $p3->id)->where('status', 'explained')->get() as $note) {
+            app(VarianceService::class)->acknowledge($note, $this->fin);
+        }
         $this->assertSame('pass', $this->item($this->svc()->checklist($p3), 'variances_explained')['status']);
         $this->svc()->close($p3, $this->fin);
         $this->assertSame('closed', $this->stateOf($p3));
@@ -194,8 +202,8 @@ class PeriodCloseTest extends TestCase
         $this->assertRefused(fn () => $this->svc()->lock($p1, $this->fin)); // still open
         $c = $this->svc()->close($p1, $this->fin);
         $this->assertSame(['closed', $this->fin->id], [$c->status, $c->closed_by_id]);
-        $this->assertCount(8, $c->checklist);
-        $this->assertSame(['period_ended', 'earlier_periods_closed', 'actuals_posted', 'accruals_done', 'accruals_cancelled', 'invoices_approved', 'variances_explained', 'cloud_imported'], array_column($c->checklist, 'key'));
+        $this->assertCount(9, $c->checklist);
+        $this->assertSame(['period_ended', 'earlier_periods_closed', 'actuals_posted', 'duplicates_resolved', 'accruals_done', 'accruals_cancelled', 'invoices_approved', 'variances_explained', 'cloud_imported'], array_column($c->checklist, 'key'));
         $this->assertNotContains('fail', array_column($c->checklist, 'status'));
         $this->assertSame('n_a', $this->item(['items' => $c->checklist], 'cloud_imported')['status']);
         $this->assertSame(3, Forecast::withoutGlobalScopes()->where('period_id', $p1->id)->where('is_snapshot', true)->whereNull('superseded_at')->count());

@@ -11,6 +11,7 @@ use App\Models\Ea\TechComponent;
 use App\Models\User;
 use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\ApplicationTcoService;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Collection;
 
 /**
@@ -288,7 +289,7 @@ class CostModelService
         //    obsolescence flag has already opened a risk in the register.
         $techIds = $this->techFor($application->id);
         $obsolete = $techIds
-            ? TechComponent::whereIn('id', $techIds)->where('obsolescence_flag', true)->count()
+            ? count(array_filter($techIds, fn ($id) => $this->techMeta[$id]['obsolete'] ?? false))
             : 0;
         $known++;
         if ($techIds) {
@@ -300,11 +301,11 @@ class CostModelService
         }
 
         // 4. EOL inside 12 months (0–15).
-        $eolSoon = $techIds
-            ? TechComponent::whereIn('id', $techIds)
-                ->whereNotNull('eol_date')
-                ->whereBetween('eol_date', [now(), now()->addYear()])->count()
-            : 0;
+        $eolSoon = 0;
+        if ($techIds) {
+            [$from, $to] = [now(), now()->addYear()];
+            $eolSoon = count(array_filter($techIds, fn ($id) => ($eol = $this->techMeta[$id]['eol'] ?? null) && $eol->betweenIncluded($from, $to)));
+        }
         $known++;
         if ($eolSoon) {
             $score += min(15.0, $eolSoon * 5.0);
@@ -337,11 +338,15 @@ class CostModelService
 
     private ?array $techByApp = null;
 
+    /** @var array<int, array{obsolete:bool, eol:?CarbonInterface}> flag and end-of-life date of each technology component, read with the dependency map */
+    private array $techMeta = [];
+
     private function techFor(int $applicationId): array
     {
         if ($this->techByApp === null) {
             $this->techByApp = [];
-            foreach (TechComponent::query()->get(['id', 'application_ids']) as $component) {
+            foreach (TechComponent::query()->get(['id', 'application_ids', 'obsolescence_flag', 'eol_date']) as $component) {
+                $this->techMeta[(int) $component->id] = ['obsolete' => (bool) $component->obsolescence_flag, 'eol' => $component->eol_date];
                 foreach ((array) ($component->application_ids ?? []) as $appId) {
                     $this->techByApp[(int) $appId][] = (int) $component->id;
                 }

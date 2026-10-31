@@ -895,6 +895,8 @@ Route::middleware('auth')->group(function () {
             Route::post('/actuals/auto-match', [ActualsController::class, 'autoMatch'])->name('actuals.auto-match');
             Route::post('/actuals/mappings', [ActualsController::class, 'mappingStore'])->name('actuals.mappings.store');
             Route::delete('/actuals/mappings/{mapping}', [ActualsController::class, 'mappingDestroy'])->whereNumber('mapping')->name('actuals.mappings.destroy');
+            Route::post('/actuals/{actual}/confirm-duplicate', [ActualsController::class, 'confirmDuplicate'])->whereNumber('actual')->name('actuals.confirm-duplicate');
+            Route::post('/actuals/{actual}/clear-duplicate', [ActualsController::class, 'clearDuplicate'])->whereNumber('actual')->name('actuals.clear-duplicate');
             Route::post('/actuals/rules', [ActualsController::class, 'ruleStore'])->name('actuals.rules.store');
             Route::delete('/actuals/rules/{rule}', [ActualsController::class, 'ruleDestroy'])->whereNumber('rule')->name('actuals.rules.destroy');
             foreach (['match', 'unmatch', 'unbudgeted'] as $action) {

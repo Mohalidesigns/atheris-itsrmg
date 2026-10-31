@@ -58,6 +58,21 @@ class FinanceMasking
         return in_array($code, (array) config('finance.masked_kri_codes', []), true) && ! ($u && $this->canSeeAmounts($u));
     }
 
+    /** A reading's value as text for flashes and messages: "hidden" when the viewer may not see the finance KRI's money. */
+    public function kriValueText(Kri $kri, float|int|null $value, ?User $u): string
+    {
+        return $this->kriValueMasked((string) $kri->code, $u) ? 'value hidden (needs view it-finance-amounts)' : $kri->formatValue($value);
+    }
+
+    /**
+     * Platform-provisioned finance KRIs: the masking is keyed on their code, so the code of a platform KRI is immutable and
+     * its definition (category, unit, direction, thresholds) is changed only by `manage it-finance-settings` (P7 M2).
+     */
+    public static function isPlatformFinanceKri(Kri $kri): bool
+    {
+        return $kri->source === 'platform' && ($kri->category === 'finance' || str_starts_with((string) $kri->code, 'KRI-FIN-'));
+    }
+
     /** Masks `value`, `trend[].value` and `readings[].value` of one KRI payload; `$u` null means "a viewer without amounts". */
     public function maskKriPayload(array $kri, ?User $u): array
     {

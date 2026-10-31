@@ -44,7 +44,7 @@ class BudgetTransferController extends Controller
                 'toLine.costCentre:id,code,name', 'toCostCentre:id,code,name', 'toCostPool:id,code,name', 'toTower:id,code,name', 'fromPeriod:id,name', 'toPeriod:id,name',
                 'requestedBy:id,name', 'approvedBy:id,name'])
             ->orderByDesc('id')->get()->filter(fn ($t) => Gate::forUser($user)->allows('view', $t))->values();
-        $all = BudgetTransfer::query()->where('fiscal_year_id', $fyId)->get();
+        $all = BudgetTransfer::query()->where('fiscal_year_id', $fyId)->get()->filter(fn ($t) => Gate::forUser($user)->allows('view', $t))->values(); // summary counts only what the viewer may see
 
         return $this->renderMasked('Finance/Budgets/Transfers', [
             'filters' => ['fiscal_year_id' => $fyId, 'status' => $status, 'highlight' => $request->integer('highlight') ?: null],
@@ -100,12 +100,16 @@ class BudgetTransferController extends Controller
         $budgets = Budget::query()->where('fiscal_year_id', $fyId)->where('status', 'baseline')->when($ids !== null, fn ($q) => $q->whereIn('cost_centre_id', $ids ?: [0]))
             ->with('costCentre:id,code')->get()->keyBy('id');
 
-        return BudgetLine::query()->whereIn('budget_id', $budgets->keys())->orderBy('budget_id')->orderBy('line_no')->get()->map(function (BudgetLine $l) use ($budgets) {
+        $lines = BudgetLine::query()->whereIn('budget_id', $budgets->keys())->orderBy('budget_id')->orderBy('line_no')->get();
+        $byPeriod = $this->ledger->currentByPeriodMany($lines);
+        $current = $this->ledger->currentBaseAmounts($lines);
+
+        return $lines->map(function (BudgetLine $l) use ($budgets, $byPeriod, $current) {
             $b = $budgets[$l->budget_id];
-            $by = $this->ledger->currentByPeriod($l);
+            $by = $byPeriod[$l->id] ?? [];
 
             return ['id' => $l->id, 'label' => "{$b->budget_code} {$b->version_label} · #{$l->line_no} {$l->description} ({$b->costCentre?->code})",
-                'cost_centre_id' => $l->cost_centre_id, 'is_capex' => $l->is_capex, 'current_base_amount' => $l->current_base_amount, 'available_by_period' => $by];
+                'cost_centre_id' => $l->cost_centre_id, 'is_capex' => $l->is_capex, 'current_base_amount' => $current[$l->id], 'available_by_period' => $by];
         })->values()->all();
     }
 

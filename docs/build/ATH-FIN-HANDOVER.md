@@ -76,11 +76,21 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 - **Pint on a directory** reformats unrelated files. Run it only on the touched files.
 - The P1 allocation tables were rebuilt by a guarded drop-and-recreate, because they were empty and unused (C149).
 
+## State (2026-10-31, P7 done)
+
+- P7 Hardening & hand-off is on `feature/it-finance-p7` (branched from P6 main 70b5e99; first P7 commit c7d0cc1). ATH-FIN-003 §P7 has what shipped (WP-A..E, QA, H3 query work, review fixes F1-F4), decisions P7-1..P7-23, the H3 query table, the H9 requirement-to-test table, the P4 L1-L18 list, the backlog, spec errata and the Administrator notes. Plan: `docs/build/ATH-FIN-PLAN-p7.md`; reviews: `docs/build/ATH-FIN-REV-p7.md`.
+- Gate at c7d0cc1: 950 passed / 10 skipped on Postgres (32 min), seed + SMOKE 10/10, build, Playwright 11/11. The final gate after the review fixes is recorded in ATH-FIN-003 §P7.
+- **Final reviews (Opus, whole module):** security NO-GO (C1, platform audit trail cross-tenant and unmasked) and domain CONDITIONAL GO (H1, H2, H3 = C1); all fixed. Audit trail is now `App\Models\Activity` with `organization_id`.
+- **Job titles are matched segment-exact for finance stages** (P7-3). `headofit@` is titled "Head of IT"; `itops@` ("Head of IT Operations") cannot decide Head of IT stages. The platform `ApprovalEngine` still uses the substring rule for non-finance processes.
+- **Query budget:** 60 queries per finance page is enforced in `RouteSmokeTest` (dashboard allow-listed at 80). `RequestMemo` is the per-request GET memo, cleared on terminate; keep keys user, organisation and cost-centre aware.
+- **Scheduler:** 10 `fin:*` schedules plus the shared `reports:run-due`, all `withoutOverlapping`.
+- **Open questions:** re-seeding after 31 Dec 2026 (add a `FINANCE_DEMO_TODAY` anchor if UAT re-seeds), and Nigeria WHT / VAT rates need tax-counsel sign-off or a disclaimer before UAT.
+- **Seeder gotchas still apply:** the expense seeder reports swallowed errors, monitoring seeds inside `whilePeriodsOpen()`, FBN's FinOps seeder avoids the pending re-open period.
+
 ## Next session — paste this
 
 ```
-Start P7 Hardening & hand-off of IT Financial Management (see ATH-FIN-002 §4 P7: no new features), branching feature/it-finance-p7 from feature/it-finance-p6.
-Read docs/build/ATH-FIN-HANDOVER.md (token rules + P6 state) first. Don't read the spec yourself: dispatch fin-architect (opus) to write docs/build/ATH-FIN-PLAN-p7.md, triaging the deferred Medium/Low items in ATH-FIN-003 §P1–§P6 into must-fix-before-UAT vs. backlog.
-Then: fixers (sonnet) on their own DBs → QA on it_security_risk_fin_qa (incl. Playwright ×3) → gate (suite on it_security_risk_test in background, about 30 min; seed + SMOKE on it_security_risk_scratch; npm run build; pint on touched files) → both reviewers on OPUS over the full module, on throwaway DBs → fix Critical/High → re-gate → ATH-FIN-003 §P7, commit AND push, open the PR (PR only at P7), memory, handover.
-Check disk first (df -h).
+IT Financial Management P7 is complete (feature/it-finance-p7, PR open to main). Read docs/build/ATH-FIN-HANDOVER.md first.
+Next: UAT support and backlog triage. Start from ATH-FIN-003 §P7 "Deferred / logged", the P4 L1-L18 list and the open questions (FINANCE_DEMO_TODAY, tax-counsel sign-off). Pick backlog items with the user before touching code; the first candidates are domain M1 (prepayment successor at post time), M6 (accrual FX rate type/date), FIN-07.06 audit-trail export and a PHPUnit test for invoice bulk import.
+After merging the PR, run the gate once on main (suite on it_security_risk_test in the background, seed + SMOKE on it_security_risk_scratch, npm run build). Check disk first (df -h).
 ```

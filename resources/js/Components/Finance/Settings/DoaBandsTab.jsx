@@ -15,8 +15,8 @@ function BandsTable({ bands, baseCurrency }) {
             {bands.map((b, i) => (
                 <tr key={i}>
                     <td className="px-4 py-2 text-[#2D3748]">{b.label}</td>
-                    <td className="px-4 py-2 text-xs tabular-nums">{formatMoney(b.min, baseCurrency, { decimals: 0 })}</td>
-                    <td className="px-4 py-2 text-xs tabular-nums">{b.max === null || b.max === undefined ? 'No upper limit' : formatMoney(b.max, baseCurrency, { decimals: 0 })}</td>
+                    <td className="px-4 py-2 text-xs tabular-nums">{b.masked || b.min == null ? '—' : formatMoney(b.min, baseCurrency, { decimals: 0 })}</td>
+                    <td className="px-4 py-2 text-xs tabular-nums">{b.masked ? '—' : b.max === null || b.max === undefined ? 'No upper limit' : formatMoney(b.max, baseCurrency, { decimals: 0 })}</td>
                 </tr>
             ))}
         </Table>

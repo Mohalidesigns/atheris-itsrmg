@@ -60,6 +60,7 @@ class ActualsController extends Controller
         $truncated = $rows->count() > 500;
         $rows = $rows->take(500);
         $this->primeLines($rows->pluck('budget_line_id'));
+        $this->primeUsers($rows->pluck('matched_by_id'));
 
         $counted = $scope()->where('match_status', '!=', 'duplicate');
         $unmatched = $scope()->where('match_status', 'unmatched');
@@ -68,6 +69,7 @@ class ActualsController extends Controller
             ? $this->recon->queue($orgId, ['fiscal_year_id' => $fy, 'period_id' => $filters['period_id'], 'batch_id' => $filters['batch_id']])->when($visible !== null, fn ($q) => $q->whereIn('cost_centre_id', $visible ?: [0]))->limit(500)->get()
             : collect();
         $this->primeLines($queue->pluck('budget_line_id'));
+        $this->primeUsers($queue->pluck('matched_by_id'));
 
         return $this->renderExpenses('Finance/Actuals/Index', [
             'tab' => $tab, 'filters' => $filters, 'actuals' => $rows->map(fn ($a) => $this->actualRow($a))->values(), 'truncated' => $truncated,
@@ -159,6 +161,24 @@ class ActualsController extends Controller
         $this->actuals->acknowledgeUnbudgeted($actual, $request->user(), (string) $request->validate(['note' => ['required', 'string', 'max:2000']])['note']);
 
         return back()->with('success', 'Acknowledged as unbudgeted spend.');
+    }
+
+    public function confirmDuplicate(Request $request, Actual $actual)
+    {
+        Gate::authorize('view', $actual);
+        Gate::authorize('importActuals', Actual::class);
+        $this->actuals->confirmDuplicate($actual, $request->user(), (string) $request->validate(['reason' => ['required', 'string', 'max:2000']])['reason']);
+
+        return back()->with('success', 'Confirmed as a duplicate; the row is excluded from the totals.');
+    }
+
+    public function clearDuplicate(Request $request, Actual $actual)
+    {
+        Gate::authorize('view', $actual);
+        Gate::authorize('importActuals', Actual::class);
+        $this->actuals->clearDuplicateFlag($actual, $request->user(), (string) $request->validate(['reason' => ['required', 'string', 'max:2000']])['reason']);
+
+        return back()->with('success', 'Cleared: the row is treated as a normal GL posting.');
     }
 
     public function mappingStore(Request $request)

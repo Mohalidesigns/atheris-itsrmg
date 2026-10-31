@@ -26,6 +26,7 @@ use App\Models\LegalEntity;
 use App\Models\Risk;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\Concerns\LogsFinanceEvents;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -388,8 +389,12 @@ class BudgetService
         in_array($method, BudgetLine::PHASING, true) || $this->fail('Unknown phasing method.', 'phasing_method');
         $investmentId = null;
         if (! empty($data['investment_id'])) {
-            Investment::withoutGlobalScopes()->where('organization_id', $orgId)->whereKey($data['investment_id'])->whereNotIn('stage', ['closed', 'cancelled'])->exists()
-                || $this->fail('Pick an open investment of this bank.', 'investment_id');
+            $inv = Investment::withoutGlobalScopes()->where('organization_id', $orgId)->whereKey($data['investment_id'])->whereNotIn('stage', ['closed', 'cancelled'])->first()
+                ?? $this->fail('Pick an open investment of this bank.', 'investment_id');
+            $visible = FinancePolicy::visibleCostCentreIds($by); // null = bank-wide (P5 security L3)
+            if ($visible !== null && ! in_array((int) $inv->cost_centre_id, $visible, true)) {
+                $this->fail('That investment belongs to a cost centre you cannot see.', 'investment_id');
+            }
             $investmentId = (int) $data['investment_id'];
         }
         $contractId = null;
@@ -711,6 +716,8 @@ class BudgetService
         $this->assertApprover($b, $by);
 
         return DB::transaction(function () use ($b, $by, $note) {
+            $b = Budget::withoutGlobalScopes()->lockForUpdate()->findOrFail($b->id); // serialise concurrent approvals (P7 M3)
+            $this->assertTransition($b, 'approve');
             $configured = $this->approvals->configured('finance.budget_approval', (int) $b->organization_id);
             $configured && $this->approvals->assertZeroStepSoD('finance.budget_approval', $b, $by, 'submitted_by_id', 'owner_id');
             if (! $configured) {

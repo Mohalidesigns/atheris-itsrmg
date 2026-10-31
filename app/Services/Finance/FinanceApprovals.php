@@ -58,6 +58,7 @@ class FinanceApprovals
             $late = $this->engine->start($process, $subject);
             $late && $late->forceFill(['context' => $this->snapshot($process, $subject)])->save();
         }
+        $this->assertEligible($process, $subject, $actor);
         $message = $this->engine->gate($process, $subject, $actor, $note);
         if ($message !== null) {
             event(new FinanceApprovalRequested($process, $subject, $this->engine->current($process, $subject), $actor));
@@ -91,7 +92,7 @@ class FinanceApprovals
         foreach ($steps->prepend($current)->values() as $k => $step) {
             $need = $k === 0 ? $remaining : max(1, (int) $step->min_approvals);
             for ($n = 0; $n < $need; $n++) {
-                $slots[] = [$step, $users->filter(fn ($u) => $this->engine->matches($step, $u))->pluck('id')->map(fn ($v) => (int) $v)->all()];
+                $slots[] = [$step, $users->filter(fn ($u) => $this->stepMatches($step, $u))->pluck('id')->map(fn ($v) => (int) $v)->all()];
             }
         }
         $owner = [];
@@ -120,6 +121,41 @@ class FinanceApprovals
         }
     }
 
+    /** Segment-exact job-title match (P7-3): the title is split on / , & ; and "and", and any trimmed part must equal the reference, case-insensitively. */
+    public static function jobTitleMatches(string $title, string $ref): bool
+    {
+        $ref = mb_strtolower(trim($ref));
+        if ($ref === '') {
+            return false;
+        }
+        foreach (preg_split('/\s*(?:[\/,&;]|\band\b)\s*/iu', $title) ?: [] as $part) {
+            if (mb_strtolower(trim($part)) === $ref) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Engine matching, except that job-title stages use the exact segment rule (the engine's substring rule is a logged platform defect). */
+    private function stepMatches(object $step, User $user): bool
+    {
+        if ($step->approver_type === 'job_title' && ! $user->hasRole('Super Admin')) {
+            return self::jobTitleMatches((string) $user->job_title, (string) $step->approver_ref);
+        }
+
+        return $this->engine->matches($step, $user);
+    }
+
+    /** Refuses an actor whose job title does not match the current job-title stage, before the engine sees the decision. */
+    public function assertEligible(string $process, Model $subject, User $actor): void
+    {
+        $step = $this->engine->current($process, $subject)?->currentStep();
+        if ($step && $step->approver_type === 'job_title' && ! $this->stepMatches($step, $actor)) {
+            throw ValidationException::withMessages(['approval' => "Your job title does not match the stage \"{$step->name}\" (".$this->engine->describe($step).'), so you cannot decide it.']);
+        }
+    }
+
     public function finalised(string $process, Model $subject, User $actor, ?string $note = null): void
     {
         event(new FinanceApprovalDecided($process, $subject, 'approved', $actor, $note));
@@ -128,6 +164,7 @@ class FinanceApprovals
     /** $outcome is returned or rejected. */
     public function decline(string $process, Model $subject, User $actor, string $note, string $outcome): void
     {
+        $this->assertEligible($process, $subject, $actor);
         $this->engine->reject($process, $subject, $actor, $note)
             || $this->engine->cancel($process, $subject, $outcome === 'returned' ? 'Returned to the author' : 'Rejected');
         event(new FinanceApprovalDecided($process, $subject, $outcome, $actor, $note));
@@ -172,8 +209,13 @@ class FinanceApprovals
                 }
                 array_key_exists('band', $trail['context']) && $trail['context']['band'] = null;
                 isset($trail['context']['conditions']['amount_band']) && $trail['context']['conditions']['amount_band'] = null;
+                foreach (['requires_cfo', 'requires_board'] as $k) { // these flags disclose that the amount crossed a threshold (P6 security L6)
+                    array_key_exists($k, $trail['context']['conditions'] ?? []) && $trail['context']['conditions'][$k] = null;
+                    array_key_exists($k, $trail['context']) && $trail['context'][$k] = null;
+                }
             }
-            $trail['stages'] = collect($trail['stages'])->map(fn ($s) => is_array($s) && str_starts_with((string) ($s['condition'] ?? ''), 'amount_band') ? array_merge($s, ['condition' => null]) : $s)->values();
+            // Conditions on the amount band or the CFO/Board flags disclose where the thresholds sit (P7 M1).
+            $trail['stages'] = collect($trail['stages'])->map(fn ($s) => is_array($s) && preg_match('/^(amount_band|requires_cfo|requires_board)\b/', (string) ($s['condition'] ?? '')) ? array_merge($s, ['condition' => null]) : $s)->values();
         }
 
         return $trail;

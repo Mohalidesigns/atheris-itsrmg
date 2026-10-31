@@ -18,6 +18,7 @@ use App\Models\LegalEntity;
 use App\Models\User;
 use App\Services\Finance\CurrencyService;
 use App\Services\Finance\DoaBandService;
+use App\Services\Finance\FinanceMasking;
 use App\Services\Finance\FinanceSettings;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -75,7 +76,7 @@ class FinanceSettingsController extends Controller
             'values' => $d->values->map(fn ($v) => ['period_id' => $v->period_id, 'value' => (string) $v->value])->values(),
         ])->values();
 
-        return Inertia::render('Finance/Settings', [
+        $props = [
             'tab' => $tab,
             'baseCurrency' => $this->settings->baseCurrency($orgId),
             'settings' => $this->settingProps($setting),
@@ -132,7 +133,29 @@ class FinanceSettingsController extends Controller
                 'approveBands' => $user->can('approve it-finance') || $user->can('manage it-finance-settings'),
                 'changeBase' => $this->currency->baseLockedReason($orgId) === null,
             ],
-        ]);
+        ];
+
+        return Inertia::render('Finance/Settings', app(FinanceMasking::class)->canSeeAmounts($user) ? $props : $this->maskThresholds($props));
+    }
+
+    /** Keeps the keys but nulls every money threshold for a viewer without `view it-finance-amounts` (P0 S9). */
+    private function maskThresholds(array $props): array
+    {
+        foreach (['variance_abs_floor', 'renewal_cfo_from', 'invoice_sod_from', 'invoice_sod_default', 'match_tolerance_abs', 'capitalisation_cfo_from', 'business_case_board_from'] as $k) {
+            array_key_exists($k, $props['settings']) && $props['settings'][$k] = null;
+        }
+        $props['settings']['renewal_cfo_defaults']['from'] = null;
+        $props['settings']['doa_bands'] = $this->maskBands((array) $props['settings']['doa_bands']);
+        $props['doaVersions'] = collect($props['doaVersions'])->map(fn ($v) => array_merge($v, ['bands' => $this->maskBands((array) $v['bands'])]))->values();
+        $props['finopsPolicy']['cloud_anomaly_abs_floor'] = null;
+        $props['finopsPolicy']['defaults']['cloud_anomaly_abs_floor'] = null;
+
+        return $props;
+    }
+
+    private function maskBands(array $bands): array
+    {
+        return array_map(fn ($b) => is_array($b) ? array_merge($b, ['min' => null, 'max' => null, 'masked' => true]) : $b, $bands);
     }
 
     public function update(Request $request)

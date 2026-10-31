@@ -14,7 +14,7 @@ use App\Services\Finance\StageGateService;
 
 /**
  * Fixtures of the P5 investment tests: the P4 bank (NGN, FY2027, "today" 2027-04-05) plus a manager (IT Budget Owner), a sponsor
- * (Investment Sponsor) and the stage deciders already built by the earlier fixtures: $this->head (Head of IT Governance),
+ * (Investment Sponsor) and the stage deciders already built by the earlier fixtures: $this->head (Head of IT),
  * $this->cfo (Chief Financial Officer), $this->cio and $this->md (Managing Director). Everything runs through the services.
  */
 trait BuildsInvestments

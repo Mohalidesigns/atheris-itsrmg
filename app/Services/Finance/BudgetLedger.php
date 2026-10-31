@@ -8,10 +8,28 @@ use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetLinePeriod;
 use App\Models\Finance\Period;
 use App\Models\User;
+use Illuminate\Support\Collection;
 
 /** Current budget = baseline amounts + the signed adjustments of applied transfers and supplementary requests (plan C22). */
 class BudgetLedger
 {
+    /**
+     * Source-line and fiscal-year maps of a bank's budget lines, for lineage walks (read once per request).
+     *
+     * @return array{sources: Collection, lineFy: Collection}
+     */
+    public static function lineageMaps(int $orgId): array
+    {
+        return RequestMemo::remember("lineageMaps:{$orgId}", function () use ($orgId) {
+            $budgetFy = Budget::withoutGlobalScopes()->where('organization_id', $orgId)->pluck('fiscal_year_id', 'id');
+
+            return [
+                'sources' => BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->whereNotNull('source_line_id')->pluck('source_line_id', 'id'),
+                'lineFy' => BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->pluck('budget_id', 'id')->map(fn ($b) => $budgetFy[$b] ?? null),
+            ];
+        });
+    }
+
     /** @return array<int, string> period_id => current base amount */
     public function currentByPeriod(BudgetLine $line): array
     {
@@ -25,6 +43,44 @@ class BudgetLedger
         }
 
         return $out;
+    }
+
+    /**
+     * currentByPeriod for many lines in two queries.
+     *
+     * @param  iterable<int|BudgetLine>  $lines  lines or line ids
+     * @return array<int, array<int, string>> line_id => [period_id => current base amount]
+     */
+    public function currentByPeriodMany(iterable $lines): array
+    {
+        $ids = collect($lines)->map(fn ($l) => (int) ($l instanceof BudgetLine ? $l->id : $l))->unique()->values();
+        $out = $ids->mapWithKeys(fn ($id) => [$id => []])->all();
+        if ($ids->isEmpty()) {
+            return $out;
+        }
+        foreach (BudgetLinePeriod::withoutGlobalScopes()->whereIn('budget_line_id', $ids)->get() as $p) {
+            $out[$p->budget_line_id][$p->period_id] = bcadd((string) $p->base_amount, '0', 2);
+        }
+        foreach (BudgetAdjustment::withoutGlobalScopes()->whereIn('budget_line_id', $ids)->get() as $a) {
+            $out[$a->budget_line_id][$a->period_id] = bcadd($out[$a->budget_line_id][$a->period_id] ?? '0', (string) $a->base_amount, 2);
+        }
+
+        return $out;
+    }
+
+    /**
+     * BudgetLine::current_base_amount for many lines in one query.
+     *
+     * @param  iterable<BudgetLine>  $lines
+     * @return array<int, string> line_id => base annual amount + adjustments
+     */
+    public function currentBaseAmounts(iterable $lines): array
+    {
+        $lines = collect($lines);
+        $adj = $lines->isEmpty() ? collect() : BudgetAdjustment::withoutGlobalScopes()->whereIn('budget_line_id', $lines->pluck('id'))
+            ->selectRaw('budget_line_id, sum(base_amount) as total')->groupBy('budget_line_id')->pluck('total', 'budget_line_id');
+
+        return $lines->mapWithKeys(fn (BudgetLine $l) => [$l->id => bcadd((string) $l->base_annual_amount, bcadd((string) ($adj[$l->id] ?? '0'), '0', 2), 2)])->all();
     }
 
     /** @return array<int, string> period_id => current amount in the line's own currency (period amount + adjustment amount) */

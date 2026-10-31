@@ -79,6 +79,8 @@ class SupplementaryBudgetService
         $this->assertApprover($r, $by);
 
         return DB::transaction(function () use ($r, $by, $note) {
+            $r = SupplementaryRequest::withoutGlobalScopes()->lockForUpdate()->findOrFail($r->id); // serialise concurrent approvals (P7 M3)
+            $this->assertTransition($r, 'approve');
             $this->approvals->assertZeroStepSoD(self::PROCESS, $r, $by, 'requested_by_id');
             if (! $this->approvals->configured(self::PROCESS, (int) $r->organization_id)) {
                 $this->approvals->assertDefaultApprover($r, $by, 'requested_by_id');

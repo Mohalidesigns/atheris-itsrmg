@@ -118,6 +118,18 @@ class ActualsService
         ], $by);
     }
 
+    /** The base-currency value of an import row at its posting date (null when no rate exists; post() then reports it). */
+    private function rowBase(int $orgId, array $attrs): ?string
+    {
+        try {
+            $on = CarbonImmutable::parse($attrs['posted_on']);
+
+            return $this->fx->convert($orgId, (string) $attrs['amount'], strtoupper((string) $attrs['currency']), $on->gt(FinanceClock::today()) ? FinanceClock::today() : $on, 'spot')['base_amount'];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     private function currentLineId(int $lineId): ?int
     {
         $line = BudgetLine::withoutGlobalScopes()->find($lineId);
@@ -163,11 +175,25 @@ class ActualsService
                 return $batch->refresh();
             }
             $matched = $unmatched = $accepted = $dups = 0;
+            $seen = [];
             foreach ($a['valid'] as $row) {
-                $dupOf = $this->recon->duplicateOf($orgId, $row['source_ref']);
+                $base = $this->rowBase($orgId, $row['attrs']);
+                $dupOf = $this->recon->duplicateOf($orgId, $row['source_ref'], (string) $row['attrs']['amount'], strtoupper((string) $row['attrs']['currency']), $row['attrs']['posted_on'], $row['attrs']['vendor_id'] ?? null);
+                $dupReason = 'invoice_posting';
+                $key = $row['source_ref'] ? implode('|', [$row['source_ref'], $row['attrs']['vendor_id'] ?? '', $base, $row['attrs']['posted_on']]) : null;
+                if (! $dupOf && $key && isset($seen[$key])) {
+                    $dupOf = $seen[$key];
+                    $dupReason = 'file_duplicate';
+                }
+                $possible = ! $dupOf && $this->recon->possibleDuplicateOf($orgId, $row['source_ref']);
                 $actual = $this->post($row['attrs'] + [
                     'source' => 'gl_import', 'source_ref' => $row['source_ref'], 'posting_key' => "gl:{$batch->id}:{$row['row']}", 'import_batch_id' => $batch->id,
-                ] + ($dupOf ? ['match_status' => 'duplicate', 'duplicate_of_id' => $dupOf->id, 'match_reason' => 'invoice_posting'] : []), $by);
+                ] + ($dupOf ? ['match_status' => 'duplicate', 'duplicate_of_id' => $dupOf->id, 'match_reason' => $dupReason] : []), $by);
+                $key && ! $dupOf && ($seen[$key] = $actual);
+                if ($possible && $actual->match_status !== 'duplicate') {
+                    // H2: held in the queue (never auto-matched or counted as matched) until a second person rules on it.
+                    $actual->forceFill(['match_status' => 'unmatched', 'budget_line_id' => null, 'match_rule_id' => null, 'matched_by_id' => null, 'matched_at' => null, 'match_reason' => 'possible_duplicate'])->save();
+                }
                 if ($actual->match_status === 'duplicate') {
                     $dups++;
                 } else {
@@ -197,6 +223,7 @@ class ActualsService
     {
         (int) $by->organization_id === (int) $a->organization_id || $this->fail('This actual belongs to another bank.');
         $a->match_status === 'duplicate' && $this->fail('A duplicate row is excluded from the totals; it cannot be matched.');
+        $a->match_reason === 'possible_duplicate' && $this->fail('This row is a possible duplicate of an invoice posting; confirm or clear the flag before matching it.');
         in_array($a->source, ['gl_import', 'manual'], true) || $this->fail('Only GL and manual rows can be matched; a posting from a document keeps the document\'s line.');
         $this->assertOpenPeriod(Period::withoutGlobalScopes()->find($a->period_id));
         $current = $this->budgets->resolveBaselineLine($line) ?? $this->fail('Pick a line of the current baseline budget.', 'budget_line_id');
@@ -212,6 +239,39 @@ class ActualsService
         }
 
         return $a->refresh();
+    }
+
+    /** H2: a second person confirms a flagged GL row duplicates an invoice posting; it leaves the totals. */
+    public function confirmDuplicate(Actual $a, User $by, string $reason): Actual
+    {
+        $this->assertPossibleDuplicate($a, $by);
+        mb_strlen(trim($reason)) >= 5 || $this->fail('Give the reason you are confirming the duplicate.', 'reason');
+        $batch = $a->import_batch_id ? ImportBatch::withoutGlobalScopes()->find($a->import_batch_id) : null;
+        $importer = $batch?->imported_by_id ?? $batch?->created_by_id ?? $a->created_by_id;
+        $importer && (int) $importer === (int) $by->id && $this->fail('You imported this row, so another person must confirm the duplicate (segregation of duties).', 'approval');
+        $of = $this->recon->possibleDuplicateOf((int) $a->organization_id, $a->source_ref) ?? $this->fail('The invoice posting this row duplicates can no longer be found.', 'reason');
+        $a->forceFill(['match_status' => 'duplicate', 'duplicate_of_id' => $of->id, 'match_reason' => 'confirmed_duplicate', 'budget_line_id' => null, 'matched_by_id' => $by->id, 'matched_at' => now()])->save();
+        $this->audit($a, $by, 'duplicate_confirmed', "Actual #{$a->id} confirmed as a duplicate of #{$of->id}", ['reason' => trim($reason), 'duplicate_of_id' => $of->id]);
+
+        return $a->refresh();
+    }
+
+    /** H2: the flag is cleared and normal matching applies. */
+    public function clearDuplicateFlag(Actual $a, User $by, string $reason): Actual
+    {
+        $this->assertPossibleDuplicate($a, $by);
+        mb_strlen(trim($reason)) >= 5 || $this->fail('Give the reason this is not a duplicate.', 'reason');
+        $a->forceFill(['match_reason' => 'not_duplicate'])->save();
+        $this->audit($a, $by, 'duplicate_cleared', "Actual #{$a->id} cleared as not a duplicate", ['reason' => trim($reason)]);
+
+        return $a->refresh();
+    }
+
+    private function assertPossibleDuplicate(Actual $a, User $by): void
+    {
+        (int) $by->organization_id === (int) $a->organization_id || $this->fail('This actual belongs to another bank.');
+        $a->match_reason === 'possible_duplicate' && $a->match_status !== 'duplicate' || $this->fail('This row is not flagged as a possible duplicate.');
+        $this->assertOpenPeriod(Period::withoutGlobalScopes()->find($a->period_id));
     }
 
     public function unmatch(Actual $a, User $by): Actual
@@ -231,6 +291,7 @@ class ActualsService
         (int) $by->organization_id === (int) $a->organization_id || $this->fail('This actual belongs to another bank.');
         $this->assertOpenPeriod(Period::withoutGlobalScopes()->find($a->period_id));
         $a->match_status === 'unmatched' || $this->fail('Only an unmatched row can be acknowledged as unbudgeted.');
+        $a->match_reason === 'possible_duplicate' && $this->fail('This row is a possible duplicate of an invoice posting; confirm or clear the flag first.');
         mb_strlen(trim($note)) >= 5 || $this->fail('Give a short note for the acknowledgement.', 'note');
         $a->forceFill(['match_status' => 'unbudgeted', 'match_reason' => 'acknowledged', 'matched_by_id' => $by->id, 'matched_at' => now()])->save();
         $this->audit($a, $by, 'unbudgeted_acknowledged', "Actual #{$a->id} acknowledged as unbudgeted", ['note' => $note]);
@@ -418,7 +479,7 @@ class ActualsService
         foreach ($valid as $v) {
             $probe = new Actual;
             $probe->forceFill($v['attrs'] + ['organization_id' => $orgId, 'fiscal_year_id' => Period::withoutGlobalScopes()->whereKey($v['attrs']['period_id'])->value('fiscal_year_id'), 'source' => 'gl_import']);
-            $this->recon->duplicateOf($orgId, $v['source_ref']) ? null : ($this->recon->autoMatch($probe)['line'] ? $matched++ : $unmatched++);
+            $this->recon->duplicateOf($orgId, $v['source_ref'], $this->rowBase($orgId, $v['attrs']), $v['attrs']['posted_on'], $v['attrs']['vendor_id'] ?? null) ? null : ($this->recon->autoMatch($probe)['line'] ? $matched++ : $unmatched++);
         }
 
         return ['report' => [

@@ -3,6 +3,7 @@
 namespace App\Services\Finance;
 
 use App\Models\Finance\CloudAccount;
+use App\Models\Finance\CloudAnomaly;
 use App\Models\User;
 use App\Notifications\Finance\CloudAnomalyNotification;
 use Carbon\CarbonInterface;
@@ -34,20 +35,28 @@ class CloudAnomalySweeper
     {
         $sent = 0;
         $controllers = User::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_active', true)->role('IT Finance Controller')->get();
-        $accounts = CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->get()->keyBy('id');
-        foreach ($this->anomalies->detectForOrg($orgId, $today) as $x) {
-            $account = $accounts[$x->cloud_account_id] ?? null;
-            $recipients = $controllers->values();
-            $x->owner_id && $recipients->push(User::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_active', true)->find($x->owner_id));
-            $recipients = $recipients->filter(fn ($u) => $u && $u->can('view it-finance'))->unique('id')->values();
-            $users = $this->sweeper->claim($x, 'cloud_anomaly', 0, $recipients);
-            if ($users->isEmpty()) {
-                continue;
+        $accounts = CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_active', true)->whereNull('deleted_at')->orderBy('id')->get();
+        foreach ($accounts as $account) {
+            try { // one failing account must not stop the others
+                $this->anomalies->detect($account, $today);
+                // Every open anomaly not yet claimed is notified, not only the ones created in this run (claim() keeps it idempotent).
+                $open = CloudAnomaly::withoutGlobalScopes()->where('organization_id', $orgId)->where('cloud_account_id', $account->id)->where('status', 'open')->orderBy('id')->get();
+                foreach ($open as $x) {
+                    $recipients = $controllers->values();
+                    $x->owner_id && $recipients->push(User::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_active', true)->find($x->owner_id));
+                    $recipients = $recipients->filter(fn ($u) => $u && $u->can('view it-finance'))->unique('id')->values();
+                    $users = $this->sweeper->claim($x, 'cloud_anomaly', 0, $recipients);
+                    if ($users->isEmpty()) {
+                        continue;
+                    }
+                    Notification::send($users, new CloudAnomalyNotification(
+                        (string) $account->name, $x->scope_label, $x->detected_on->format('d M Y'), (string) $x->deviation_pct, (string) $x->method,
+                        route('finance.cloud.anomalies.index', ['status' => 'open', 'highlight' => $x->id])));
+                    $sent++;
+                }
+            } catch (Throwable $e) {
+                report($e);
             }
-            Notification::send($users, new CloudAnomalyNotification(
-                (string) ($account?->name ?? 'Cloud account'), $x->scope_label, $x->detected_on->format('d M Y'), (string) $x->deviation_pct, (string) $x->method,
-                route('finance.cloud.anomalies.index', ['status' => 'open', 'highlight' => $x->id])));
-            $sent++;
         }
 
         return $sent;

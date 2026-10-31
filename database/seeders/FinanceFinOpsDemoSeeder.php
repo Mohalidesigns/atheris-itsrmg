@@ -616,6 +616,9 @@ class FinanceFinOpsDemoSeeder extends Seeder
     {
         $svc = app(ChargebackService::class);
         $closed = Period::withoutGlobalScopes()->where('organization_id', $this->orgId)->where('fiscal_year_id', $this->fyId)->where('is_adjustment', false)->where('status', 'closed')->orderByDesc('starts_on')->get();
+        // a period with a re-open request awaiting approval cannot be exported (P7 review M3)
+        $pendingReopen = DB::table('fin_period_closes')->where('organization_id', $this->orgId)->where('reopen_status', 'submitted')->pluck('period_id')->all();
+        $closed = $closed->reject(fn ($p) => in_array($p->id, $pendingReopen, true))->values();
         $latest = $closed->first();
         if (! $latest) {
             $this->warn('no closed period to export a chargeback for.');
@@ -656,13 +659,13 @@ class FinanceFinOpsDemoSeeder extends Seeder
         $expense = ExpenseRequest::withoutGlobalScopes()->where('organization_id', $this->orgId)->where('request_code', 'EXP-0009')->where('is_capex', true)->first();
         $expense && $this->billCapexExpense($expense);
 
-        $afuJune = '2026-06-30';
+        $afuJune = $this->today->subMonthsNoOverflow(4)->endOfMonth()->toDateString(); // relative to now, never a literal year
         $afuSep = $this->today->subDays(19)->toDateString();
         $afuToday = $this->today->toDateString();
 
         // (a) a closed investment, capitalised with catch-up lines and a created asset (First Bank)
         if ($closedInv) {
-            $c = $this->prepare($closedInv, ['title' => 'Branch SD-WAN rollout: 750 branches in service', 'standard' => 'ias_16', 'available_for_use_on' => '2026-08-31', 'useful_life_months' => 84,
+            $c = $this->prepare($closedInv, ['title' => 'Branch SD-WAN rollout: 750 branches in service', 'standard' => 'ias_16', 'available_for_use_on' => $this->today->subMonthsNoOverflow(2)->endOfMonth()->toDateString(), 'useful_life_months' => 84,
                 'asset_name' => 'Branch SD-WAN estate (750 branches)', 'asset_type' => 'network', 'asset_owner_id' => $closedInv->manager_id], 0.45, 0);
             $c && $this->decideAll($c);
         }

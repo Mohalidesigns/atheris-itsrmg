@@ -5,6 +5,7 @@ namespace App\Services\Finance;
 use App\Models\Approvals\ApprovalDecision;
 use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalStep;
+use App\Models\Asset;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\Category;
 use App\Models\Finance\Contract;
@@ -386,6 +387,8 @@ class InvoiceService
                 $desc === '' && $this->fail('Describe every line.', "lines.{$n}.description");
                 $qty = $this->quantity($l['quantity'] ?? '1', "lines.{$n}.quantity");
                 $unit = $this->money($l['unit_cost'] ?? null, "lines.{$n}.unit_cost", true, 'The unit cost');
+                ! empty($l['category_id']) && $this->inBank(Category::class, $orgId, $l['category_id'], "lines.{$n}.category_id");
+                ! empty($l['asset_id']) && $this->inBank(Asset::class, $orgId, $l['asset_id'], "lines.{$n}.asset_id");
                 $parsedLines[] = ['line_no' => $n + 1, 'po_line_id' => $poLine?->id, 'description' => mb_substr($desc, 0, 255), 'quantity' => $qty, 'unit_cost' => $unit,
                     'amount' => $this->phasing->round(bcmul($qty, $unit, 8), 2), 'category_id' => $l['category_id'] ?? null, 'asset_id' => $l['asset_id'] ?? null];
             }
@@ -401,6 +404,21 @@ class InvoiceService
         $totals = $this->tax->compute($subtotal, $currency, $vat, $wht);
         $on = $invoiceDate->gt(FinanceClock::today()) ? FinanceClock::today() : $invoiceDate;
         $conv = $this->fx->convert($orgId, $totals['total_amount'], $currency, $on, 'spot');
+
+        // P7-10: invoices booked straight against an approved request may not exceed its total beyond the match tolerance.
+        if ($expense) {
+            // Serialise concurrent captures on the request row, and count only live invoices (a rejected, cancelled or deleted one frees its share).
+            ExpenseRequest::withoutGlobalScopes()->where('organization_id', $orgId)->whereKey($expense->id)->lockForUpdate()->value('id');
+            $already = (string) Invoice::withoutGlobalScopes()->whereNull('deleted_at')->where('organization_id', $orgId)->where('expense_request_id', $expense->id)->whereNull('po_id')
+                ->whereIn('status', ['draft', 'submitted', 'approved', 'scheduled', 'paid', 'disputed'])
+                ->when($existing, fn ($q) => $q->where('id', '!=', $existing->id))->sum('total_amount');
+            $excess = bcsub(bcadd($already, $totals['total_amount'], 2), (string) $expense->total_amount, 2);
+            if (bccomp($excess, '0', 2) > 0) {
+                $s = $this->settings->for($orgId);
+                $this->matcher->within($excess, (string) $expense->total_amount, $conv['fx_rate'], (string) $s->match_tolerance_pct, (string) $s->match_tolerance_abs)
+                    || $this->fail("The invoices against {$expense->request_code} would total more than the approved amount beyond the match tolerance; raise a new request or re-approve.", 'subtotal');
+            }
+        }
 
         $paymentDays = (int) ($contract?->payment_terms_days ?? config('finance.invoices.default_payment_days', 30));
         $due = $get('due_on') ? $this->date($get('due_on'), 'due_on') : $invoiceDate->addDays($paymentDays);

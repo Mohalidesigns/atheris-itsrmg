@@ -2,6 +2,8 @@
 
 namespace App\Services\Finance;
 
+use App\Models\Asset;
+use App\Models\Finance\Category;
 use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\GoodsReceipt;
 use App\Models\Finance\GoodsReceiptLine;
@@ -66,8 +68,12 @@ class ProcurementService
                 $unit = $this->money($l['unit_cost'] ?? null, "lines.{$i}.unit_cost", true, 'The unit cost');
                 $amount = $this->phasing->round(bcmul($qty, $unit, 8), 2);
                 $subtotal = bcadd($subtotal, $amount, 2);
+                $catId = $l['category_id'] ?? $e->category_id;
+                $assetId = $l['asset_id'] ?? $e->asset_id;
+                $catId && $this->inBank(Category::class, $orgId, $catId, "lines.{$i}.category_id");
+                $assetId && $this->inBank(Asset::class, $orgId, $assetId, "lines.{$i}.asset_id");
                 $rows[] = ['line_no' => $i + 1, 'description' => $desc, 'quantity' => $qty, 'unit_cost' => $unit, 'amount' => $amount,
-                    'category_id' => $l['category_id'] ?? $e->category_id, 'asset_id' => $l['asset_id'] ?? $e->asset_id];
+                    'category_id' => $catId, 'asset_id' => $assetId];
             }
             $vat = ($data['tax_type_id'] ?? $e->tax_type_id) ? $this->inBank(TaxType::class, $orgId, $data['tax_type_id'] ?? $e->tax_type_id, 'tax_type_id') : null;
             $totals = $this->tax->compute($subtotal, $e->currency, $vat, null);
@@ -78,7 +84,7 @@ class ProcurementService
             if (bccomp($excess, '0', 2) > 0) {
                 $s = $this->settings->for($orgId);
                 $this->matcher->within($excess, (string) $e->total_amount, $conv['fx_rate'], (string) $s->match_tolerance_pct, (string) $s->match_tolerance_abs)
-                    || $this->fail("The PO total ({$totals['total_amount']}) is above the approved {$e->total_amount} beyond the match tolerance; raise a new request or re-approve.", 'lines');
+                    || $this->fail("The PO total is above the approved amount of {$e->request_code} beyond the match tolerance; raise a new request or re-approve.", 'lines');
             }
 
             $po = PurchaseOrder::withoutGlobalScopes()->create([

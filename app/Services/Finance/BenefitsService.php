@@ -44,6 +44,22 @@ class BenefitsService
     public function update(Benefit $b, array $data, User $by): Benefit
     {
         in_array($b->status, Benefit::FINAL, true) && $this->fail("A {$b->status} benefit cannot be edited.", 'title');
+        $inv = Investment::withoutGlobalScopes()->findOrFail($b->investment_id);
+        if ($this->pastApproval($inv)) {
+            foreach (['target_value', 'baseline_value', 'unit', 'due_on', 'aggregation', 'type', 'measurement_method'] as $k) {
+                if (! array_key_exists($k, $data)) {
+                    continue;
+                }
+                $old = $b->{$k};
+                $new = $data[$k];
+                $same = match ($k) {
+                    'due_on' => ($old?->toDateString()) === ($new ? substr((string) $new, 0, 10) : null),
+                    'unit', 'aggregation', 'type', 'measurement_method' => (string) $old === (string) $new,
+                    default => ($old === null || $old === '') ? ($new === null || $new === '') : ($new !== null && $new !== '' && is_numeric($new) && bccomp((string) $old, (string) $new, 2) === 0),
+                };
+                $same || $this->fail('Target, baseline, unit, due date, aggregation, type and measurement method are frozen once the investment is approved; cancel this benefit and register a new one.', $k);
+            }
+        }
         $b->fill($this->attributes((int) $b->organization_id, $data, $b))->save();
         $this->recompute($b);
         $this->audit($b, $by, 'updated', "Benefit {$b->benefit_code} updated");
@@ -55,7 +71,7 @@ class BenefitsService
     {
         $b->status === 'cancelled' && $this->fail('A cancelled benefit takes no readings.', 'value');
         $inv = Investment::withoutGlobalScopes()->findOrFail($b->investment_id);
-        $inv->stage === 'cancelled' && $this->fail('A cancelled investment takes no readings.', 'value');
+        in_array($inv->stage, ['cancelled', 'closed'], true) && $this->fail("A {$inv->stage} investment takes no readings.", 'value');
         (int) $p->organization_id === (int) $b->organization_id || $this->fail('Unknown period for this bank.', 'period_id');
         $p->is_adjustment && $this->fail('Pick a regular fiscal period.', 'period_id');
         $p->status === 'locked' && $this->fail("{$p->name} is locked; record the reading in an open or closed period.", 'period_id');
@@ -73,6 +89,13 @@ class BenefitsService
 
             return $r->refresh();
         });
+    }
+
+    private function pastApproval(Investment $i): bool
+    {
+        $at = array_search($i->stage, ['idea', 'business_case', 'approved', 'in_delivery', 'delivered', 'benefits_tracking', 'closed'], true);
+
+        return $i->bac_baselined_at !== null || ($at !== false && $at >= 2);
     }
 
     public function cancel(Benefit $b, string $reason, User $by): Benefit

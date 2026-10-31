@@ -2,6 +2,7 @@
 
 namespace App\Services\Finance\Reports\Definitions;
 
+use App\Models\Finance\Accrual;
 use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\CostCentre;
@@ -61,14 +62,27 @@ class CommitmentsReport extends FinanceReport
         $avail = app(BudgetAvailability::class);
         $lineOf = fn ($id) => ($l = $lines[$id] ?? null) ? trim(($codes[$l->budget_id] ?? '')." #{$l->line_no} {$l->description}") : 'Unbudgeted';
         $ccOf = fn ($id) => trim(($cc[$id]->code ?? '').' '.($cc[$id]->name ?? ''));
+        // P4-M3: remaining amounts come from the same rules as the BvA drill (direct invoices, accrual relief).
+        $items = collect($avail->commitmentItems($lines->keys()->map(fn ($k) => (int) $k)->all()))->keyBy(fn ($it) => $it['type'].'|'.$it['code']);
         $rows = [];
         foreach ($reqs as $r) {
             $rows[] = ['document' => (string) $r->request_code, 'kind' => 'Expense request', 'vendor' => (string) ($vendors[$r->vendor_id] ?? ''), 'line' => $lineOf($r->budget_line_id), 'cost_centre' => $ccOf($r->cost_centre_id),
-                'date' => $r->approved_at?->toDateString() ?? $r->created_at?->toDateString(), 'remaining' => bcadd((string) $r->base_total_amount, '0', 2)];
+                'date' => $r->approved_at?->toDateString() ?? $r->created_at?->toDateString(), 'remaining' => $items['expense|'.$r->request_code]['remaining_base'] ?? bcadd((string) $r->base_total_amount, '0', 2)];
         }
         foreach ($pos as $p) {
             $rows[] = ['document' => (string) $p->po_code, 'kind' => 'Purchase order', 'vendor' => (string) ($vendors[$p->vendor_id] ?? ''), 'line' => $lineOf($p->budget_line_id), 'cost_centre' => $ccOf($p->cost_centre_id),
-                'date' => $p->po_date?->toDateString(), 'remaining' => $avail->remainingForPo($p)];
+                'date' => $p->po_date?->toDateString(), 'remaining' => $items['po|'.$p->po_code]['remaining_base'] ?? $avail->remainingForPo($p)];
+        }
+        $releases = Accrual::withoutGlobalScopes()->where('organization_id', $orgId)->where('type', 'prepayment_release')->where('status', 'proposed')
+            ->when($costCentreIds !== null, fn ($w) => $w->whereIn('cost_centre_id', $costCentreIds ?: [0]))->when($ccFilter, fn ($w) => $w->where('cost_centre_id', $ccFilter))
+            ->when($fy, fn ($w) => $w->where('fiscal_year_id', $fy))->orderBy('id')->get();
+        $relLines = BudgetLine::withoutGlobalScopes()->whereIn('id', $releases->pluck('budget_line_id')->filter()->unique())->get(['id', 'budget_id', 'line_no', 'description']);
+        $relCodes = Budget::withoutGlobalScopes()->whereIn('id', $relLines->pluck('budget_id'))->pluck('budget_code', 'id');
+        $relLines = $relLines->keyBy('id');
+        foreach ($releases as $a) {
+            $l = $relLines[$a->budget_line_id] ?? null;
+            $rows[] = ['document' => 'ACR-'.$a->id, 'kind' => 'Prepayment release', 'vendor' => '', 'line' => $l ? trim(($relCodes[$l->budget_id] ?? '')." #{$l->line_no} {$l->description}") : 'Unbudgeted',
+                'cost_centre' => $ccOf($a->cost_centre_id), 'date' => $a->created_at?->toDateString(), 'remaining' => bcadd((string) $a->base_amount, '0', 2)];
         }
 
         return $rows;

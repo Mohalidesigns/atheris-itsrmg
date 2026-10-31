@@ -7,6 +7,8 @@ use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalStep;
 use App\Models\Approvals\ApprovalWorkflow;
 use App\Models\User;
+use App\Services\Finance\FinanceApprovals;
+use App\Services\Finance\RequestMemo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +33,8 @@ class ApprovalEngine
     /** The bank's active configuration for a process, if it has at least one active stage. */
     public function workflow(int $orgId, string $process): ?ApprovalWorkflow
     {
-        $wf = ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $orgId)->where('process', $process)->where('is_active', true)
-            ->with(['stages' => fn ($q) => $q->where('is_active', true)])->first();
+        $wf = RequestMemo::remember("workflow:{$orgId}:{$process}", fn () => ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $orgId)->where('process', $process)->where('is_active', true)
+            ->with(['stages' => fn ($q) => $q->where('is_active', true)])->first());
 
         return $wf && $wf->stages->isNotEmpty() ? $wf : null;
     }
@@ -107,10 +109,14 @@ class ApprovalEngine
         if (! $request || $request->status === 'approved') {
             return ['final' => true, 'step' => null, 'next' => null];
         }
-        $step = $request->currentStep();
-        $this->assertEligible($step, $request, $subject, $actor);
 
-        return DB::transaction(function () use ($request, $step, $actor, $note) {
+        return DB::transaction(function () use ($request, $subject, $actor, $note) {
+            // Serialise concurrent decisions on this request (P7 M3): re-read it under a row lock, then judge eligibility on the fresh state.
+            $locked = ApprovalRequest::withoutGlobalScopes()->lockForUpdate()->find($request->id);
+            ($locked && $locked->status === 'pending') || throw ValidationException::withMessages(['approval' => 'This approval has already been decided.']);
+            $request = $locked->load('steps.decisions');
+            $step = $request->currentStep();
+            $this->assertEligible($step, $request, $subject, $actor);
             ApprovalDecision::withoutGlobalScopes()->create(['organization_id' => $request->organization_id, 'step_id' => $step->id,
                 'user_id' => $actor->id, 'decision' => 'approved', 'comment' => $note, 'decided_at' => now()]);
             if ($step->decisions()->where('decision', 'approved')->count() < $step->min_approvals) {
@@ -168,6 +174,15 @@ class ApprovalEngine
 
     public function canDecide(ApprovalStep $step, ApprovalRequest $request, ?Model $subject, User $user): bool
     {
+        // Pre-screen the conditions that need no query: the answer is the same (any failure means "no"), without 3 queries per row on lists.
+        $def = ApprovalProcesses::PROCESSES[$request->process] ?? [];
+        if ((int) $user->organization_id !== (int) $request->organization_id
+            || ($request->initiated_by && (int) $request->initiated_by === (int) $user->id)
+            || ($subject && ! empty($def['owner_cannot_approve']) && (int) $subject->{$def['owner']} === (int) $user->id && $step->approver_type !== 'owner')
+            || in_array((int) $user->id, array_map('intval', (array) ($request->context['sod_excluded_ids'] ?? [])), true)
+            || ! $this->matchesForRequest($step, $request, $user)) {
+            return false;
+        }
         try {
             $this->assertEligible($step, $request, $subject, $user);
 
@@ -196,7 +211,17 @@ class ApprovalEngine
         in_array((int) $actor->id, array_map('intval', (array) ($request->context['sod_excluded_ids'] ?? [])), true)
             && $fail('You took part in this record (owner, recommender, opener or requester), so you cannot approve it (segregation of duties).');
 
-        $this->matches($step, $actor) || $fail("This is awaiting \"{$step->name}\": ".$this->describe($step).'.');
+        $this->matchesForRequest($step, $request, $actor) || $fail("This is awaiting \"{$step->name}\": ".$this->describe($step).'.');
+    }
+
+    /** Finance processes match job titles by exact segment (P7 L4); every other process keeps the engine's rule. */
+    private function matchesForRequest(ApprovalStep $step, ApprovalRequest $request, User $user): bool
+    {
+        if ($step->approver_type === 'job_title' && str_starts_with((string) $request->process, 'finance.') && ! $user->hasRole('Super Admin')) {
+            return FinanceApprovals::jobTitleMatches((string) $user->job_title, (string) $step->approver_ref);
+        }
+
+        return $this->matches($step, $user);
     }
 
     /** Does $user fit the step's approver definition? */
@@ -220,7 +245,7 @@ class ApprovalEngine
     {
         return match ($step->approver_type) {
             'role' => "anyone with the role {$step->approver_ref}",
-            'user', 'owner' => ($step->approver_type === 'owner' ? 'the record owner, ' : '').(User::find((int) $step->approver_ref)?->name ?? 'an unassigned person'),
+            'user', 'owner' => ($step->approver_type === 'owner' ? 'the record owner, ' : '').(RequestMemo::remember("userById:{$step->approver_ref}", fn () => User::find((int) $step->approver_ref))?->name ?? 'an unassigned person'),
             'job_title' => "anyone whose job title includes \"{$step->approver_ref}\"",
             'permission' => "anyone holding \"{$step->approver_ref}\"",
             default => 'an approver',

@@ -189,6 +189,7 @@ class CapitalisationService
     public function submit(Capitalisation $c, User $by): Capitalisation
     {
         $this->sameBank($c, $by);
+        $by->can('view it-finance-amounts') || $this->fail('You need to see amounts to submit a capitalisation.', 'approval');
         $c->status === 'draft' || $this->fail("A {$c->status} capitalisation cannot be submitted.");
 
         return DB::transaction(function () use ($c, $by) {
@@ -207,7 +208,7 @@ class CapitalisationService
             }
             $c->available_for_use_on->toDateString() <= FinanceClock::today()->toDateString() || $this->fail('The asset must already be available for use.', 'available_for_use_on');
             $e = $this->eligibility($c->source_type, (int) ($c->investment_id ?: $c->expense_request_id), $c->available_for_use_on->toDateString(), (int) $c->organization_id, (int) $c->id, $c->recognition_date?->toDateString());
-            bccomp((string) $c->amount, $e['remaining'], 2) <= 0 || $this->fail("The amount ({$c->amount}) exceeds what is left to capitalise ({$e['remaining']}).", 'amount');
+            bccomp((string) $c->amount, $e['remaining'], 2) <= 0 || $this->fail('The amount exceeds what is left to capitalise from this source.', 'amount');
             AmortisationSchedule::build((string) $c->amount, (string) $c->residual_value, (int) $c->useful_life_months, $c->method, $c->declining_rate_pct === null ? null : (string) $c->declining_rate_pct, $c->available_for_use_on->startOfMonth()->toDateString());
 
             $c->forceFill([
@@ -245,7 +246,7 @@ class CapitalisationService
                 }
             }
             $e = $this->eligibility($c->source_type, (int) ($c->investment_id ?: $c->expense_request_id), $c->available_for_use_on->toDateString(), (int) $c->organization_id, (int) $c->id, $c->recognition_date?->toDateString());
-            bccomp((string) $c->amount, $e['remaining'], 2) <= 0 || $this->fail("The amount ({$c->amount}) now exceeds what is left to capitalise ({$e['remaining']}).", 'amount');
+            bccomp((string) $c->amount, $e['remaining'], 2) <= 0 || $this->fail('The amount now exceeds what is left to capitalise from this source.', 'amount');
 
             $lines = AmortisationSchedule::build((string) $c->amount, (string) $c->residual_value, (int) $c->useful_life_months, $c->method,
                 $c->declining_rate_pct === null ? null : (string) $c->declining_rate_pct, $c->available_for_use_on->startOfMonth()->toDateString(), $today->startOfMonth()->toDateString());
@@ -266,7 +267,7 @@ class CapitalisationService
                 'eligible_amount' => $e['pool'], 'asset_id' => $assetId,
             ])->save();
             $this->approvals->finalised(self::PROCESS, $c, $by, $note);
-            $this->audit($c, $by, 'approved', "Capitalisation {$c->capitalisation_code} approved: {$c->amount} capitalised on {$today->toDateString()}", ['asset_id' => $assetId, 'lines' => count($rows)]);
+            $this->audit($c, $by, 'approved', "Capitalisation {$c->capitalisation_code} approved and capitalised on {$today->toDateString()}", ['asset_id' => $assetId, 'lines' => count($rows), 'amount' => (string) $c->amount]);
 
             return "Capitalisation {$c->capitalisation_code} approved: the asset is booked and its amortisation schedule created.";
         });
@@ -376,7 +377,7 @@ class CapitalisationService
         $recognition = ($d['recognition_date'] ?? '') === '' || ($d['recognition_date'] ?? null) === null ? null : $this->date($d['recognition_date'], 'recognition_date')->toDateString();
         $recognition === null || $recognition <= $afu || $this->fail('The recognition date (when the criteria were first met, IAS 38.65) cannot be after the available-for-use date.', 'recognition_date');
         $e = $this->eligibility($source instanceof Investment ? 'investment' : 'expense', (int) $source->id, $afu, $orgId, $self?->id, $recognition);
-        bccomp($amount, $e['remaining'], 2) <= 0 || $this->fail("The amount ({$amount}) exceeds what is left to capitalise ({$e['remaining']}) of the capex booked up to {$afu}.", 'amount');
+        bccomp($amount, $e['remaining'], 2) <= 0 || $this->fail("The amount exceeds what is left to capitalise from the capex booked up to {$afu}.", 'amount');
 
         $assetId = null;
         if (! empty($d['asset_id'])) {
@@ -485,6 +486,7 @@ class CapitalisationService
     private function assertApprover(Capitalisation $c, User $by): void
     {
         (int) $by->organization_id === (int) $c->organization_id || $this->fail('This capitalisation belongs to another bank.', 'approval');
+        $by->can('view it-finance-amounts') || $this->fail('You need to see amounts to decide a capitalisation.', 'approval');
         $by->can(self::PERMISSION) || $this->fail('You need the "'.self::PERMISSION.'" permission to decide a capitalisation.', 'approval');
     }
 

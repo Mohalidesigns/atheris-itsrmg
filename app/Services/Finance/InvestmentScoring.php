@@ -32,6 +32,7 @@ class InvestmentScoring
     {
         in_array($i->stage, ['closed', 'cancelled'], true) && $this->fail("A {$i->stage} investment cannot be scored.", 'scores');
         (int) $i->organization_id === (int) $by->organization_id || $this->fail('That investment belongs to another bank.', 'scores');
+        in_array((int) $by->id, array_filter([(int) $i->sponsor_id, (int) $i->manager_id]), true) && $this->fail('The sponsor and the manager cannot score their own investment.', 'scores');
         $clean = $this->validated($scores);
         $orgId = (int) $i->organization_id;
         $weights = $this->weights($orgId);

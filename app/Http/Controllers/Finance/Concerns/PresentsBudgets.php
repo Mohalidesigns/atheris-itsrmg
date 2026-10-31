@@ -186,6 +186,9 @@ trait PresentsBudgets
     {
         $cats = Category::query()->where('is_active', true)->orderBy('sort_order')->orderBy('code')->get();
         $pick = fn ($c) => ['id' => $c->id, 'code' => $c->code, 'name' => $c->name];
+        $viewer = auth()->user(); // cross-module pickers are emptied without that module's view permission (P7-15)
+        $canEa = (bool) $viewer?->can('view ea');
+        $canRisks = (bool) $viewer?->can('view risks');
 
         return [
             'costPools' => $cats->where('kind', 'cost_pool')->map(fn ($c) => $pick($c) + ['default_capex' => $c->default_capex, 'default_gl_account_id' => $c->default_gl_account_id])->values()->all(),
@@ -194,9 +197,9 @@ trait PresentsBudgets
             'glAccounts' => GlAccount::query()->where('is_active', true)->orderBy('code')->get()->map(fn ($g) => ['id' => $g->id, 'code' => $g->code, 'name' => $g->name, 'type' => $g->type])->values()->all(),
             'vendors' => Vendor::query()->where('organization_id', $orgId)->orderBy('name')->limit(500)->get(['id', 'name'])->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values()->all(),
             'assets' => Asset::query()->where('organization_id', $orgId)->orderBy('name')->limit(500)->get(['id', 'name'])->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values()->all(),
-            'eaApplications' => EaApplication::query()->orderBy('name')->limit(500)->get(['id', 'name'])->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values()->all(),
-            'businessServices' => BusinessService::query()->orderBy('name')->limit(500)->get(['id', 'name'])->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values()->all(),
-            'risks' => Risk::query()->where('organization_id', $orgId)->orderBy('title')->limit(500)->get(['id', 'title'])->map(fn ($v) => ['id' => $v->id, 'title' => $v->title])->values()->all(),
+            'eaApplications' => ! $canEa ? [] : EaApplication::query()->orderBy('name')->limit(500)->get(['id', 'name'])->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values()->all(),
+            'businessServices' => ! $canEa ? [] : BusinessService::query()->orderBy('name')->limit(500)->get(['id', 'name'])->map(fn ($v) => ['id' => $v->id, 'name' => $v->name])->values()->all(),
+            'risks' => ! $canRisks ? [] : Risk::query()->where('organization_id', $orgId)->orderBy('title')->limit(500)->get(['id', 'title'])->map(fn ($v) => ['id' => $v->id, 'title' => $v->title])->values()->all(),
             'drivers' => Driver::query()->where('is_active', true)->orderBy('code')->get()->map(fn ($d) => ['id' => $d->id, 'code' => $d->code, 'name' => $d->name, 'unit' => $d->unit])->values()->all(),
             'currencies' => Currency::query()->where('is_active', true)->orderByDesc('is_base')->orderBy('code')->get()->map(fn ($c) => ['code' => $c->code, 'decimals' => $c->decimals, 'is_base' => $c->is_base])->values()->all(),
             'legalEntities' => LegalEntity::query()->orderBy('code')->get(['id', 'code', 'name'])->map(fn ($e) => ['id' => $e->id, 'code' => $e->code, 'name' => $e->name])->values()->all(),

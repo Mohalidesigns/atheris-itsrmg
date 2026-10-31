@@ -11,6 +11,7 @@ use App\Models\Vendor;
 use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\DoaBandService;
 use App\Services\Finance\FinanceClock;
+use App\Services\Finance\RequestMemo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -211,8 +212,12 @@ class ExpenseRequest extends Model
     public static function endorserFor(int $orgId, ?int $costCentreId, array $excluded): ?int
     {
         $id = $costCentreId;
+        if (! $id) {
+            return null;
+        }
+        $tree = RequestMemo::remember("ccAll:{$orgId}", fn () => CostCentre::withoutGlobalScopes()->where('organization_id', $orgId)->get()->keyBy('id'));
         for ($hops = 0; $id && $hops < 12; $hops++) {
-            $cc = CostCentre::withoutGlobalScopes()->where('organization_id', $orgId)->find($id);
+            $cc = $tree[$id] ?? null;
             if (! $cc) {
                 return null;
             }

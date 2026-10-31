@@ -25,6 +25,9 @@ class ChargebackController extends Controller
     public function download(Request $request, ChargebackRun $chargebackRun)
     {
         Gate::authorize('runChargeback', ChargebackRun::class);
+        activity('it-finance')->performedOn($chargebackRun)->causedBy($request->user())->event('downloaded')
+            ->withProperties(['run_code' => $chargebackRun->run_code, 'file_sha256' => $chargebackRun->file_sha256])
+            ->log("Chargeback run {$chargebackRun->run_code} downloaded");
 
         return $this->file($chargebackRun);
     }

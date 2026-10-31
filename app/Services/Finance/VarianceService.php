@@ -123,6 +123,12 @@ class VarianceService
                 $prevPeak = $note->peak_severity;
                 $peak = self::RANK[$c['severity']] > self::RANK[$note->peak_severity] ? $c['severity'] : $note->peak_severity;
                 $status = $note->status === 'cleared' ? 'open' : $note->status;
+                $reopen = $this->reopenReason($note, $c, $fg['budget'], $settings['abs_floor']);
+                if ($reopen) {
+                    $this->resetExplanation($note, $reopen);
+                    $status = 'open';
+                    $amounts += ['explanation' => null, 'author_id' => null, 'explained_at' => null, 'acknowledged_by_id' => null, 'acknowledged_at' => null];
+                }
                 $note->forceFill($amounts + ['severity' => $c['severity'], 'peak_severity' => $peak, 'is_breaching' => true, 'status' => $status])->save();
                 $stats['updated']++;
                 if ($peak !== $prevPeak) {
@@ -136,6 +142,39 @@ class VarianceService
         }
 
         return $stats;
+    }
+
+    /**
+     * H1: an explanation or acknowledgement no longer stands when the variance got worse (amber to red) or, after acknowledgement,
+     * moved by more than `finance.monitoring.variance_reopen_delta_pct` of the budget. Returns the reason, or null to keep it.
+     */
+    private function reopenReason(VarianceNote $note, array $c, string $budget, string $floor): ?string
+    {
+        if (! in_array($note->status, ['explained', 'acknowledged'], true)) {
+            return null;
+        }
+        if (self::RANK[$c['severity']] > (self::RANK[$note->severity] ?? 0)) {
+            return "the variance escalated from {$note->severity} to {$c['severity']}";
+        }
+        if ($note->status !== 'acknowledged') {
+            return null;
+        }
+        $moved = ltrim(bcsub($c['variance'], (string) $note->variance_amount, 2), '-');
+        $pct = (string) config('finance.monitoring.variance_reopen_delta_pct', 10);
+        $limit = bccomp($budget, '0', 2) === 0 ? $floor : bcdiv(bcmul(ltrim($budget, '-'), $pct, 6), '100', 2);
+
+        return bccomp($moved, $limit, 2) > 0 && bccomp($moved, '0', 2) > 0 ? "the variance moved by {$moved} after it was acknowledged" : null;
+    }
+
+    /** The earlier explanation stays visible as a comment on the note; the note itself goes back to `open`. */
+    private function resetExplanation(VarianceNote $note, string $why): void
+    {
+        $authorId = $note->author_id ?? $note->acknowledged_by_id ?? $note->created_by_id;
+        if ($note->explanation && $authorId) {
+            VarianceComment::withoutGlobalScopes()->create(['organization_id' => $note->organization_id, 'created_by_id' => null, 'variance_note_id' => $note->id, 'author_id' => $authorId,
+                'body' => 'Earlier explanation (superseded because '.$why.'): '.$note->explanation.($note->acknowledged_at ? ' [acknowledged '.$note->acknowledged_at->toDateString().']' : '')]);
+        }
+        $this->audit($note, null, 'explanation_reset', 'Variance explanation reset: '.$why);
     }
 
     /** Nightly sweep: ended, still open, regular periods of open fiscal years of every bank. Returns the number of periods evaluated. */

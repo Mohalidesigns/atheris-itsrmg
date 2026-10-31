@@ -355,11 +355,11 @@ class BudgetWorkbook
     /** Spreadsheet-injection guard: a leading = + - @ in a text cell is prefixed with an apostrophe. */
     private function safe(string $v, bool $export): string
     {
-        return $export && $v !== '' && str_contains('=+-@', $v[0]) ? "'".$v : $v;
+        return $export && $v !== '' && ! is_numeric($v) && str_contains("=+-@\t\r", $v[0]) ? "'".$v : $v;
     }
 
     private function unsafe(string $v): string
     {
-        return strlen($v) > 1 && $v[0] === "'" && str_contains('=+-@', $v[1]) ? substr($v, 1) : $v;
+        return strlen($v) > 1 && $v[0] === "'" && str_contains("=+-@\t\r", $v[1]) ? substr($v, 1) : $v;
     }
 }

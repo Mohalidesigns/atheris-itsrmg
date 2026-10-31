@@ -110,7 +110,8 @@ class ApplicationTcoTest extends TestCase
         $this->assertSame('2400000.00', $totals['tco_total']);
         $this->assertSame('100.00', $totals['coverage_pct']); // capped: FinOps cloud replacing the ledger cloud exceeds it in this fixture
         // 1,400,000 attributed of 1,500,000 in the ledger; FinOps (1,500,000) replaces the 500,000 ledger cloud, so the remainder is by definition it_total - tco_total
-        $this->assertSame(bcsub('1500000.00', '2400000.00', 2), $totals['unattributed']);
+        $this->assertSame('0.00', $totals['unattributed']); // P7-17: never a negative bucket
+        $this->assertSame('900000.00', $totals['finops_excess']); // the reconciling line; tco_total + unattributed - finops_excess == it_total
     }
 
     public function test_an_application_subject_sits_beside_the_ea_model_and_feeds_it_the_measured_figure(): void // FIN-05.10, P6-16

@@ -34,6 +34,12 @@ class CurrencyService
      */
     public function quote(int $orgId, string $from, string $to, CarbonInterface $on, string $rateType = 'spot'): ?array
     {
+        return RequestMemo::remember("fxQuote:{$orgId}:{$from}:{$to}:{$on->toDateString()}:{$rateType}", fn () => $this->resolveQuote($orgId, $from, $to, $on, $rateType));
+    }
+
+    /** @return array{rate:string, rate_date:string, rate_type:string}|null */
+    private function resolveQuote(int $orgId, string $from, string $to, CarbonInterface $on, string $rateType): ?array
+    {
         if ($from === $to) {
             return ['rate' => bcadd('1', '0', self::SCALE), 'rate_date' => $on->toDateString(), 'rate_type' => $rateType];
         }
@@ -94,7 +100,7 @@ class CurrencyService
 
     private function decimals(int $orgId, string $code): int
     {
-        $dp = Currency::withoutGlobalScopes()->where('organization_id', $orgId)->where('code', $code)->value('decimals');
+        $dp = RequestMemo::remember("decimals:{$orgId}:{$code}", fn () => Currency::withoutGlobalScopes()->where('organization_id', $orgId)->where('code', $code)->value('decimals'));
 
         return $dp === null ? 2 : max(0, min(8, (int) $dp));
     }
@@ -104,7 +110,7 @@ class CurrencyService
     {
         foreach (array_unique(config('finance.money_tables')) as $table) {
             if (DB::table($table)->where('organization_id', $orgId)->exists()) {
-                return 'The base currency cannot change once budgets, transfers or supplementary requests exist.';
+                return 'The base currency cannot change once finance records holding amounts exist (budgets, targets, transfers, supplementary requests, contracts, spend, investments or business cases).';
             }
         }
 

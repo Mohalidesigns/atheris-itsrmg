@@ -7,6 +7,7 @@ use App\Models\Ea\EaApplication;
 use App\Models\Finance\AllocationRun;
 use App\Models\Finance\ImportBatch;
 use App\Models\Finance\Investment;
+use App\Models\Finance\VarianceNote;
 use App\Models\Kri;
 use App\Models\KriReading;
 use App\Models\ScheduledReport;
@@ -166,8 +167,8 @@ class FinOpsWorkflowIntegrationTest extends TestCase
     {
         $this->seedCloud();
         app(CloudAnomalyService::class)->detect($this->cloudAccount, CarbonImmutable::parse('2027-04-05'));
-        Kri::withoutGlobalScopes()->create([
-            'organization_id' => $this->org->id, 'code' => 'KRI-FIN-CLD', 'name' => 'Cloud anomalies', 'category' => 'finance', 'threshold_green' => 0, 'threshold_amber' => 2, 'threshold_red' => 5,
+        Kri::withoutGlobalScopes()->updateOrCreate(['organization_id' => $this->org->id, 'code' => 'KRI-FIN-CLD'], [
+            'name' => 'Cloud anomalies', 'category' => 'finance', 'threshold_green' => 0, 'threshold_amber' => 2, 'threshold_red' => 5,
             'direction' => 'higher_worse', 'unit' => 'count', 'frequency' => 'monthly', 'source' => 'platform', 'owner_id' => $this->fin->id,
         ]);
         Artisan::call('kri:measure');
@@ -216,6 +217,9 @@ class FinOpsWorkflowIntegrationTest extends TestCase
         }
         app(VarianceService::class)->evaluate($p1, $this->fin);
         $this->explainAll($p1);
+        foreach (VarianceNote::withoutGlobalScopes()->where('period_id', $p1->id)->where('status', 'explained')->get() as $__n) {
+            app(VarianceService::class)->acknowledge($__n, $this->fin); // P7-5
+        }
         $svc->close($p1, $this->fin);
         $this->assertSame('closed', $p1->refresh()->status);
         $runs = AllocationRun::withoutGlobalScopes()->where('period_id', $p1->id)->get();

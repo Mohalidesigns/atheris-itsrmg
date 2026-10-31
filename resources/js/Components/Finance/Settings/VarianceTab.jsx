@@ -33,7 +33,7 @@ export default function VarianceTab({ settings, baseCurrency, can }) {
                             <Chip tone="warning">{formatPct(amber)} to {formatPct(red)}</Chip>
                             <Chip tone="error">{formatPct(red)} and above</Chip>
                         </div>
-                        <p className="mt-2 text-xs text-[#718096]">Variances smaller than {formatMoney(d.variance_abs_floor || 0, baseCurrency, { decimals: 0 })} are not flagged, whatever the percentage.</p>
+                        <p className="mt-2 text-xs text-[#718096]">Variances smaller than {d.variance_abs_floor === null ? '—' : formatMoney(d.variance_abs_floor || 0, baseCurrency, { decimals: 0 })} are not flagged, whatever the percentage.</p>
                     </div>
                 </fieldset>
                 {can.manage && <SaveBar processing={form.processing} dirty={!bad} />}

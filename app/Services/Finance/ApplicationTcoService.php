@@ -99,13 +99,16 @@ class ApplicationTcoService
         $needle = $search ? mb_strtolower(trim($search)) : null;
         $needle && $rows = array_values(array_filter($rows, fn ($r) => str_contains(mb_strtolower($r['label'].' '.$r['code']), $needle)));
 
+        $gap = bcsub($c['it_total'], $sumTotal, 2);
+
         return [
             'rows' => $rows,
             'totals' => [
                 'tco_total' => $sumTotal, 'it_total' => $c['it_total'],
-                // One source for numerator and remainder: tco_total + unattributed == it_total to the cent. Negative only when FinOps cloud exceeds the ledger cloud it replaces.
+                // tco_total + unattributed - finops_excess == it_total to the cent. FinOps cloud above the ledger cloud it replaces shows as finops_excess, never a negative bucket (P7-17).
                 'coverage_pct' => bccomp($c['it_total'], '0', 2) <= 0 ? '0.00' : bcadd(bcmul(bcdiv(bccomp($sumTotal, $c['it_total'], 2) > 0 ? $c['it_total'] : $sumTotal, $c['it_total'], 8), '100', 8), '0', 2),
-                'unattributed' => bcsub($c['it_total'], $sumTotal, 2),
+                'unattributed' => bccomp($gap, '0', 2) < 0 ? '0.00' : $gap,
+                'finops_excess' => bccomp($gap, '0', 2) < 0 ? bcmul($gap, '-1', 2) : '0.00',
                 'finops_untagged_cloud' => $c['finops_untagged'],
             ],
             'subjectAvailable' => [
@@ -157,6 +160,7 @@ class ApplicationTcoService
         $periods = Period::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fiscalYearId)->orderBy('sequence')->get();
         if ($rules->isNotEmpty()) {
             $sum = [];
+            $ccIds === null && $this->allocations->primeOutcomes($orgId, $subject, $periods->pluck('id'), [$basis]);
             foreach ($periods as $p) {
                 foreach ($this->allocations->outcome($orgId, $subject, $p, $basis, $ccIds)['rows'] as $r) {
                     if (isset($rules[$r['allocation_id']]) && ! $skip((int) ($r['cost_pool_id'] ?? 0))) {
@@ -282,6 +286,7 @@ class ApplicationTcoService
         $rules = Allocation::withoutGlobalScopes()->where('organization_id', $orgId)->where('target_type', $subject)->whereNull('deleted_at')->pluck('target_id', 'id');
         $allocated = [];
         if ($rules->isNotEmpty()) {
+            $ccIds === null && $this->allocations->primeOutcomes($orgId, $subject, $periods->pluck('id'), [$basis]);
             foreach ($periods as $p) {
                 foreach ($this->allocations->outcome($orgId, $subject, $p, $basis, $ccIds)['rows'] as $r) {
                     $target = $rules[$r['allocation_id']] ?? null;

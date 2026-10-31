@@ -3,7 +3,6 @@
 namespace App\Services\Finance;
 
 use App\Models\Finance\Benefit;
-use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BusinessCase;
 use App\Models\Finance\Investment;
@@ -82,8 +81,7 @@ class StageGateService
             'scored' => [InvestmentScore::withoutGlobalScopes()->where('investment_id', $i->id)->count() >= count(Investment::CRITERIA), 'Score all five criteria'],
             'risks_recorded' => [filled($bc?->risks_summary) || InvestmentLink::withoutGlobalScopes()->where('investment_id', $i->id)->where('linkable_type', Risk::class)->exists(), 'Record risks or link a risk'],
             'regulatory_reference' => [! $i->is_regulatory || filled($i->regulatory_reference), 'Give the regulatory reference'],
-            'funded' => [BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->where('investment_id', $i->id)
-                ->whereIn('budget_id', Budget::withoutGlobalScopes()->where('status', 'baseline')->select('id'))->exists(), 'Tag a baseline budget line'],
+            'funded' => $this->funded($i, $bc),
             'start_date' => [$i->starts_on !== null, 'Set the start date'],
             'actual_end' => $this->actualEnd($i, $payload),
             'benefits_registered' => [Benefit::withoutGlobalScopes()->where('investment_id', $i->id)->where('status', '!=', 'cancelled')
@@ -93,6 +91,22 @@ class StageGateService
             'benefits_final' => [! Benefit::withoutGlobalScopes()->where('investment_id', $i->id)->whereNotIn('status', Benefit::FINAL)->exists(), 'Every benefit needs a final status'],
             default => [false, 'Unknown criterion'],
         };
+    }
+
+    /** Σ current base of the tagged baseline lines must cover BAC (or the draft business case's one-off cost). @return array{0:bool,1:?string} */
+    private function funded(Investment $i, ?BusinessCase $bc): array
+    {
+        $need = $i->bac !== null ? (string) $i->bac : ($bc && $bc->one_off_cost !== null ? (string) $bc->one_off_cost : null);
+        $ids = BudgetLine::withoutGlobalScopes()->where('organization_id', $i->organization_id)->where('investment_id', $i->id)->pluck('id')->map(fn ($v) => (int) $v)->all();
+        $have = app(InvestmentFinancials::class)->allocated($ids);
+        if (! $ids || bccomp($have, '0', 2) <= 0) {
+            return [false, 'Tag a baseline budget line'];
+        }
+        if ($need !== null && bccomp($have, $need, 2) < 0) {
+            return [false, 'Tagged baseline lines hold '.$have.' of '.bcadd($need, '0', 2).'; gap '.bcsub($need, $have, 2)];
+        }
+
+        return [true, null];
     }
 
     /** @return array{0:bool,1:?string} */
@@ -144,7 +158,7 @@ class StageGateService
             $gate = StageGate::withoutGlobalScopes()->create([
                 'organization_id' => $i->organization_id, 'created_by_id' => $by->id, 'investment_id' => $i->id, 'gate' => $to, 'from_stage' => $i->stage,
                 'status' => $needsApproval ? 'submitted' : 'passed', 'criteria' => $criteria,
-                'payload' => $to === 'delivered' ? ['actual_ends_on' => $criteria[0]['detail'] ?? null] : null,
+                'payload' => $to === 'delivered' ? ['actual_ends_on' => collect($criteria)->firstWhere('key', 'actual_end')['detail'] ?? null] : null,
                 'business_case_id' => $bc?->id, 'requested_by_id' => $by->id, 'requested_at' => now(), 'request_note' => $note ? trim($note) : null,
                 'approval_base_amount' => $to === 'approved' ? (string) $bc->one_off_cost : (string) ($i->bac ?? $i->planned_cost ?? '0'),
             ]);
@@ -211,6 +225,10 @@ class StageGateService
                 }
             }
             $i = Investment::withoutGlobalScopes()->findOrFail($g->investment_id);
+            if (in_array($g->gate, ['approved', 'delivered'], true)) {
+                $unmet = array_values(array_filter($this->criteria($i, $g->gate, [], (array) $g->payload), fn ($c) => $c['auto'] && ! $c['met']));
+                $unmet && $this->fail('An automatic criterion is no longer met: '.implode('; ', array_map(fn ($c) => $c['label'].($c['detail'] ? " ({$c['detail']})" : ''), $unmet)).'.', 'criteria');
+            }
             $g->forceFill(['status' => 'approved', 'decided_by_id' => $by->id, 'decided_at' => now(), 'passed_at' => now(), 'passed_by_id' => $by->id])->save();
             match ($g->gate) {
                 'approved' => $this->finaliseApproved($g, $i, $by),
@@ -237,7 +255,7 @@ class StageGateService
             $this->approvals->decline(self::PROCESS, $g, $by, $note, 'rejected');
             $g->forceFill(['status' => 'rejected', 'rejection_reason' => $note, 'decided_by_id' => $by->id, 'decided_at' => now()])->save();
             if ($g->business_case_id && ($bc = BusinessCase::withoutGlobalScopes()->find($g->business_case_id))) {
-                $this->businessCases->markRejected($bc, $note);
+                $this->businessCases->markRejected($bc, $note, $by);
             }
             if ($g->investment_change_id && ($c = InvestmentChange::withoutGlobalScopes()->find($g->investment_change_id))) {
                 $c->forceFill(['status' => 'rejected', 'rejection_reason' => $note, 'decided_by_id' => $by->id, 'decided_at' => now()])->save();
@@ -271,7 +289,7 @@ class StageGateService
         $g->forceFill(['status' => 'withdrawn'])->save();
         $this->approvals->withdraw(self::PROCESS, $g, $by);
         if ($g->business_case_id && ($bc = BusinessCase::withoutGlobalScopes()->find($g->business_case_id)) && $bc->status === 'submitted') {
-            $this->businessCases->markWithdrawn($bc);
+            $this->businessCases->markWithdrawn($bc, $by);
         }
         if ($g->investment_change_id && ($c = InvestmentChange::withoutGlobalScopes()->find($g->investment_change_id)) && $c->status === 'submitted') {
             $c->forceFill(['status' => 'withdrawn'])->save();

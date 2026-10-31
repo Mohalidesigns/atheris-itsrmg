@@ -342,13 +342,14 @@ class BudgetController extends Controller
     private function activity(Budget $b): array
     {
         $lineIds = $b->lines()->pluck('id');
+        $can = request()->user()->can('view it-finance-amounts');
 
         return Activity::query()->where('log_name', 'it-finance')->where(function ($q) use ($b, $lineIds) {
             $q->where(fn ($w) => $w->where('subject_type', $b->getMorphClass())->where('subject_id', $b->id))
                 ->orWhere(fn ($w) => $w->where('subject_type', (new BudgetLine)->getMorphClass())->whereIn('subject_id', $lineIds));
         })->with('causer:id,name')->latest('id')->limit(50)->get()->map(fn ($a) => [
             'id' => $a->id, 'event' => $a->event, 'description' => $a->description, 'causer' => $this->userMini($a->causer),
-            'changes' => $a->properties?->toArray() ?: null, 'created_at' => $a->created_at?->toIso8601String(),
+            'changes' => $can ? ($a->properties?->toArray() ?: null) : null, 'created_at' => $a->created_at?->toIso8601String(),
         ])->values()->all();
     }
 

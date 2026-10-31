@@ -402,6 +402,8 @@ class FinanceMonitoringDemoSeeder extends Seeder
         $openAmber = VarianceNote::withoutGlobalScopes()->where('organization_id', $this->orgId)->where('period_id', $lastId)->where('severity', 'amber')->where('is_breaching', true)
             ->orderBy('id')->limit(2)->pluck('id')->all();
         $acked = 0;
+        // P7-5: a period that is closed (and so passed the close checklist) has every red note acknowledged by a second person.
+        $lastClosed = in_array($this->last->status, ['closed', 'locked'], true) || ($this->reopenMode === 'pending' && $this->reopenTarget && (int) $this->reopenTarget->id === $lastId);
         foreach (VarianceNote::withoutGlobalScopes()->where('organization_id', $this->orgId)->where('is_breaching', true)->where('status', 'open')->orderBy('period_id')->orderBy('id')->get() as $n) {
             if ($n->id === $keepOpenRed || in_array($n->id, $openAmber, true)) {
                 continue;
@@ -412,7 +414,7 @@ class FinanceMonitoringDemoSeeder extends Seeder
             $note = $vs->explain($n, $this->pick($pool), $n->severity === 'red' ? $this->pick(self::ACTIONS) : null, $owner);
             $update = ['explained_at' => $at];
             // red notes of earlier periods are acknowledged by Finance; in the latest period only every other one is
-            if ($n->severity === 'red' && ((int) $n->period_id !== $lastId || $n->id % 2 === 0)) {
+            if ($n->severity === 'red' && ((int) $n->period_id !== $lastId || $lastClosed || $n->id % 2 === 0)) {
                 $vs->acknowledge($note, $this->who['finance']);
                 $update['acknowledged_at'] = $at->addDays(2);
                 $acked++;

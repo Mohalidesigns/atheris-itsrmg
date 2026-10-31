@@ -5,11 +5,44 @@ namespace App\Services\Finance;
 use App\Models\Finance\Actual;
 use App\Models\Finance\CloudAnomaly;
 use App\Models\Finance\Contract;
+use App\Models\Kri;
+use App\Models\User;
 
 /** Measures of the finance KRIs (FIN-04.08); KriMeasures registers them. Each returns [value, note]. */
 class FinanceKriSource
 {
     public function __construct(private readonly FinanceMetrics $metrics, private readonly MonitoringService $monitoring) {}
+
+    /** Finance KRI definitions, provisioned for every bank by FinanceSettings::ensureDefaults (P7-18). Idempotent. */
+    public static function ensureDefinitions(int $orgId): void
+    {
+        $defs = [
+            ['KRI-FIN-VAR', 'IT budget variance (YTD)', 'Absolute year-to-date variance of IT spend against budget.', '%', 5, 10, 20],
+            ['KRI-FIN-UNB', 'Unbudgeted IT spend', 'Unbudgeted actual spend as a share of year-to-date IT spend.', '%', 2, 5, 10],
+            ['KRI-FIN-INV', 'Overdue IT invoices', 'Unpaid, undisputed IT invoices past their due date.', 'count', 0, 3, 10],
+            ['KRI-FIN-NOT', 'Contracts past notice deadline', 'Live contracts whose notice deadline has passed with no renewal decision.', 'count', 0, 1, 3],
+            ['KRI-FIN-CLD', 'Cloud cost anomalies (30 days)', 'Cloud cost anomaly events detected in the last 30 days that are still open or acknowledged.', 'count', 0, 2, 5],
+        ];
+        $existing = Kri::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('code', array_column($defs, 0))->pluck('code')->all();
+        if (count($existing) === count($defs)) {
+            return;
+        }
+        $cfo = User::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_active', true)
+            ->where(fn ($q) => $q->where('job_title', 'like', '%Chief Financial%')->orWhere('job_title', 'like', '%CFO%'))->orderBy('id')->first();
+        foreach ($defs as [$code, $name, $desc, $unit, $g, $a, $r]) {
+            if (in_array($code, $existing, true)) {
+                continue;
+            }
+            $kri = Kri::withoutGlobalScopes()->firstOrNew(['organization_id' => $orgId, 'code' => $code]);
+            if ($kri->exists) {
+                continue; // never overwrite a bank's tuned thresholds or owner
+            }
+            $kri->fill([
+                'name' => $name, 'description' => $desc, 'category' => 'finance', 'unit' => $unit, 'direction' => 'higher_worse', 'threshold_green' => $g, 'threshold_amber' => $a,
+                'threshold_red' => $r, 'frequency' => 'monthly', 'source' => 'platform', 'owner_id' => $cfo?->id,
+            ])->save();
+        }
+    }
 
     /** @return array{0:float,1:string} absolute YTD variance % of the current fiscal year */
     public function budgetVariancePct(int $orgId): array
@@ -59,9 +92,11 @@ class FinanceKriSource
     public function cloudAnomalies(int $orgId): array
     {
         $days = (int) config('finance.cloud.anomaly.kri_window_days', 30);
+        // Distinct (account, detected_on) events: one spike raises several anomalies (service, tag, total) but is one event.
         $n = CloudAnomaly::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', CloudAnomaly::OPEN)
-            ->whereDate('detected_on', '>=', FinanceClock::today()->subDays($days)->toDateString())->count();
+            ->whereDate('detected_on', '>=', FinanceClock::today()->subDays($days)->toDateString())->get(['cloud_account_id', 'detected_on'])
+            ->map(fn ($x) => $x->cloud_account_id.'|'.$x->detected_on->toDateString())->unique()->count();
 
-        return [(float) $n, "{$n} open cloud cost anomalies in the last {$days} days (FinOps)."];
+        return [(float) $n, "{$n} open cloud cost anomaly events in the last {$days} days (FinOps)."];
     }
 }

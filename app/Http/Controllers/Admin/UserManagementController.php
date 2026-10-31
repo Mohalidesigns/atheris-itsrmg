@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
 
@@ -111,10 +112,17 @@ class UserManagementController extends Controller
 
         $this->guardRoles($request, $validated['roles']);
 
+        // Job titles drive approval-stage matching, so nobody may retitle themselves (P7 L3).
+        $oldTitle = $user->job_title;
+        $newTitle = isset($validated['job_title']) && trim($validated['job_title']) !== '' ? $validated['job_title'] : null;
+        if ((int) $user->id === (int) $request->user()->id && (string) $oldTitle !== (string) $newTitle) {
+            throw ValidationException::withMessages(['job_title' => 'You cannot change your own job title; ask another administrator.']);
+        }
+
         $user->fill([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'job_title' => $validated['job_title'] ?? null,
+            'job_title' => $newTitle,
             'department' => $validated['department'] ?? null,
             'organization_id' => $this->targetOrganization($request, $validated['organization_id'] ?? null, $user),
         ]);
@@ -124,6 +132,10 @@ class UserManagementController extends Controller
         }
 
         $user->save();
+        if ((string) $oldTitle !== (string) $newTitle) {
+            activity()->performedOn($user)->causedBy($request->user())
+                ->withProperties(['old' => ['job_title' => $oldTitle], 'attributes' => ['job_title' => $newTitle]])->log('job_title_changed');
+        }
 
         $user->syncRoles($validated['roles']);
 

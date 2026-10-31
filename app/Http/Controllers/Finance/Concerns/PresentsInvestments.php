@@ -192,8 +192,10 @@ trait PresentsInvestments
     /** @return list<array<string,mixed>> */
     protected function activityRows(Model $subject, int $limit = 100): array
     {
+        $can = request()->user()->can('view it-finance-amounts');
+
         return Activity::query()->where('subject_type', $subject::class)->where('subject_id', $subject->getKey())->with('causer:id,name')->orderByDesc('id')->limit($limit)->get()
             ->map(fn ($a) => ['id' => $a->id, 'event' => $a->event, 'description' => $a->description, 'causer' => $a->causer ? ['id' => $a->causer->id, 'name' => $a->causer->name] : null,
-                'at' => $a->created_at?->toIso8601String(), 'changes' => $a->event === 'updated' ? ($a->properties['attributes'] ?? null) : null])->values()->all();
+                'at' => $a->created_at?->toIso8601String(), 'changes' => $can && $a->event === 'updated' ? ($a->properties['attributes'] ?? null) : null])->values()->all();
     }
 }

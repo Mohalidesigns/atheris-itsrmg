@@ -39,7 +39,7 @@ class TcoController extends Controller
         $basis = $v['basis'] ?? 'actual';
 
         $p = $fy ? $this->tco->portfolio($orgId, $fy->id, $subject, $basis, $ccIds, $user, $v['search'] ?? null)
-            : ['rows' => [], 'totals' => ['tco_total' => '0.00', 'it_total' => '0.00', 'coverage_pct' => '0.00', 'unattributed' => '0.00'], 'subjectAvailable' => $available];
+            : ['rows' => [], 'totals' => ['tco_total' => '0.00', 'it_total' => '0.00', 'coverage_pct' => '0.00', 'unattributed' => '0.00', 'finops_excess' => '0.00'], 'subjectAvailable' => $available];
         $model = $subject === 'ea_application' ? EaApplication::class : BusinessService::class;
         $subjects = $model::withoutGlobalScopes()->where(fn ($q) => $q->where('organization_id', $orgId)->orWhereNull('organization_id'))->orderBy('name')->get(['id', 'code', 'name'])
             ->map(fn ($m) => ['id' => (int) $m->id, 'label' => trim(($m->code ? $m->code.' ' : '').$m->name)])->values();

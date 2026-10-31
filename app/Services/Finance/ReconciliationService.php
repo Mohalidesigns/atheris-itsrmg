@@ -15,6 +15,7 @@ use App\Models\Finance\PurchaseOrder;
 use App\Models\User;
 use App\Models\Vendor;
 use App\Services\Finance\Concerns\LogsFinanceEvents;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -86,7 +87,7 @@ class ReconciliationService
     {
         $n = 0;
         $open = Period::withoutGlobalScopes()->where('organization_id', $orgId)->where('status', 'open')->pluck('id')->all();
-        foreach ($this->queue($orgId, [])->whereIn('source', ['gl_import', 'manual'])->whereIn('period_id', $open ?: [0])->get() as $a) {
+        foreach ($this->queue($orgId, [])->whereIn('source', ['gl_import', 'manual'])->where(fn ($w) => $w->whereNull('match_reason')->orWhere('match_reason', '!=', 'possible_duplicate'))->whereIn('period_id', $open ?: [0])->get() as $a) {
             $r = $this->autoMatch($a);
             if ($r['line']) {
                 $a->forceFill(['budget_line_id' => $r['line']->id, 'match_status' => 'matched', 'match_reason' => $r['reason'], 'match_rule_id' => $r['rule_id'], 'matched_by_id' => $by->id, 'matched_at' => now()])->save();
@@ -124,18 +125,46 @@ class ReconciliationService
         return array_slice($out, 0, $limit);
     }
 
-    /** The invoice actual a GL reference duplicates (plan P3-12): an invoice code, vendor invoice number or PO code already posted from an invoice. */
-    public function duplicateOf(int $orgId, ?string $reference): ?Actual
+    /**
+     * The invoice actual a GL row duplicates (plan P3-12, P7-9, P7 review H2): the key is reference + vendor (when both are mapped)
+     * + transaction-currency amount, with the posting date inside `finance.actuals.duplicate_window_days` of the invoice posting.
+     * Without an amount and date only the reference is compared (legacy callers). Anything weaker is `possibleDuplicateOf`.
+     */
+    public function duplicateOf(int $orgId, ?string $reference, ?string $amount = null, ?string $currency = null, ?string $postedOn = null, ?int $vendorId = null): ?Actual
+    {
+        foreach ($this->referenceMatches($orgId, $reference) as $a) {
+            if ($amount === null && $postedOn === null) {
+                return $a;
+            }
+            $sameAmount = $amount === null || (bccomp((string) $a->amount, $amount, 2) === 0 && ($currency === null || strtoupper((string) $a->currency) === strtoupper($currency)));
+            $sameVendor = ! $vendorId || ! $a->vendor_id || (int) $a->vendor_id === (int) $vendorId;
+            $inWindow = $postedOn === null || abs($a->posted_on->startOfDay()->diffInDays(CarbonImmutable::parse($postedOn)->startOfDay())) <= (int) config('finance.actuals.duplicate_window_days', 31);
+            if ($sameAmount && $sameVendor && $inWindow) {
+                return $a;
+            }
+        }
+
+        return null;
+    }
+
+    /** A reference that matches an approved invoice posting but not its amount, vendor or date window: flagged for a human, never silently excluded (P7-9). */
+    public function possibleDuplicateOf(int $orgId, ?string $reference): ?Actual
+    {
+        return $this->referenceMatches($orgId, $reference)->first();
+    }
+
+    /** @return Collection<int, Actual> */
+    private function referenceMatches(int $orgId, ?string $reference): Collection
     {
         $ref = trim((string) $reference);
         if ($ref === '') {
-            return null;
+            return collect();
         }
         $invoiceIds = Invoice::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', ['approved', 'scheduled', 'paid'])
             ->where(fn ($q) => $q->where('invoice_code', $ref)->orWhere('vendor_invoice_no', $ref)
                 ->orWhereIn('po_id', PurchaseOrder::withoutGlobalScopes()->where('organization_id', $orgId)->where('po_code', $ref)->select('id')))->pluck('id');
 
-        return $invoiceIds->isEmpty() ? null : Actual::withoutGlobalScopes()->where('organization_id', $orgId)->where('source', 'invoice')->whereIn('invoice_id', $invoiceIds)->orderBy('id')->first();
+        return $invoiceIds->isEmpty() ? collect() : Actual::withoutGlobalScopes()->where('organization_id', $orgId)->where('source', 'invoice')->whereIn('invoice_id', $invoiceIds)->orderBy('id')->get();
     }
 
     public function saveRule(array $data, User $by, ?MatchRule $rule = null): MatchRule

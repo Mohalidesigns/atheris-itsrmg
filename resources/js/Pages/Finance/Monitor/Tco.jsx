@@ -44,6 +44,7 @@ export default function Tco(props) {
                 <KpiTile label="Coverage" value={fmtPct(totals?.coverage_pct)} sub="Attributed share of IT cost" icon="donut_large" tint="bg-[#E7F4EC] text-[#2D7D46]" />
                 <KpiTile label="Unattributed" value={fmt(totals?.unattributed)} icon="help" tint="bg-[#FFF6E0] text-[#8A6400]" alert={Number(totals?.coverage_pct) < 50} />
             </div>
+            {Number(totals?.finops_excess) > 0 && <p className="mb-4 rounded-lg border border-[#F0DDA8] bg-[#FFF6E0] px-5 py-3 text-sm text-[#8A6400]"><Icon name="info" size={18} className="mr-1 inline" />FinOps cloud cost exceeds the cloud cost in the ledger by {fmt(totals.finops_excess)}. It is shown as a reconciling line so that attributed TCO, unattributed and this excess tie to the IT total.</p>}
 
             <FiltersBar cols="lg:grid-cols-4">
                 <SelectFilter id="tc-fy" label="Fiscal year" value={f.fiscal_year_id} onChange={set('fiscal_year_id')} all="Current">{fiscalYears.map((y) => <option key={y.id} value={y.id}>{y.year_label}</option>)}</SelectFilter>

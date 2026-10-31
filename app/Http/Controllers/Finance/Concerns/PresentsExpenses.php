@@ -58,6 +58,12 @@ trait PresentsExpenses
     /** @var array<int, string> subject id => current stage name */
     private array $stageMemo = [];
 
+    /** @var array<int, array{invoiced:string,accrued:string}> */
+    private array $poSumMemo = [];
+
+    /** @var array<int, User|null> users looked up by id for "posted by" / "matched by" columns, one query per distinct id */
+    private array $userMemo = [];
+
     protected function renderExpenses(string $component, array $props)
     {
         $can = request()->user()->can('view it-finance-amounts');
@@ -117,6 +123,29 @@ trait PresentsExpenses
     protected function stageOf(int $id): ?string
     {
         return $this->stageMemo[$id] ?? null;
+    }
+
+    /** Primes the user memo for many ids with one query. */
+    protected function primeUsers(iterable $ids): void
+    {
+        $ids = collect($ids)->filter()->map(fn ($i) => (int) $i)->unique()->diff(array_keys($this->userMemo))->values();
+        if ($ids->isEmpty()) {
+            return;
+        }
+        $found = User::withoutGlobalScopes()->whereIn('id', $ids)->get(['id', 'name'])->keyBy('id');
+        foreach ($ids as $id) {
+            $this->userMemo[$id] = $found[$id] ?? null;
+        }
+    }
+
+    protected function userById($id): ?User
+    {
+        if (! $id) {
+            return null;
+        }
+        $this->primeUsers([$id]);
+
+        return $this->userMemo[(int) $id] ?? null;
     }
 
     protected function userMini(?User $u): ?array
@@ -203,10 +232,24 @@ trait PresentsExpenses
     }
 
     /** @return array<string,mixed> */
+    /** Invoiced / accrued totals of many purchase orders in two queries, for poRow(). */
+    protected function primePoSums(iterable $pos): void
+    {
+        $pos = collect($pos)->reject(fn ($po) => isset($this->poSumMemo[$po->id]))->values();
+        $this->poSumMemo += app(BudgetAvailability::class)->poSums($pos);
+    }
+
+    /** @return array{invoiced:string,accrued:string}|null */
+    protected function poSums(PurchaseOrder $po): ?array
+    {
+        return $this->poSumMemo[$po->id] ?? null;
+    }
+
     protected function poRow(PurchaseOrder $po): array
     {
         $po->loadMissing(['vendor:id,name', 'expenseRequest:id,request_code,title', 'costCentre:id,code,name', 'issuedBy:id,name', 'lines']);
-        $invoiced = (string) Invoice::withoutGlobalScopes()->where('po_id', $po->id)->whereIn('status', ['approved', 'scheduled', 'paid'])->sum('total_amount');
+        $sums = $this->poSumMemo[$po->id] ?? null;
+        $invoiced = (string) ($sums ? $sums['invoiced'] : Invoice::withoutGlobalScopes()->where('po_id', $po->id)->whereIn('status', ['approved', 'scheduled', 'paid'])->sum('total_amount'));
 
         return [
             'id' => $po->id, 'po_code' => $po->po_code, 'status' => $po->status, 'vendor' => $this->vendorMini($po->vendor),
@@ -214,7 +257,7 @@ trait PresentsExpenses
             'cost_centre' => $this->ccMini($po->costCentre), 'po_date' => $this->dateOf($po->po_date), 'expected_delivery_on' => $this->dateOf($po->expected_delivery_on),
             'currency' => $po->currency, 'subtotal' => (string) $po->subtotal, 'tax_amount' => (string) $po->tax_amount, 'total_amount' => (string) $po->total_amount,
             'base_total_amount' => (string) $po->base_total_amount, 'received_pct' => $po->received_pct, 'invoiced_amount' => bcadd($invoiced, '0', 2),
-            'remaining_commitment_base' => app(BudgetAvailability::class)->remainingForPo($po), 'issued_by' => $this->userMini($po->issuedBy),
+            'remaining_commitment_base' => app(BudgetAvailability::class)->remainingForPo($po, $sums), 'issued_by' => $this->userMini($po->issuedBy),
             'external_reference' => $po->external_reference, 'is_lease' => $po->is_lease,
         ];
     }
@@ -292,7 +335,7 @@ trait PresentsExpenses
     /** @return array<string,mixed> */
     protected function actualRow(Actual $a): array
     {
-        $a->loadMissing(['period', 'costCentre:id,code,name', 'glAccount:id,code,name', 'budgetLine', 'vendor:id,name', 'contract:id,contract_code,title', 'invoice:id,invoice_code', 'creator:id,name']);
+        $a->loadMissing(['period', 'costCentre:id,code,name', 'glAccount:id,code,name', 'budgetLine', 'vendor:id,name', 'contract:id,contract_code,title', 'invoice:id,invoice_code']);
 
         return [
             'id' => $a->id, 'period' => $this->periodMini($a->period), 'posted_on' => $this->dateOf($a->posted_on), 'source' => $a->source, 'source_ref' => $a->source_ref,
@@ -300,7 +343,7 @@ trait PresentsExpenses
             'vendor' => $this->vendorMini($a->vendor), 'contract' => $this->contractMini($a->contract),
             'invoice' => $a->invoice ? ['id' => $a->invoice->id, 'invoice_code' => $a->invoice->invoice_code] : null, 'batch_id' => $a->import_batch_id, 'currency' => $a->currency,
             'amount' => (string) $a->amount, 'base_amount' => (string) $a->base_amount, 'is_capex' => $a->is_capex, 'is_lease' => $a->is_lease, 'match_status' => $a->match_status,
-            'match_reason' => $a->match_reason, 'matched_by' => $a->matched_by_id ? $this->userMini(User::withoutGlobalScopes()->find($a->matched_by_id)) : null,
+            'match_reason' => $a->match_reason, 'matched_by' => $a->matched_by_id ? $this->userMini($this->userById($a->matched_by_id)) : null,
             'matched_at' => $a->matched_at?->toIso8601String(), 'duplicate_of_id' => $a->duplicate_of_id,
         ];
     }
@@ -309,7 +352,7 @@ trait PresentsExpenses
     protected function accrualRow(Accrual $a): array
     {
         $a->loadMissing(['period', 'reversalPeriod', 'po:id,po_code', 'invoice:id,invoice_code', 'recurringExpense:id,recurring_code', 'budgetLine', 'costCentre:id,code,name']);
-        $by = fn ($id) => $id ? $this->userMini(User::withoutGlobalScopes()->find($id)) : null;
+        $by = fn ($id) => $id ? $this->userMini($this->userById($id)) : null;
 
         return [
             'id' => $a->id, 'type' => $a->type, 'source' => $a->source, 'status' => $a->status, 'period' => $this->periodMini($a->period), 'reversal_period' => $this->periodMini($a->reversalPeriod),
@@ -363,9 +406,12 @@ trait PresentsExpenses
     /** @return list<array<string,mixed>> */
     protected function activityRows(Model $subject, int $limit = 100): array
     {
+        $can = request()->user()->can('view it-finance-amounts');
+
         return Activity::query()->where('subject_type', $subject::class)->where('subject_id', $subject->getKey())->with('causer:id,name')->orderByDesc('id')->limit($limit)->get()
             ->map(fn ($a) => ['id' => $a->id, 'event' => $a->event, 'description' => $a->description, 'causer' => $a->causer ? ['id' => $a->causer->id, 'name' => $a->causer->name] : null,
-                'at' => $a->created_at?->toIso8601String()])->values()->all();
+                'at' => $a->created_at?->toIso8601String(),
+                'changes' => $can && $a->event === 'updated' ? ($a->properties['attributes'] ?? null) : null])->values()->all();
     }
 
     /** Fiscal-year, cost-centre, vendor, category lookups shared by the form pages. @return Collection<int, array<string,mixed>> */
@@ -385,9 +431,10 @@ trait PresentsExpenses
         $lines = BudgetLine::query()->whereIn('budget_id', $budgets->keys())
             ->when($ids !== null && ! $user->hasRole('Procurement Officer'), fn ($q) => $q->whereIn('cost_centre_id', $ids ?: [0]))->orderBy('budget_id')->orderBy('line_no')->get();
         $this->primeLines($lines->pluck('id'));
+        $contractOf = Contract::query()->whereIn('budget_line_id', $lines->pluck('id'))->selectRaw('budget_line_id, min(id) as first_id')->groupBy('budget_line_id')->pluck('first_id', 'budget_line_id');
 
         return $lines->map(fn (BudgetLine $l) => $this->lineMini($l) + [
-            'category_id' => $l->category_id, 'gl_account_id' => $l->gl_account_id, 'vendor_id' => $l->vendor_id, 'contract_id' => Contract::query()->where('budget_line_id', $l->id)->value('id'),
+            'category_id' => $l->category_id, 'gl_account_id' => $l->gl_account_id, 'vendor_id' => $l->vendor_id, 'contract_id' => $contractOf[$l->id] ?? null,
             'is_capex' => $l->is_capex, 'currency' => $l->currency, 'fiscal_year_id' => $budgets[$l->budget_id]->fiscal_year_id,
         ])->values()->all();
     }

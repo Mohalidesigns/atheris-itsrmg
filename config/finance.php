@@ -63,7 +63,8 @@ return [
     'transfers' => ['allow_capex_opex' => false],
     // Tables that hold money; the base currency is frozen once any has a row (P3+ append).
     'money_tables' => ['fin_budget_lines', 'fin_budget_transfers', 'fin_supplementary_requests', 'fin_contracts', 'fin_contract_renewals',
-        'fin_expense_requests', 'fin_purchase_orders', 'fin_invoices', 'fin_actuals', 'fin_recurring_expenses', 'fin_accruals', 'fin_cloud_cost_lines', 'fin_capitalisations'],
+        'fin_expense_requests', 'fin_purchase_orders', 'fin_invoices', 'fin_actuals', 'fin_recurring_expenses', 'fin_accruals', 'fin_cloud_cost_lines', 'fin_capitalisations',
+        'fin_budget_targets', 'fin_investments', 'fin_business_cases'],
     'workbook' => ['max_rows' => 2000, 'max_kb' => 4096],
     'approval_defaults' => [ // base-currency thresholds that FinancePolicySeeder maps onto each bank's bands
         'budget_md_ceo_from' => 250000000,
@@ -92,7 +93,7 @@ return [
     // P3 expenses, procurement, invoices and actuals (ATH-FIN-001 §3.3)
     'expenses' => ['justification_min' => 20, 'unbudgeted_band_bump' => 1],
     'invoices' => ['due_offsets' => [7, 0], 'overdue_offsets' => [1, 7, 14, 30], 'default_payment_days' => 30, 'override_reason_min' => 10],
-    'actuals' => ['max_kb' => 8192, 'date_formats' => ['Y-m-d', 'd/m/Y', 'm/d/Y', 'd-M-Y', 'd.m.Y']],
+    'actuals' => ['max_kb' => 8192, 'duplicate_window_days' => 31, 'date_formats' => ['Y-m-d', 'd/m/Y', 'm/d/Y', 'd-M-Y', 'd.m.Y']],
     'recurring' => ['catch_up_max' => 12],
     // P4 monitoring, variance, period close and reports (ATH-FIN-001 §3.4, §3.7)
     'monitoring' => [
@@ -102,6 +103,7 @@ return [
         'close_reminder_working_days' => [5],
         'close_overdue_working_days' => [3], // still open 3 working days after the end
         'top_variances' => 10,
+        'variance_reopen_delta_pct' => 10, // an acknowledged variance moving by more than this share (of the budget) is re-opened for explanation
     ],
     'reports' => ['max_rows' => 20000, 'pdf_max_rows' => 1500, 'preview_rows' => 50],
 
@@ -123,7 +125,7 @@ return [
         'gate_criteria' => [ // [key, label, auto]; auto keys are evaluated by StageGateService::criteria(); manual keys must be ticked
             'business_case' => [['sponsor_named', 'Sponsor named', true], ['manager_named', 'Manager named', true], ['cost_centre_set', 'Cost centre set', true], ['problem_agreed', 'Problem statement and options agreed with the sponsor', false]],
             'approved' => [['business_case_complete', 'Business case complete (costs, horizon, rate)', true], ['scored', 'All five criteria scored', true], ['risks_recorded', 'Risks recorded (summary or linked risk)', true], ['regulatory_reference', 'Regulatory reference (regulatory investments)', true], ['options_considered', 'Options considered and recommendation stated', false]],
-            'in_delivery' => [['funded', 'Funded: at least one baseline budget line tagged', true], ['start_date', 'Start date set', true], ['delivery_plan', 'Delivery plan and governance agreed', false]],
+            'in_delivery' => [['funded', 'Funded: tagged baseline budget lines cover the BAC', true], ['start_date', 'Start date set', true], ['delivery_plan', 'Delivery plan and governance agreed', false]],
             'delivered' => [['actual_end', 'Actual end date given', true], ['acceptance', 'User acceptance signed off', false], ['handover', 'Handed over to operations', false]],
             'benefits_tracking' => [['benefits_registered', 'At least one benefit with owner, target and due date', true], ['reviews_scheduled', 'Value reviews scheduled', true]],
             'closed' => [['reviews_done', 'No value review scheduled, due or overdue', true], ['benefits_final', 'Every benefit has a final status', true], ['lessons', 'Lessons learned recorded', false]],

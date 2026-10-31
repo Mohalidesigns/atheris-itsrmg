@@ -12,9 +12,11 @@ use App\Models\Finance\CostCentre;
 use App\Models\Finance\ImportBatch;
 use App\Models\Finance\Period;
 use App\Models\User;
+use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\Concerns\LogsFinanceEvents;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 
@@ -33,8 +35,17 @@ class CloudCostService
     /* ---------------------------------------------------------------- accounts */
 
     /** @param array<string,mixed> $data */
+    /** Tag rules and new accounts shape attribution for the whole bank, so a cost-centre-scoped viewer cannot create or change them (P6-sec-M1). */
+    public function assertBankWide(User $by): void
+    {
+        if (FinancePolicy::visibleCostCentreIds($by) !== null && ! $by->can('manage it-finance-settings')) {
+            throw new AuthorizationException('Tag rules and cloud accounts are managed bank-wide; ask a finance approver or settings administrator.');
+        }
+    }
+
     public function storeAccount(array $data, User $by): CloudAccount
     {
+        $this->assertBankWide($by);
         $orgId = (int) $by->organization_id;
         $clean = $this->cleanAccount($data, $orgId, null);
         $account = CloudAccount::withoutGlobalScopes()->create($clean + ['organization_id' => $orgId, 'created_by_id' => $by->id]);
@@ -197,6 +208,7 @@ class CloudCostService
 
         DB::transaction(function () use ($a, $orgId, $by, $batch, $ctx, $periodFor, $byDate, &$result) {
             $hits = [];
+            $replacedStats = [];
             $maxDate = null;
             foreach ($byDate as $date => $list) {
                 $period = $periodFor($date);
@@ -208,8 +220,18 @@ class CloudCostService
 
                     continue;
                 }
+                $manual = [];
                 if (! $closed && $existing) {
-                    DB::table('fin_cloud_cost_lines')->where('cloud_account_id', $a->id)->whereDate('usage_date', $date)->delete();
+                    $scope = fn () => DB::table('fin_cloud_cost_lines')->where('organization_id', $orgId)->where('cloud_account_id', $a->id)->whereDate('usage_date', $date);
+                    $old = $scope()->get(['service', 'resource_id', 'region', 'cost_centre_id', 'ea_application_id', 'business_service_id', 'attributed_by', 'base_cost', 'import_batch_id']);
+                    foreach ($old->where('attributed_by', 'manual') as $m) { // manual attributions survive a restatement
+                        $manual[$m->service.'|'.($m->resource_id ?? '').'|'.($m->region ?? '')] = $m;
+                    }
+                    $replacedStats[$date] = [
+                        'before_lines' => $old->count(), 'before_base_total' => $old->reduce(fn ($c, $l) => bcadd($c, (string) $l->base_cost, 2), '0.00'),
+                        'before_batches' => $old->pluck('import_batch_id')->unique()->filter()->count(),
+                    ];
+                    $scope()->delete();
                     $result['replaced_dates'][] = $date;
                 } elseif ($closed) {
                     $result['appended_dates'][] = $date;
@@ -218,6 +240,9 @@ class CloudCostService
                 $now = now();
                 foreach ($list as $r) {
                     $attr = $this->attribute($a, (array) $r['tags'], $ctx);
+                    if ($manual && ($m = $manual[$r['service'].'|'.($r['resource_id'] ?? '').'|'.($r['region'] ?? '')] ?? null)) {
+                        $attr = ['cost_centre_id' => $m->cost_centre_id, 'ea_application_id' => $m->ea_application_id, 'business_service_id' => $m->business_service_id, 'is_untagged' => false, 'attributed_by' => 'manual', 'rule_ids' => []];
+                    }
                     foreach ($attr['rule_ids'] as $rid) {
                         $hits[$rid] = ($hits[$rid] ?? 0) + 1;
                     }
@@ -233,6 +258,9 @@ class CloudCostService
                     DB::table('fin_cloud_cost_lines')->insert($chunk);
                 }
                 $result['inserted'] += count($insert);
+                if (isset($replacedStats[$date])) {
+                    $replacedStats[$date] += ['after_lines' => count($insert), 'after_base_total' => array_reduce($insert, fn ($c, $l) => bcadd($c, (string) $l['base_cost'], 2), '0.00'), 'manual_kept' => count($manual)];
+                }
                 $maxDate = $maxDate === null || $date > $maxDate ? $date : $maxDate;
             }
             foreach ($hits as $rid => $n) {
@@ -242,6 +270,14 @@ class CloudCostService
                 $last = $a->last_usage_date?->toDateString();
                 $last === null || $maxDate > $last ? DB::table('fin_cloud_accounts')->where('id', $a->id)->update(['last_usage_date' => $maxDate, 'updated_at' => now()]) : null;
                 $a->last_usage_date = $last === null || $maxDate > $last ? $maxDate : $last;
+            }
+            if ($replacedStats) {
+                $this->audit($a, $by, 'restated', "Cloud cost lines of {$a->label} restated for ".count($replacedStats).' day(s)', [
+                    'dates' => array_keys($replacedStats), 'before_lines' => array_sum(array_column($replacedStats, 'before_lines')), 'after_lines' => array_sum(array_column($replacedStats, 'after_lines')),
+                    'before_base_total' => array_reduce(array_column($replacedStats, 'before_base_total'), fn ($c, $v) => bcadd($c, (string) $v, 2), '0.00'),
+                    'after_base_total' => array_reduce(array_column($replacedStats, 'after_base_total'), fn ($c, $v) => bcadd($c, (string) $v, 2), '0.00'),
+                    'manual_kept' => array_sum(array_column($replacedStats, 'manual_kept')), 'import_batch_id' => $batch?->id,
+                ]);
             }
             if (! $batch && $result['inserted']) {
                 $this->audit($a, $by, 'cost_lines_added', "{$result['inserted']} cloud cost lines added to {$a->label}", ['replaced' => count($result['replaced_dates'])]);
@@ -402,6 +438,7 @@ class CloudCostService
     /** @param array<string,mixed> $data */
     public function storeRule(array $data, User $by): CloudTagRule
     {
+        $this->assertBankWide($by);
         $orgId = (int) $by->organization_id;
         $clean = $this->cleanRule($data, $orgId, null);
         $rule = CloudTagRule::withoutGlobalScopes()->create($clean + ['organization_id' => $orgId, 'created_by_id' => $by->id]);
@@ -413,6 +450,7 @@ class CloudCostService
     /** @param array<string,mixed> $data */
     public function updateRule(CloudTagRule $r, array $data, User $by): CloudTagRule
     {
+        $this->assertBankWide($by);
         $this->sameBank($r, $by);
         $clean = $this->cleanRule($data + $r->only(['cloud_account_id', 'tag_key', 'tag_value', 'dimension', 'target_id', 'is_active']), (int) $r->organization_id, $r);
         $r->fill($clean)->save();
@@ -422,6 +460,7 @@ class CloudCostService
 
     public function destroyRule(CloudTagRule $r, User $by): void
     {
+        $this->assertBankWide($by);
         $this->sameBank($r, $by);
         $this->audit($r, $by, 'deleted', "Tag rule {$r->tag_key}={$r->tag_value} deleted");
         $r->delete();
@@ -566,6 +605,11 @@ class CloudCostService
      * @return array{mtd:string,prior_mtd:string,trend:list<array{date:string,cost:string}>}
      */
     public function mtd(int $orgId, ?array $ccIds = null, ?CarbonInterface $today = null, array $ownedAccounts = []): array
+    {
+        return RequestMemo::remember('cloudMtd:'.md5(json_encode([$orgId, $ccIds, $today?->toDateString(), FinanceClock::today()->toDateString(), $ownedAccounts])), fn () => $this->computeMtd($orgId, $ccIds, $today, $ownedAccounts));
+    }
+
+    private function computeMtd(int $orgId, ?array $ccIds, ?CarbonInterface $today, array $ownedAccounts): array
     {
         $today = ($today ?? FinanceClock::today())->startOfDay();
         $start = $today->startOfMonth();
