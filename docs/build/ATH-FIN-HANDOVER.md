@@ -17,7 +17,12 @@ Living note: overwrite the "Next session" block at every milestone. Spec: `docs/
 ## Token-economy rules for every phase
 
 1. The orchestrator does not read the spec or the codebase itself. `fin-architect` reads them and writes the plan to `docs/build/ATH-FIN-PLAN-pN.md`. The orchestrator reads only that plan and the agents' reports.
-2. Models: architect on **opus** (never downgrade). Builders and QA on **sonnet**. Reviewers on **sonnet with "be exhaustive"** for P0, P4, P5 and P6, and on **opus** for P1, P2, P3 and P7 (the plan requires reviewers on those).
+2. Models and effort are set in `.claude/agents/*.md`:
+   - **Architect:** opus, effort high.
+   - **Builders, QA and the integrator:** sonnet, effort medium.
+   - **Reviewers:** sonnet, effort high by default. Pass `model: opus` only for a final/whole-module review or a high-risk phase (P7 used it). Don't spawn a cold agent for something a few tool calls settle; do it inline.
+   - **Token budget:** every agent ends with one. It covers reading only the named sections, `--filter` tests only, no full suite, and reports of at most 300 words.
+   - **Cost reference:** in P7 an Opus reviewer used about 230–310k tokens, and a Sonnet fixer about 35–180k.
 3. Run the full gate **once** per phase, after QA, plus one re-run after fixes. Builders run only their own `--filter` classes.
 4. No browser walks. Playwright runs only at P2 (calendar and renewal journeys) and P7.
 5. Fix only Critical and High findings. Log Medium and Low findings in ATH-FIN-003.
