@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Draft for review (31 Oct 2026) |
+| Status | Draft v1.1 for review (31 Oct 2026) — D4, D5, D6 resolved; D1, D2, D3 open |
 | Applies to | `IT-Governance` and `Info-Sec`, both split from `IT-Security-Risk` `main` @ `70b5e99` |
 | Referenced by | `docs/SPLIT_PRUNE_IT_GOVERNANCE.md`, `docs/SPLIT_PRUNE_INFO_SEC.md` (C1, C8, C9, C10, C12, C13, C14, C15) |
 | Backend neutrality | Contracts are HTTP + JSON. They hold whether each product stays on Laravel or moves to Java Spring Boot (decision of 25 Oct 2026 still open). §10 maps them to both stacks. |
@@ -51,9 +51,11 @@ ITG = IT Governance, ISec = Information Security. C2–C7 were not numbered in t
   - **Events** (asynchronous, fire-and-forget with guaranteed delivery): `POST /api/suite/v1/events`. Used by every contract except the queries below.
   - **Queries** (synchronous, read-only, with a timeout): `GET /api/suite/v1/<resource>`. Used where a user is waiting for an answer: C2 blast radius, C6 board-pack figures, C8 change lookup, C10 review status.
 
-### 3.2 Authentication
+### 3.2 Deployment and authentication
 
-On-prem pairs at one bank, so no third-party identity provider is assumed.
+**Deployment (D4, resolved).** When a client buys both products, they are deployed on the **same server**: two applications, two databases (on the same database server is fine), each with its own URL / virtual host. `SUITE_PEER_URL` then points at the peer over the local interface (e.g. `http://127.0.0.1:8081` or an internal hostname), so suite traffic never leaves the machine. Separate hosts remain technically possible (nothing in the contracts assumes a shared host), but same-server is the standard bundled install and the one the installer and documentation target.
+
+On-prem pairs at one bank, so no third-party identity provider is assumed. Same-server deployment does **not** remove the signature requirement below: it is what stops any other process on the host, or a misrouted request, from writing into the peer.
 
 - Each product holds a **suite client ID** and a **shared secret** for its peer (`SUITE_PEER_URL`, `SUITE_CLIENT_ID`, `SUITE_SECRET` in `.env` / `application.yml`).
 - Every request carries:
@@ -62,7 +64,7 @@ On-prem pairs at one bank, so no third-party identity provider is assumed.
   - `X-Suite-Signature: sha256=<hex HMAC-SHA256 of "<timestamp>.<raw body>" with the shared secret>` (body is empty string for GET)
 - Secrets rotate without downtime: each side accepts the current and previous secret for 24 h after rotation.
 - Suite endpoints sit **outside** the `auth` and CSRF groups (like SCIM today) and are gated only by the signature middleware. They must be added to the `UNAUTHENTICATED_BY_DESIGN` list in the authorisation tests.
-- mTLS is optional and recommended where the bank's network team supports it; it does not replace the signature.
+- mTLS is not needed for the same-server install. If a bank ever splits the products across hosts, mTLS is recommended in addition to (not instead of) the signature.
 
 ### 3.3 Event envelope
 
@@ -73,7 +75,7 @@ On-prem pairs at one bank, so no third-party identity provider is assumed.
   "version": 1,
   "occurred_at": "2026-10-31T09:15:00+01:00",
   "source": "itg",
-  "tenant": "kano-heritage",
+  "tenant": "kano-heritage-bank",
   "subject": "itg:vendor:VEN-0042",
   "correlation_id": "0193f2c4-0000-7000-8000-000000000001",
   "actor": { "email": "ciso@kanoheritage.ng", "name": "Amina Bello" },
@@ -277,8 +279,26 @@ The vendor flow agreed on 22 Oct 2026: IT registers vendors and collects documen
 - **`vendor.handed_over` payload:** `vendor_code`, `name`, `category`, `tier`, `domain`, `country`, `services_provided`, `data_access_level`, `processes_personal_data`, `dpa_signed_at`, `material_outsourcing`, `regulator_notified_at`, `contract_start`, `contract_end`, `owner` (email), `contacts[]`, `criticality` (`critical` / `high` / `medium` / `low`), `documents[]` (`title`, `type`, `received_at`, `download_url` signed, 15-minute expiry), `ropa_refs[]` (C15).
 - **Consumer (ISec):** upsert `Vendor` on `vendor_code` with `source = 'suite'`; vendor creation in the ISec UI is disabled except with a "local only" flag (checklist §2). If `criticality = critical`, open a `VendorAssessment` with `assessment_type = 'ctpra'`; otherwise the standard security assessment.
 - **`vendor_assessment.completed` payload:** `vendor_code`, `assessment_ref`, `assessment_type`, `overall_score`, `residual_rating`, `completed_at`, `next_review_date`, `key_findings[]` (titles only, no detail), `rating` (`provider`, `rating_value`, `grade`, `captured_at`) when a `TprmSecurityRating` exists.
-- **Consumer (ITG):** stores the residual rating, grade and next review date on the vendor (display-only) and blocks moving the vendor to `active` while a critical vendor has no completed assessment, unless the CISO override is recorded.
-- **Fallback (ITG alone):** "Security assessment" tab shows a manual rating field. **(ISec alone):** vendors are created locally.
+- **Consumer (ITG):** stores the residual rating, grade and next review date on the vendor (display-only) and blocks moving a critical vendor to `active` until either (a) a completed CTPRA has been received, or (b) an **approved, unexpired vendor risk exception** has been received (C9a below).
+- **Fallback (ITG alone):** "Security assessment" tab shows a manual rating field, and the risk exception in C9a runs in ITG's own Workflow Studio. **(ISec alone):** vendors are created locally.
+
+#### C9a — Vendor risk exception: CISO conditional approval before CTPRA (D6, resolved)
+
+A CISO may approve a critical vendor before its CTPRA is complete, **only through a formal risk exception with conditional approval**, routed up a configurable approval chain. It is never a single-person override.
+
+- **Where it lives:** Information Security (where the CTPRA, the CISO and the vendor security record are). New model `VendorRiskException`, modelled on the existing `PolicyException` (statuses `requested`, `approved`, `rejected`, `revoked`, `expired`; maximum duration by risk rating).
+- **Fields:** `exception_code`, `vendor_code`, `risk_rating` (critical / high / medium / low), `business_justification`, `risk_description`, `compensating_controls[]` (e.g. no production data until CTPRA complete, VPN-only access, enhanced monitoring, contractual right to audit), `conditions[]` (what the vendor or business must do and by when), `ctpra_due_date`, `requested_by` (CISO), `starts_at`, `expires_at`, `status`, `approvals[]`, `revoked_reason`.
+- **Duration limits:** `expires_at` may not exceed `ctpra_due_date`, nor a per-rating maximum (default critical 3 months, high 6 — the same defaults as `PolicyException::MAX_MONTHS`), configurable per bank in `config/tprm.php`.
+- **Approval workflow:** a new generic process `vendor.risk_exception` in `App\Services\Approvals\ApprovalProcesses`, so it runs on the existing `ApprovalEngine` and its stages are configured per bank in **Workflow Studio** (approver types already supported: role, named person, job title, record owner, permission; stages can be limited by condition).
+  - Initiator: the CISO (permission `request vendor exceptions`). The initiator can never approve their own request.
+  - Stage condition fields: `risk_rating`, `vendor_tier`, `processes_personal_data`, `material_outsourcing`.
+  - Default when the bank has configured nothing: CISO request → Chief Risk Officer → MD/CEO, plus Board Risk Committee notification when `material_outsourcing = true`. Banks change the chain in Workflow Studio without code.
+- **Events to ITG:** `vendor_risk_exception.approved` (`exception_code`, `vendor_code`, `starts_at`, `expires_at`, `conditions[]`, `approved_by[]` emails), `vendor_risk_exception.revoked`, `vendor_risk_exception.expired`. ITG lets the vendor go `active` with a visible "Conditional — risk exception RE-2026-004 until 31 Jan 2027" badge.
+- **Lifecycle:**
+  - CTPRA completed → exception closes automatically (`vendor_assessment.completed` supersedes it); badge removed.
+  - 14 and 3 days before expiry → reminder to the CISO, vendor owner and last approver.
+  - Expiry or revocation without a completed CTPRA → ITG moves the vendor to `suspended` (new contracts and renewals blocked, existing contract unaffected) and notifies the vendor owner and procurement. Continuing needs a new exception through the same workflow; an approved exception's dates cannot be edited.
+- **Reporting:** open exceptions, exceptions expiring within 30 days, and vendors activated under exception appear in the vendor register and in the C6 security summary (`vendor_exceptions: {open, expiring_30d, expired_unresolved}`) so they reach board packs.
 - **Toggle:** `SUITE_C9`.
 
 ### C10 — Security review of a change request
@@ -306,13 +326,31 @@ Not used. Kept free so contract numbers in the prune checklists stay stable.
 - **Fallback (ITG alone):** cyber KRIs can be defined locally.
 - **Toggle:** `SUITE_C12`.
 
-### C13 — DR invocation from a major incident
+### C13 — DR invocation (D5, resolved)
 
-- **Direction:** ISec → ITG (`dr.invocation_requested`), ITG → ISec (`dr.invocation_started`, `dr.invocation_step_completed`, `dr.invocation_completed`).
-- **Trigger:** incident commander clicks "Invoke DR" on a major incident in ISec (never automatic).
-- **Request payload:** `incident_code`, `severity`, `affected_application_refs[]` (from C2), `requested_by` (email), `reason`.
-- **Consumer (ITG):** proposes the runbook(s) linked to the affected applications; the BCM/DR owner confirms in ITG, which starts a `DrExercise` with `status = 'invoked'` (new value alongside `scheduled`) and `outcome_notes` linked to `isec:incident:<code>`. Progress events let the incident timeline show DR steps and the RTO clock.
-- **Fallback (ISec alone):** "Invoke DR" is hidden; the incident timeline has a free-text DR entry.
+**Who invokes depends on the cause of the outage:**
+
+| Cause | Invoking authority | Where invoked | Examples |
+|---|---|---|---|
+| **Malicious**: systems compromised, data integrity lost, or environment unsafe to operate | Information Security | ISec, from the security incident | ransomware, intrusion, tampered data, active attacker in the network |
+| **Non-malicious**: infrastructure, hardware or environmental failure; systems offline but not compromised | IT / Operations | ITG, directly in the DR module | storage or power failure, data-centre outage, hardware fault, failed upgrade |
+
+ITG always **executes** the runbook (DR runbooks and exercises stay in IT Governance); the cause decides who has the authority to start it.
+
+**Data changes (ITG):** `dr_exercises` gains `mode` (`exercise` / `invocation`), `cause` (`malicious` / `non_malicious`), `invoked_by` (user), `invoking_product` (`itg` / `isec`), `source_ref` (e.g. `isec:incident:INC-2026-0107` or an ITSM ticket reference), and new status values `invoked` and `escalated`. New permissions: `invoke dr` (IT/Ops roles, in ITG) and `invoke dr security` (incident commander / CISO roles, in ISec).
+
+**Path A — malicious (ISec invokes):**
+- **Trigger:** incident commander clicks "Invoke DR" on a security incident in ISec (never automatic). ISec requires the commander to confirm the **recovery environment is not compromised** (DR site and backups checked clean, or restore from a known-good point dated before the compromise) — restoring into a compromised environment repeats the incident.
+- **Event ISec → ITG:** `dr.invocation_requested` with `incident_code`, `severity`, `cause: "malicious"`, `affected_application_refs[]` (from C2), `recovery_point_before` (timestamp), `clean_environment_confirmed: true`, `invoked_by` (email), `reason`.
+- **Consumer (ITG):** starts the invocation immediately (no second approval — authority sits with Information Security for this cause), selects the runbook(s) linked to the affected applications and assigns them to the DR owner, who executes. If no runbook matches, the DR owner is paged to pick one.
+- **Progress ITG → ISec:** `dr.invocation_started`, `dr.invocation_step_completed`, `dr.invocation_completed` (`runbook`, `step`, `completed_at`, `rto_minutes`, `elapsed_minutes`) so the incident timeline shows DR progress against the RTO clock.
+
+**Path B — non-malicious (IT/Ops invokes):**
+- **Trigger:** a user with `invoke dr` starts an invocation in ITG's DR module, optionally referencing an ITSM ticket (existing `ItsmConnector`). No dependency on ISec.
+- **Event ITG → ISec (awareness only):** `dr.invocation_started` with `cause: "non_malicious"`, so the SOC knows failover traffic and unusual activity are expected.
+- **Escalation:** if IT/Ops or the SOC finds signs of compromise during a non-malicious invocation, either side marks it **escalated to security**. ITG sends `dr.escalated_to_security` (invocation ref, observations, escalated_by); ISec opens a linked security incident and the invocation's `cause` becomes `malicious`. From then on Information Security holds the authority (Path A rules, including the clean-environment check), and ITG shows the invocation as `escalated` until ISec confirms how to continue.
+
+- **Fallback (ISec alone):** "Invoke DR" is hidden; the incident timeline has a free-text DR entry. **(ITG alone):** Path B only; cause can still be recorded as malicious for reporting.
 - **Toggle:** `SUITE_C13`.
 
 ### C14 — Security architecture sync
@@ -368,11 +406,12 @@ Ownership per both checklists: Information Security owns the write surface for s
 | `change.implemented` | ITG | C8 |
 | `vendor.handed_over`, `vendor.updated`, `vendor.offboarded` | ITG | C9 |
 | `vendor_assessment.started`, `vendor_assessment.completed`, `vendor_rating.changed` | ISec | C9 |
+| `vendor_risk_exception.approved`, `vendor_risk_exception.revoked`, `vendor_risk_exception.expired` | ISec | C9a |
 | `change.security_review_requested`, `change.updated` | ITG | C10 |
 | `change.security_review_decided` | ISec | C10 |
 | `kri.defined`, `kri.reading_recorded`, `kri.breached` | ISec | C12 |
 | `dr.invocation_requested` | ISec | C13 |
-| `dr.invocation_started`, `dr.invocation_step_completed`, `dr.invocation_completed` | ITG | C13 |
+| `dr.invocation_started`, `dr.invocation_step_completed`, `dr.invocation_completed`, `dr.escalated_to_security` | ITG | C13 |
 | `ea_application.upserted`, `ea_application.retired`, `ea_component.upserted`, `ea_component.retired` | ITG | C14 |
 | `security_zone.upserted`, `zone_assignment.changed`, `threat_model.upserted`, `control_mapping.changed` | ISec | C14 |
 | `processing_activity.upserted`, `processing_activity.retired` | ITG | C15 |
@@ -396,7 +435,7 @@ Definition of done for each contract (in addition to the repo rule — PHP suite
 1. Feature tests on both sides: producer writes the outbox row in the same transaction; consumer is idempotent on event id **and** business key; schema violation returns `422`; bad signature returns `401`.
 2. Peer-down test: producer keeps working, outbox retries, UI shows the "unavailable" banner for queries.
 3. Toggle-off test: the local fallback in §5 works.
-4. Demo data: both demo tenants (`kano-heritage`, `firstbank-nigeria` slugs) seeded so the flow is visible end-to-end when both apps run locally.
+4. Demo data: both demo tenants (`kano-heritage-bank`, `first-bank-nigeria` slugs) seeded so the flow is visible end-to-end when both apps run locally.
 5. Activity log entries on send, receipt and failure.
 
 ## 9. Decisions needed before or during build
@@ -406,9 +445,9 @@ Definition of done for each contract (in addition to the repo rule — PHP suite
 | D1 | Which product owns the IT asset register? Both checklists keep Asset Management. | Two editable registers at one bank will drift apart; vulnerabilities, drift and PCI scope all point at assets. | IT Governance owns it (ITAM is a governance function); Info-Sec mirrors it and owns only security attributes (C4). |
 | D2 | Java rewrite first, or prune Laravel now? (open since 25 Oct) | Determines whether S0 is written in Laravel or Spring Boot. The contracts in this document are the same either way. | Build S0 + S1 in whichever stack the products will ship on; do not build plumbing twice. |
 | D3 | Where is the CBN-CSAT return compiled? The Info-Sec checklist removes `app/Services/Returns/**` **except** `CsatMapper`, but `CsatMapper` extends `ReturnMapper` and is driven by `ReturnCompiler`, which is removed. | As written, CSAT returns stop compiling in Info-Sec after pruning. | Keep `ReturnCompiler`, `ReturnMapper` and the citation/seal classes in Info-Sec as a slim engine for the CSAT return only; ITG keeps the full Returns Centre. Fix the Info-Sec checklist accordingly. |
-| D4 | Do both products always ship in one deployment (same server, two databases), or can a bank run them on separate hosts? | Affects whether mTLS and network allow-listing are required at install. | Support both; HMAC signature is mandatory, mTLS optional. |
-| D5 | Who can invoke DR from an incident (C13)? | Accountability during a live event. | Incident commander requests; BCM/DR owner confirms in ITG. |
-| D6 | Is a CISO override allowed to activate a critical vendor without a completed CTPRA (C9)? | Regulator will ask who approved an unassessed critical vendor. | Yes, recorded with reason and expiry date, reported in the vendor register. |
+| D4 | Deployment topology | Affects mTLS and network set-up at install. | **Resolved 31 Oct 2026:** when bought together, both products are deployed on the same server (two apps, two databases). HMAC signature stays mandatory; mTLS not needed. See §3.2. |
+| D5 | Who can invoke DR (C13)? | Accountability during a live event. | **Resolved 31 Oct 2026:** by cause. Information Security for malicious incidents (compromise, loss of integrity, unsafe environment); IT/Operations for non-malicious infrastructure, hardware or environmental failures. ITG executes the runbook in both cases. See C13. |
+| D6 | Can a CISO activate a critical vendor before the CTPRA is complete (C9)? | Regulator will ask who approved an unassessed critical vendor. | **Resolved 31 Oct 2026:** yes, only through a formal risk exception / conditional approval, routed through an approval chain to senior management that each bank configures in Workflow Studio. See C9a. |
 
 ## 10. Mapping to each stack
 
