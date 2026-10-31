@@ -45,6 +45,7 @@ use App\Models\Finance\ValueReview;
 use App\Models\Finance\VarianceNote;
 use App\Models\User;
 use App\Services\Finance\FinanceApprovals;
+use App\Services\Finance\RequestMemo;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -332,7 +333,7 @@ class FinancePolicy
         return match (true) {
             $m instanceof Investment => $m,
             $m instanceof FinanceDocument => $m->documentable()->withoutGlobalScopes()->first() instanceof Investment ? $m->documentable()->withoutGlobalScopes()->first() : null,
-            isset($m->investment_id) => Investment::withoutGlobalScopes()->find($m->investment_id),
+            isset($m->investment_id) => RequestMemo::remember("inv:{$m->investment_id}", fn () => Investment::withoutGlobalScopes()->find($m->investment_id)),
             $m instanceof BenefitReading => ($b = Benefit::withoutGlobalScopes()->find($m->benefit_id)) ? Investment::withoutGlobalScopes()->find($b->investment_id) : null,
             default => null,
         };
@@ -368,22 +369,24 @@ class FinancePolicy
             return null;
         }
 
-        $all = CostCentre::withoutGlobalScopes()->where('organization_id', $user->organization_id)->get(['id', 'parent_id', 'owner_id']);
-        $byParent = $all->groupBy('parent_id');
-        $ids = [];
-        $queue = $all->where('owner_id', $user->id)->pluck('id')->all();
-        while ($queue) {
-            $id = array_shift($queue);
-            if (in_array($id, $ids, true)) {
-                continue;
+        return RequestMemo::remember("visibleCc:{$user->organization_id}:{$user->id}", function () use ($user) {
+            $all = CostCentre::withoutGlobalScopes()->where('organization_id', $user->organization_id)->get(['id', 'parent_id', 'owner_id']);
+            $byParent = $all->groupBy('parent_id');
+            $ids = [];
+            $queue = $all->where('owner_id', $user->id)->pluck('id')->all();
+            while ($queue) {
+                $id = array_shift($queue);
+                if (in_array($id, $ids, true)) {
+                    continue;
+                }
+                $ids[] = $id;
+                foreach ($byParent->get($id, collect()) as $child) {
+                    $queue[] = $child->id;
+                }
             }
-            $ids[] = $id;
-            foreach ($byParent->get($id, collect()) as $child) {
-                $queue[] = $child->id;
-            }
-        }
 
-        return $ids;
+            return $ids;
+        });
     }
 
     /** Cost-centre row restriction for planning records; null visibility means every cost centre. */
@@ -486,7 +489,7 @@ class FinancePolicy
     /** Plan C70: every cost centre, Procurement, the contract's own people, its team, or its cost centre in the user's tree. */
     private function contractVisible(User $user, Model $model): bool
     {
-        $contract = $model instanceof Contract ? $model : Contract::withoutGlobalScopes()->find($model->contract_id);
+        $contract = $model instanceof Contract ? $model : RequestMemo::remember("contract:{$model->contract_id}", fn () => Contract::withoutGlobalScopes()->find($model->contract_id));
         if (! $contract) {
             return false;
         }

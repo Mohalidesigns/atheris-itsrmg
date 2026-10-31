@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Models\Finance\Accrual;
 use App\Models\Finance\Actual;
+use App\Models\Finance\Budget;
 use App\Models\Finance\BudgetLine;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\GlAccount;
@@ -16,6 +17,7 @@ use App\Models\User;
 use App\Services\Finance\Concerns\LogsFinanceEvents;
 use App\Services\Finance\Concerns\ValidatesFinanceInput;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Accruals and prepayments (FIN-03.06, plan P3-14): received-not-invoiced accruals proposed per period, posted as +actual and
@@ -43,7 +45,7 @@ class AccrualService
             $this->create([
                 'type' => 'accrual', 'source' => 'po', 'dedupe_key' => $c['dedupe_key'], 'period_id' => $p->id, 'po_id' => $po->id, 'budget_line_id' => $po->budget_line_id,
                 'gl_account_id' => $po->expenseRequest?->gl_account_id, 'cost_centre_id' => $po->cost_centre_id, 'description' => "Received not invoiced: {$po->po_code}",
-                'currency' => $po->currency, 'fx_rate' => (string) $po->fx_rate, 'amount' => $c['amount'], 'base_amount' => $c['base_amount'],
+                'currency' => $po->currency, 'fx_rate' => $c['fx_rate'], 'amount' => $c['amount'], 'base_amount' => $c['base_amount'],
             ], $p, $by);
             $made++;
         }
@@ -65,25 +67,33 @@ class AccrualService
         $pos = PurchaseOrder::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', ['open', 'partially_received', 'received', 'closed'])
             ->whereDate('po_date', '<=', $p->ends_on->toDateString())->with('taxType')->get();
         $periodIds = Period::withoutGlobalScopes()->where('organization_id', $orgId)->whereDate('starts_on', '<=', $p->ends_on->toDateString())->select('id');
+        if ($pos->isEmpty()) {
+            return $out;
+        }
+        // Three grouped queries for every purchase order at once, instead of three per order.
+        $taken = Accrual::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('dedupe_key', $pos->map(fn ($po) => "po:{$po->id}:{$p->id}")->all())->pluck('dedupe_key')->flip();
+        $receivedBy = GoodsReceiptLine::withoutGlobalScopes()->join('fin_goods_receipts as g', 'g.id', '=', 'fin_goods_receipt_lines.grn_id')
+            ->join('fin_purchase_order_lines as pl', 'pl.id', '=', 'fin_goods_receipt_lines.po_line_id')->whereIn('g.po_id', $pos->pluck('id'))
+            ->whereDate('g.received_on', '<=', $p->ends_on->toDateString())->where('fin_goods_receipt_lines.accepted', true)
+            ->selectRaw('g.po_id as pid, coalesce(sum(fin_goods_receipt_lines.quantity * pl.unit_cost), 0) as v')->groupBy('g.po_id')->pluck('v', 'pid');
+        $invoicedBy = InvoiceLine::withoutGlobalScopes()->join('fin_invoices as i', 'i.id', '=', 'fin_invoice_lines.invoice_id')->whereIn('i.po_id', $pos->pluck('id'))
+            ->whereIn('i.status', ['approved', 'scheduled', 'paid'])->whereIn('i.period_id', $periodIds)->selectRaw('i.po_id as pid, sum(fin_invoice_lines.amount) as v')->groupBy('i.po_id')->pluck('v', 'pid');
         foreach ($pos as $po) {
             $key = "po:{$po->id}:{$p->id}";
-            if (Accrual::withoutGlobalScopes()->where('organization_id', $orgId)->where('dedupe_key', $key)->exists()) {
+            if ($taken->has($key)) {
                 continue;
             }
-            $received = (string) (GoodsReceiptLine::withoutGlobalScopes()->join('fin_goods_receipts as g', 'g.id', '=', 'fin_goods_receipt_lines.grn_id')
-                ->join('fin_purchase_order_lines as pl', 'pl.id', '=', 'fin_goods_receipt_lines.po_line_id')->where('g.po_id', $po->id)
-                ->whereDate('g.received_on', '<=', $p->ends_on->toDateString())->where('fin_goods_receipt_lines.accepted', true)
-                ->selectRaw('coalesce(sum(fin_goods_receipt_lines.quantity * pl.unit_cost), 0) as v')->value('v') ?? '0');
-            $invoiced = (string) InvoiceLine::withoutGlobalScopes()->whereIn('invoice_id', Invoice::withoutGlobalScopes()->where('po_id', $po->id)
-                ->whereIn('status', ['approved', 'scheduled', 'paid'])->whereIn('period_id', $periodIds)->select('id'))->sum('amount');
+            $received = (string) ($receivedBy[$po->id] ?? '0');
+            $invoiced = (string) ($invoicedBy[$po->id] ?? '0');
             $net = $this->phasing->round(bcsub($received, $invoiced, 8), 2);
             if (bccomp($net, '0', 2) <= 0) {
                 continue;
             }
             $t = $this->tax->compute($net, (string) $po->currency, $po->taxType, null);
+            $cl = $this->closingBase($orgId, $t['total_amount'], (string) $po->currency, (string) $po->fx_rate, $p);
             $out[] = [
                 'po_id' => (int) $po->id, 'po' => $po, 'dedupe_key' => $key, 'amount' => $t['total_amount'], 'tax_amount' => $t['tax_amount'],
-                'base_amount' => $this->phasing->round(bcmul($t['total_amount'], (string) $po->fx_rate, 8), 2),
+                'base_amount' => $cl['base_amount'], 'fx_rate' => $cl['fx_rate'],
             ];
         }
 
@@ -206,16 +216,38 @@ class AccrualService
         $amounts = $this->phasing->spread((string) $i->total_amount, $weights, 2);
         $bases = $this->phasing->spread((string) $i->base_total_amount, $weights, 2);
         $out = [];
+        $lineByFy = [];
         foreach ($periods->values() as $n => $p) {
             $key = "pre:{$i->id}:".($n + 1);
+            // P7-8: a release in a later fiscal year posts to the successor of the invoice's line in that year's baseline, else unbudgeted.
+            $fyId = (int) $p->fiscal_year_id;
+            $releaseLine = $i->budget_line_id;
+            if ($i->budget_line_id && $fyId !== (int) $i->fiscal_year_id) {
+                $lineByFy[$fyId] ??= $this->successorLine((int) $i->organization_id, (int) $i->budget_line_id, $fyId);
+                $releaseLine = $lineByFy[$fyId];
+            }
             $out[] = Accrual::withoutGlobalScopes()->where('organization_id', $i->organization_id)->where('dedupe_key', $key)->first() ?? $this->create([
-                'type' => 'prepayment_release', 'source' => 'prepayment', 'dedupe_key' => $key, 'period_id' => $p->id, 'invoice_id' => $i->id, 'budget_line_id' => $i->budget_line_id,
+                'type' => 'prepayment_release', 'source' => 'prepayment', 'dedupe_key' => $key, 'period_id' => $p->id, 'invoice_id' => $i->id, 'budget_line_id' => $releaseLine,
                 'gl_account_id' => $i->gl_account_id, 'cost_centre_id' => $i->cost_centre_id, 'description' => 'Prepayment release '.($n + 1)."/{$months}: {$i->invoice_code}",
                 'currency' => $i->currency, 'fx_rate' => (string) $i->fx_rate, 'amount' => $amounts[$n], 'base_amount' => $bases[$n],
             ], $p, $by);
         }
 
         return $out;
+    }
+
+    /** The line of the fiscal year's baseline budget that descends from $lineId through source_line_id, or null. */
+    private function successorLine(int $orgId, int $lineId, int $fyId): ?int
+    {
+        $budgetIds = Budget::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fyId)->where('status', 'baseline')->pluck('id');
+        $ledger = app(BudgetLedger::class);
+        foreach (BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('budget_id', $budgetIds)->orderBy('id')->get() as $cand) {
+            if (in_array($lineId, $ledger->lineageIds($cand), true)) {
+                return (int) $cand->id;
+            }
+        }
+
+        return null;
     }
 
     public function cancel(Accrual $a, User $by, string $reason = ''): Accrual
@@ -239,6 +271,25 @@ class AccrualService
         $this->audit($a, $by, 'proposed', "Accrual #{$a->id} proposed for {$p->name}");
 
         return $a;
+    }
+
+    /** P7-7: a received-not-invoiced liability is translated at the period-end closing rate (spot fallback), as IAS 21.23 requires. @return array{fx_rate:string,base_amount:string} */
+    private function closingBase(int $orgId, string $amount, string $currency, string $poRate, Period $p): array
+    {
+        $base = $this->settings->baseCurrency($orgId);
+        if ($currency === $base) {
+            return ['fx_rate' => $poRate, 'base_amount' => $this->phasing->round(bcmul($amount, $poRate, 8), 2)];
+        }
+        foreach (['closing', 'spot'] as $type) {
+            try {
+                $c = $this->fx->convert($orgId, $amount, $currency, $p->ends_on, $type);
+
+                return ['fx_rate' => $c['fx_rate'], 'base_amount' => $c['base_amount']];
+            } catch (ValidationException) {
+            }
+        }
+
+        return ['fx_rate' => $poRate, 'base_amount' => $this->phasing->round(bcmul($amount, $poRate, 8), 2)];
     }
 
     private function nextPeriod(Period $p): ?Period

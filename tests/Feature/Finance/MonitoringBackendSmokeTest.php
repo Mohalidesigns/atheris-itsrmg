@@ -162,6 +162,9 @@ class MonitoringBackendSmokeTest extends TestCase
         $this->assertNotEmpty($c->errors()['checklist']);
         app(VarianceService::class)->evaluate($p1, $this->fin);
         $this->explainAll($p1);
+        foreach (VarianceNote::withoutGlobalScopes()->where('period_id', $p1->id)->where('status', 'explained')->get() as $__n) {
+            app(VarianceService::class)->acknowledge($__n, $this->fin); // P7-5
+        }
         $closed = $svc->close($p1, $this->fin);
         $this->assertSame('closed', $closed->status);
         $this->assertSame('closed', Period::withoutGlobalScopes()->find($p1->id)->status);

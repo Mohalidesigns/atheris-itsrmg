@@ -10,6 +10,7 @@ use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\DoaBandService;
 use App\Services\Finance\FinanceClock;
 use App\Services\Finance\FinanceSettings;
+use App\Services\Finance\RequestMemo;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -161,7 +162,7 @@ class Invoice extends Model
 
     private function expenseRequesterId(): ?int
     {
-        return $this->expense_request_id ? ExpenseRequest::withoutGlobalScopes()->whereKey($this->expense_request_id)->value('requested_by_id') : null;
+        return $this->expense_request_id ? RequestMemo::remember("reqBy:{$this->expense_request_id}", fn () => ExpenseRequest::withoutGlobalScopes()->whereKey($this->expense_request_id)->value('requested_by_id')) : null;
     }
 
     public function approvalBaseAmount(): string

@@ -27,7 +27,8 @@ class CloudAnomalyController extends Controller
         $v = $request->validate(['status' => ['nullable', 'in:'.implode(',', CloudAnomaly::STATUSES)], 'account_id' => ['nullable', 'integer'], 'scope' => ['nullable', 'in:'.implode(',', CloudAnomaly::SCOPES)]]);
 
         $visible = CloudAnomaly::withoutGlobalScopes()->where('organization_id', $orgId)->when($ccIds !== null, function ($q) use ($ccIds, $user) {
-            $accounts = CloudAccount::withoutGlobalScopes()->whereIn('default_cost_centre_id', $ccIds ?: [0])->orWhere('owner_id', $user->id);
+            $accounts = CloudAccount::withoutGlobalScopes()->where('organization_id', $user->organization_id)
+                ->where(fn ($b) => $b->whereIn('default_cost_centre_id', $ccIds ?: [0])->orWhere('owner_id', $user->id));
             $q->whereIn('cloud_account_id', $accounts->select('id'));
         });
         $counts = array_fill_keys(CloudAnomaly::STATUSES, 0);
@@ -55,6 +56,7 @@ class CloudAnomalyController extends Controller
     public function acknowledge(AnomalyActionRequest $request, CloudAnomaly $cloudAnomaly)
     {
         Gate::authorize('handleAnomaly', $cloudAnomaly);
+        $this->assertInScope($request, $cloudAnomaly);
         $this->anomalies->acknowledge($cloudAnomaly, $request->validated('note'), $request->user());
 
         return back()->with('success', 'Anomaly acknowledged.');
@@ -63,6 +65,7 @@ class CloudAnomalyController extends Controller
     public function resolve(AnomalyActionRequest $request, CloudAnomaly $cloudAnomaly)
     {
         Gate::authorize('handleAnomaly', $cloudAnomaly);
+        $this->assertInScope($request, $cloudAnomaly);
         $this->anomalies->resolve($cloudAnomaly, (string) $request->validated('note'), $request->user());
 
         return back()->with('success', 'Anomaly resolved.');
@@ -71,8 +74,22 @@ class CloudAnomalyController extends Controller
     public function dismiss(AnomalyActionRequest $request, CloudAnomaly $cloudAnomaly)
     {
         Gate::authorize('handleAnomaly', $cloudAnomaly);
+        $this->assertInScope($request, $cloudAnomaly);
         $this->anomalies->dismiss($cloudAnomaly, (string) $request->validated('note'), $request->user());
 
         return back()->with('success', 'Anomaly dismissed as a false positive.');
+    }
+
+    /** A scoped viewer cannot act on an anomaly outside the cost centres or accounts they can see (same predicate as the index). */
+    private function assertInScope(Request $request, CloudAnomaly $x): void
+    {
+        $user = $request->user();
+        $ccIds = $this->visibleCcIds($user);
+        if ($ccIds === null) {
+            return;
+        }
+        $ok = CloudAccount::withoutGlobalScopes()->where('organization_id', $user->organization_id)->whereKey($x->cloud_account_id)
+            ->where(fn ($b) => $b->whereIn('default_cost_centre_id', $ccIds ?: [0])->orWhere('owner_id', $user->id))->exists();
+        abort_unless($ok, 403, 'That anomaly is outside your cost centres.');
     }
 }

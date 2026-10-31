@@ -237,16 +237,21 @@ class FinanceExpenseDemoSeeder extends Seeder
                 return;
             }
             $done = false;
+            $last = null;
             foreach ($users as $u) {
                 try {
                     $approve($u);
                     $done = true;
                     break;
-                } catch (Throwable) {
+                } catch (Throwable $e) {
+                    $last = $e;
+
                     continue;
                 }
             }
             if (! $done) {
+                $this->warnSwallowed("advance {$process} at ".($pending ?? 'final'), $last);
+
                 return;
             }
         }
@@ -254,15 +259,26 @@ class FinanceExpenseDemoSeeder extends Seeder
 
     private function first(array $users, callable $fn): mixed
     {
+        $last = null;
         foreach ($users as $u) {
             try {
                 return $fn($u);
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                $last = $e;
+
                 continue;
             }
         }
+        $last && $this->warnSwallowed('first decider', $last);
 
         return null;
+    }
+
+    /** Nobody on the list could act: say so rather than silently dropping the demo record (P7). */
+    private function warnSwallowed(string $label, ?Throwable $e): void
+    {
+        $msg = $e instanceof ValidationException ? json_encode($e->errors()) : $e?->getMessage();
+        $this->command?->warn("  [{$this->prefix}] finance expense seed: no user could act on {$label}: ".mb_substr((string) $msg, 0, 220));
     }
 
     /* ------------------------------------------------------------------ the bank */

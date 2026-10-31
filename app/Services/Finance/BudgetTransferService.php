@@ -152,6 +152,7 @@ class BudgetTransferService
                     $this->fail('A period of this transfer is no longer open; raise a new transfer.');
                 }
             }
+            $toLine && $this->assertSameEntity($from, $toLine);
             $t->forceFill(['from_line_id' => $from->id, 'to_line_id' => $toLine?->id]);
             $this->assertAvailable($from, $t, (string) $t->base_amount);
 
@@ -246,6 +247,8 @@ class BudgetTransferService
             $this->fail('A transfer needs a different target line, or two different periods of the same line.', 'to_line_id');
         }
 
+        $to && $this->assertSameEntity($from, $to);
+
         $amount = (string) ($d['amount'] ?? '');
         if (! preg_match('/^\d{1,16}(\.\d{1,2})?$/', $amount) || bccomp($amount, '0', 2) <= 0) {
             $this->fail('The amount must be greater than 0 (base currency, up to 2 decimals).', 'amount');
@@ -263,6 +266,14 @@ class BudgetTransferService
 
         return ['fiscal_year_id' => $fy->id, 'from_line_id' => $from->id, 'to_line_id' => $to?->id, 'from_period_id' => $fromP?->id, 'to_period_id' => $toP?->id,
             'amount' => $amount, 'currency' => $this->settings->baseCurrency($orgId), 'base_amount' => $amount, 'reason' => trim((string) $d['reason'])] + $new;
+    }
+
+    /** A transfer between two group entities is an intercompany recharge, not a virement (P7-4). */
+    private function assertSameEntity(BudgetLine $from, BudgetLine $to): void
+    {
+        if ($from->legal_entity_id && $to->legal_entity_id && (int) $from->legal_entity_id !== (int) $to->legal_entity_id) {
+            $this->fail('Transfers between different legal entities are not allowed; raise an intercompany recharge instead.', 'to_line_id');
+        }
     }
 
     private function assertAvailable(BudgetLine $from, BudgetTransfer $t, string $amount, ?int $fyId = null): void

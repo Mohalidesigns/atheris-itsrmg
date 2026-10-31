@@ -176,13 +176,13 @@ class InvestmentBackendSmokeTest extends TestCase
     public function test_budget_line_accepts_investment_of_the_bank(): void // C134 / FIN-05.08
     {
         $svc = app(BudgetService::class);
-        $b = $svc->createVersion($this->openCycle(), $this->cc2, 'zero_based', $this->owner2);
-        $line = $svc->addLine($b, $this->lineData(['investment_id' => $this->inv->id]), $this->owner2);
+        $b = $svc->createVersion($this->openCycle(), $this->cc, 'zero_based', $this->owner); // the editor must see the investment's cost centre (P5-sec-L3)
+        $line = $svc->addLine($b, $this->lineData(['investment_id' => $this->inv->id]), $this->owner);
         $this->assertSame($this->inv->id, (int) $line->refresh()->investment_id);
 
         $other = Organization::factory()->create(['currency' => 'NGN']);
         $foreign = Investment::withoutGlobalScopes()->create(['organization_id' => $other->id, 'investment_code' => 'ZZZ-IVT-0001', 'title' => 'x', 'type' => 'project', 'rgt' => 'run', 'driver' => 'strategic']);
-        $this->assertRefused(fn () => $svc->addLine($b->refresh(), $this->lineData(['investment_id' => $foreign->id]), $this->owner2), 'investment_id');
+        $this->assertRefused(fn () => $svc->addLine($b->refresh(), $this->lineData(['investment_id' => $foreign->id]), $this->owner), 'investment_id');
     }
 
     public function test_links_in_org_only(): void // FIN-05.08

@@ -252,7 +252,7 @@ class FinanceWorkflowStudioTest extends TestCase
     {
         $this->fixture();
         $svc = app(BudgetService::class);
-        $headOfIt = $this->approver('Head of IT Governance');
+        $headOfIt = $this->approver('Head of IT');
         $cio = $this->approver('Chief Information Officer');
         $md = $this->approver('Managing Director/CEO');
 
@@ -312,13 +312,13 @@ class FinanceWorkflowStudioTest extends TestCase
         $this->actingAs($ownerHead)->post(route('finance.budgets.approve', $b))->assertForbidden();
 
         // an owner who also holds the approver role is still refused as owner
-        $ownerApprover = $this->userWith('Finance Approver', ['job_title' => 'Head of IT Operations']);
+        $ownerApprover = $this->userWith('Finance Approver', ['job_title' => 'Head of IT']);
         $b->forceFill(['owner_id' => $ownerApprover->id])->save();
         $this->assertRefused(fn () => $svc->approve($b->refresh(), $ownerApprover), 'approval', 'own this record');
 
         // the initiator cannot approve what they submitted
         $b2 = $this->draft($this->cc2, '2000000.00');
-        $initiator = $this->approver('Head of IT Governance');
+        $initiator = $this->approver('Head of IT');
         $svc->submit($b2, $initiator);
         $this->assertRefused(fn () => $svc->approve($b2->refresh(), $initiator), 'approval', 'started this approval');
 

@@ -143,7 +143,8 @@ class AllocationService
         $from = $this->date($d['effective_from'] ?? null, 'effective_from')->toDateString();
         $to = ! empty($d['effective_to']) ? $this->date($d['effective_to'], 'effective_to')->toDateString() : null;
         ($to === null || $to >= $from) || $this->fail('The rule cannot end before it starts.', 'effective_to');
-        $this->assertNotInFrozenPast($orgId, $from, $to);
+        // Only dates that change are checked, so a rule that started before the open floor can still be edited (P6-M6).
+        $this->assertNotInFrozenPast($orgId, $self && $self->effective_from->toDateString() === $from ? null : $from, $self && $self->effective_to?->toDateString() === $to ? null : $to);
         $journal = isset($d['journal_cost_centre_code']) ? trim((string) $d['journal_cost_centre_code']) : '';
         mb_strlen($journal) <= 32 || $this->fail('The journal cost-centre code is too long (max 32 characters).', 'journal_cost_centre_code');
         $active = array_key_exists('is_active', $d) ? (bool) $d['is_active'] : true;
@@ -269,8 +270,8 @@ class AllocationService
     {
         $day = $p->starts_on->toDateString();
 
-        return Allocation::withoutGlobalScopes()->where('organization_id', $orgId)->where('target_type', $targetType)->where('is_active', true)->whereNull('deleted_at')
-            ->whereDate('effective_from', '<=', $day)->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', $day))->orderBy('id')->get();
+        return RequestMemo::remember("rulesFor:{$orgId}:{$targetType}:{$day}", fn () => Allocation::withoutGlobalScopes()->where('organization_id', $orgId)->where('target_type', $targetType)->where('is_active', true)->whereNull('deleted_at')
+            ->whereDate('effective_from', '<=', $day)->where(fn ($q) => $q->whereNull('effective_to')->orWhereDate('effective_to', '>=', $day))->orderBy('id')->get());
     }
 
     /* ---------------------------------------------------------------- ledger and pools */
@@ -689,13 +690,37 @@ class AllocationService
      * @param  list<int>|null  $ccIds
      * @return array{rows:list<array<string,mixed>>,pools:array<string,mixed>,it_total:string,stored:bool}
      */
+    public function primeOutcomes(int $orgId, string $targetType, iterable $periodIds, array $amountTypes): void
+    {
+        $periodIds = collect($periodIds)->map(fn ($i) => (int) $i)->unique()->values();
+        if ($periodIds->isEmpty()) {
+            return;
+        }
+        $runs = AllocationRun::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('period_id', $periodIds)->whereIn('amount_type', $amountTypes)->where('target_type', $targetType)->get();
+        $results = $runs->isEmpty() ? collect() : AllocationResult::withoutGlobalScopes()->whereIn('run_id', $runs->pluck('id'))->get()->groupBy('run_id');
+        $byKey = $runs->keyBy(fn ($r) => "{$r->period_id}:{$r->amount_type}");
+        foreach ($periodIds as $pid) {
+            foreach ($amountTypes as $type) {
+                $run = $byKey["{$pid}:{$type}"] ?? null;
+                RequestMemo::remember("run:{$orgId}:{$pid}:{$type}:{$targetType}", fn () => $run);
+                $run && RequestMemo::remember("results:{$run->id}", fn () => $results->get($run->id, collect()));
+            }
+        }
+    }
+
     public function outcome(int $orgId, string $targetType, Period $p, string $amountType, ?array $ccIds): array
     {
+        return RequestMemo::remember('outcome:'.md5(json_encode([$orgId, $targetType, $p->id, $amountType, $ccIds])), fn () => $this->resolveOutcome($orgId, $targetType, $p, $amountType, $ccIds));
+    }
+
+    /** @return array{rows:list<array<string,mixed>>,pools:array<string,mixed>,it_total:string,stored:bool} */
+    private function resolveOutcome(int $orgId, string $targetType, Period $p, string $amountType, ?array $ccIds): array
+    {
         $e = null;
-        $run = $ccIds === null ? AllocationRun::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $p->id)->where('amount_type', $amountType)->where('target_type', $targetType)->first() : null;
+        $run = $ccIds === null ? RequestMemo::remember("run:{$orgId}:{$p->id}:{$amountType}:{$targetType}", fn () => AllocationRun::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $p->id)->where('amount_type', $amountType)->where('target_type', $targetType)->first()) : null;
         $pools = $this->pools($orgId, $targetType, $p, $amountType, $ccIds);
         if ($run) {
-            $rows = AllocationResult::withoutGlobalScopes()->where('run_id', $run->id)->get()->map(fn ($r) => [
+            $rows = RequestMemo::remember("results:{$run->id}", fn () => AllocationResult::withoutGlobalScopes()->where('run_id', $run->id)->get())->map(fn ($r) => [
                 'allocation_id' => (int) $r->allocation_id, 'cost_pool_id' => $r->cost_pool_id ? (int) $r->cost_pool_id : null, 'pool_base_amount' => (string) $r->pool_base_amount,
                 'share_pct' => (string) $r->share_pct, 'base_amount' => (string) $r->base_amount,
             ])->all();

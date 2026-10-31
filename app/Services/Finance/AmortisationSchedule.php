@@ -59,6 +59,7 @@ class AmortisationSchedule
             $sl = self::round2(bcdiv($room, (string) $remaining, 8));
             if ($method === 'straight_line') {
                 $charge = $remaining === 1 ? $room : $fixed;
+                bccomp($charge, $room, 2) > 0 && $charge = $room;
             } else {
                 $db = self::round2(bcdiv(bcmul($nbv, $rate, 8), '1200', 8));
                 $charge = $remaining === 1 ? $room : (bccomp($sl, $db, 2) >= 0 ? $sl : $db);

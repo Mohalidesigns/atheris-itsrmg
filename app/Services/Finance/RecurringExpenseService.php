@@ -15,10 +15,12 @@ use App\Models\Finance\RecurringExpense;
 use App\Models\Finance\TaxType;
 use App\Models\User;
 use App\Models\Vendor;
+use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\Concerns\LogsFinanceEvents;
 use App\Services\Finance\Concerns\ValidatesFinanceInput;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -43,6 +45,8 @@ class RecurringExpenseService
         array_key_exists((string) $get('frequency'), RecurringExpense::FREQUENCIES) || $this->fail('Pick a frequency.', 'frequency');
         in_array($get('auto_generate', 'expected_invoice'), RecurringExpense::AUTO_GENERATE, true) || $this->fail('Unknown generation mode.', 'auto_generate');
         $this->inBank(CostCentre::class, $orgId, $get('cost_centre_id'), 'cost_centre_id');
+        $visible = FinancePolicy::visibleCostCentreIds($by);
+        $visible !== null && ! in_array((int) $get('cost_centre_id'), $visible, true) && $this->fail('That cost centre is outside your scope.', 'cost_centre_id');
         foreach (['contract_id' => Contract::class, 'budget_line_id' => BudgetLine::class, 'vendor_id' => Vendor::class, 'category_id' => Category::class, 'gl_account_id' => GlAccount::class, 'tax_type_id' => TaxType::class] as $col => $class) {
             $get($col) && $this->inBank($class, $orgId, $get($col), $col);
         }
@@ -125,7 +129,10 @@ class RecurringExpenseService
             try {
                 $this->generate($r, $due) && $made++;
             } catch (ValidationException $e) {
-                report($e); // e.g. no FX rate: skip this date and carry on, the next run will not retry it
+                // e.g. no FX rate: keep next_due_on so the next run retries this date
+                $reason = implode(' ', Arr::flatten($e->errors())) ?: $e->getMessage();
+                $this->audit($r, null, 'generation_failed', "Recurring expense {$r->recurring_code} could not generate {$due->toDateString()}", ['reason' => $reason, 'due_on' => $due->toDateString()]);
+                break;
             }
             $r->forceFill(['last_generated_on' => $due->toDateString(), 'next_due_on' => $this->nextDue($r, $due)->toDateString()])->save();
         }

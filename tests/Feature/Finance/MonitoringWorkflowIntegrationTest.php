@@ -188,8 +188,8 @@ class MonitoringWorkflowIntegrationTest extends TestCase
         app(VarianceService::class)->evaluate($this->periodSeq(3), $this->fin);
         $codes = ['KRI-FIN-VAR', 'KRI-FIN-UNB', 'KRI-FIN-INV', 'KRI-FIN-NOT'];
         foreach ($codes as $code) {
-            Kri::withoutGlobalScopes()->create([
-                'organization_id' => $this->org->id, 'code' => $code, 'name' => $code, 'category' => 'financial', 'threshold_green' => 0, 'threshold_amber' => 5, 'threshold_red' => 20,
+            Kri::withoutGlobalScopes()->updateOrCreate(['organization_id' => $this->org->id, 'code' => $code], [
+                'name' => $code, 'category' => 'financial', 'threshold_green' => 0, 'threshold_amber' => 5, 'threshold_red' => 20,
                 'direction' => 'higher_worse', 'unit' => 'count', 'frequency' => 'monthly', 'source' => 'platform', 'owner_id' => $this->fin->id,
             ]);
         }

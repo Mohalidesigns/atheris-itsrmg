@@ -48,7 +48,7 @@ class FinanceMetrics
     }
 
     /** @param array<int,int>|null $costCentreIds @return array<string,mixed> */
-    public function summary(int $orgId, ?int $fiscalYearId = null, ?array $costCentreIds = null): array
+    public function summary(int $orgId, ?int $fiscalYearId = null, ?array $costCentreIds = null, ?int $viewerId = null): array
     {
         $fy = $this->fy($orgId, $fiscalYearId);
         $z = '0.00';
@@ -63,7 +63,11 @@ class FinanceMetrics
         if (CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->exists()) {
             $out['cloud_mtd'] = app(CloudCostService::class)->mtd($orgId, $costCentreIds)['mtd'];
             $out['cloud_anomalies_open'] = CloudAnomaly::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', CloudAnomaly::OPEN)
-                ->when($costCentreIds !== null, fn ($q) => $q->whereIn('cloud_account_id', CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('default_cost_centre_id', $costCentreIds ?: [0])->select('id')))->count();
+                ->when($costCentreIds !== null, function ($q) use ($orgId, $costCentreIds, $viewerId) { // the same predicate as the anomalies list: scoped cost centres or accounts the viewer owns
+                    $viewerId ??= auth()->id();
+                    $q->whereIn('cloud_account_id', CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)
+                        ->where(fn ($b) => $b->whereIn('default_cost_centre_id', $costCentreIds ?: [0])->when($viewerId, fn ($o) => $o->orWhere('owner_id', $viewerId)))->select('id'));
+                })->count();
         }
         $out['benefits_realised_pct'] = $inv['benefits_realised_pct'];
         if (! $fy) {
@@ -113,9 +117,10 @@ class FinanceMetrics
         if ($asOf) {
             $notes = VarianceNote::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $asOf->id)->where('is_breaching', true)
                 ->when($costCentreIds !== null, fn ($q) => $q->whereIn('cost_centre_id', $costCentreIds ?: [0]));
+            $bySeverity = $notes->selectRaw('severity, status, count(*) as c')->groupBy('severity', 'status')->get();
             $out['variances'] = [
-                'red' => (clone $notes)->where('severity', 'red')->count(), 'amber' => (clone $notes)->where('severity', 'amber')->count(),
-                'unexplained_red' => (clone $notes)->where('severity', 'red')->where('status', 'open')->count(),
+                'red' => (int) $bySeverity->where('severity', 'red')->sum('c'), 'amber' => (int) $bySeverity->where('severity', 'amber')->sum('c'),
+                'unexplained_red' => (int) $bySeverity->where('severity', 'red')->where('status', 'open')->sum('c'),
             ];
         }
         [$count, $amount] = $this->unbudgeted($orgId, $fy->id, $costCentreIds);
@@ -153,9 +158,22 @@ class FinanceMetrics
             ->when($ccIds !== null, fn ($w) => $w->whereIn('cost_centre_id', $ccIds ?: [0]));
         $today = FinanceClock::today();
 
+        // One conditional-count query for the five contract figures (same predicates as Contract::scopeLive/scopeDueWithin/scopePassed).
+        $live = ['sql' => 'fin_contracts.status in ('.implode(',', array_fill(0, count(Contract::LIVE), '?')).')', 'bind' => Contract::LIVE];
+        $due = function (int $days) use ($live, $today) {
+            [$from, $to] = [$today->toDateString(), $today->addDays($days)->toDateString()];
+
+            return ["({$live['sql']} and ((fin_contracts.ends_on between ? and ?) or (fin_contracts.notice_deadline_on between ? and ?)))", array_merge($live['bind'], [$from, $to, $from, $to])];
+        };
+        $notPassed = array_merge(['draft'], Contract::TERMINAL);
+        $d = $today->toDateString();
+        $passedSql = '(fin_contracts.status not in ('.implode(',', array_fill(0, count($notPassed), '?')).') and fin_contracts.decision is null and (fin_contracts.notice_deadline_on < ? or fin_contracts.ends_on < ?))';
+        $parts = [[$live['sql'], $live['bind']], $due(30), $due(60), $due(90), [$passedSql, array_merge($notPassed, [$d, $d])]];
+        $row = $q()->selectRaw(implode(', ', array_map(fn ($p, $i) => "sum(case when {$p[0]} then 1 else 0 end) as c{$i}", $parts, array_keys($parts))), array_merge(...array_column($parts, 1)))->first();
+
         return [
-            'contracts_active' => $q()->live()->count(), 'renewals_due_30' => $q()->dueWithin(30)->count(), 'renewals_due_60' => $q()->dueWithin(60)->count(),
-            'renewals_due_90' => $q()->dueWithin(90)->count(), 'contracts_passed' => $q()->passed($today)->count(), 'invoices_overdue' => $this->overdueInvoices($orgId, $ccIds),
+            'contracts_active' => (int) $row->c0, 'renewals_due_30' => (int) $row->c1, 'renewals_due_60' => (int) $row->c2,
+            'renewals_due_90' => (int) $row->c3, 'contracts_passed' => (int) $row->c4, 'invoices_overdue' => $this->overdueInvoices($orgId, $ccIds),
         ];
     }
 
@@ -221,7 +239,7 @@ class FinanceMetrics
             return [];
         }
         $notes = VarianceNote::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $asOf->id)->where('is_breaching', true)
-            ->when($costCentreIds !== null, fn ($q) => $q->whereIn('cost_centre_id', $costCentreIds ?: [0]))->with(['period', 'line', 'costCentre:id,code,name'])->get()
+            ->when($costCentreIds !== null, fn ($q) => $q->whereIn('cost_centre_id', $costCentreIds ?: [0]))->with(['period', 'line.budget' => fn ($q) => $q->withoutGlobalScopes(), 'costCentre:id,code,name'])->get()
             ->sortByDesc(fn ($x) => (float) ltrim((string) $x->variance_amount, '-'))->take($n)->values();
 
         return $notes->map(fn (VarianceNote $x) => [
@@ -238,25 +256,38 @@ class FinanceMetrics
         $rows = ApprovalRequest::withoutGlobalScopes()->where('organization_id', $viewer->organization_id)->where('status', 'pending')->where('process', 'like', 'finance.%')
             ->with(['steps', 'subject'])->latest('id')->limit(max(100, $limit * 10))->get();
         $gate = Gate::forUser($viewer);
-        $out = $rows->map(function (ApprovalRequest $r) use ($viewer, $gate) {
+        // "Mine" rows come first and need no policy check, so decide those first and only ask the (query-heavy) view policy
+        // for as many of the rest as the limit still needs: same rows, same order, far fewer queries.
+        $rows = $rows->map(function (ApprovalRequest $r) use ($viewer) {
             $step = $r->currentStep();
             $def = ApprovalProcesses::PROCESSES[$r->process] ?? [];
-            $params = isset($def['route']) ? (app('router')->getRoutes()->getByName($def['route'])?->parameterNames() ?? []) : [];
             $mine = $step && $this->engine->canDecide($step, $r, $r->subject, $viewer)
                 && ($viewer->can($def['permission'] ?? '') || (! empty($def['owner_stage_without_permission']) && $step->approver_type === 'owner'));
 
-            // Cost-centre scoping: only requests the viewer may open, may decide, or started themselves.
-            $visible = $mine || (int) $r->initiated_by === (int) $viewer->id || ($r->subject && $gate->allows('view', $r->subject));
-            if (! $visible) {
-                return null;
-            }
+            return [$r, $step, $def, (bool) $mine];
+        });
+        $shape = function (ApprovalRequest $r, $step, array $def, bool $mine) {
+            $params = isset($def['route']) ? (app('router')->getRoutes()->getByName($def['route'])?->parameterNames() ?? []) : [];
 
             return ['id' => $r->id, 'process' => $r->process, 'process_label' => $def['label'] ?? $r->process, 'subject' => $r->subject_label,
                 'url' => isset($def['route']) ? ($params ? route($def['route'], $r->subject_id, false) : route($def['route'], [], false)) : null,
-                'step' => $step?->name, 'due_at' => $step?->due_at?->toIso8601String(), 'mine' => (bool) $mine];
-        });
+                'step' => $step?->name, 'due_at' => $step?->due_at?->toIso8601String(), 'mine' => $mine];
+        };
+        $out = [];
+        foreach ($rows->filter(fn ($x) => $x[3]) as [$r, $step, $def, $mine]) {
+            $out[] = $shape($r, $step, $def, true);
+        }
+        foreach ($rows->reject(fn ($x) => $x[3]) as [$r, $step, $def, $mine]) {
+            if (count($out) >= $limit) {
+                break;
+            }
+            // Cost-centre scoping: only requests the viewer may open or started themselves.
+            if ((int) $r->initiated_by === (int) $viewer->id || ($r->subject && $gate->allows('view', $r->subject))) {
+                $out[] = $shape($r, $step, $def, false);
+            }
+        }
 
-        return $out->filter()->sortBy(fn ($r) => $r['mine'] ? 0 : 1)->take($limit)->values()->all();
+        return array_slice($out, 0, $limit);
     }
 
     /** @return array<string,mixed> the board-pack finance section (plan §7.1) */

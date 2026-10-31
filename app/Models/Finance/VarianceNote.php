@@ -84,7 +84,7 @@ class VarianceNote extends Model
     public function getLabelAttribute(): string
     {
         $line = $this->line;
-        $code = Budget::withoutGlobalScopes()->whereKey($line?->budget_id)->value('budget_code');
+        $code = $line?->relationLoaded('budget') ? $line->budget?->budget_code : Budget::withoutGlobalScopes()->whereKey($line?->budget_id)->value('budget_code');
 
         return trim("{$this->period?->name} · {$code} · {$line?->description}", ' ·');
     }

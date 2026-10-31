@@ -63,7 +63,8 @@ return [
     'transfers' => ['allow_capex_opex' => false],
     // Tables that hold money; the base currency is frozen once any has a row (P3+ append).
     'money_tables' => ['fin_budget_lines', 'fin_budget_transfers', 'fin_supplementary_requests', 'fin_contracts', 'fin_contract_renewals',
-        'fin_expense_requests', 'fin_purchase_orders', 'fin_invoices', 'fin_actuals', 'fin_recurring_expenses', 'fin_accruals', 'fin_cloud_cost_lines', 'fin_capitalisations'],
+        'fin_expense_requests', 'fin_purchase_orders', 'fin_invoices', 'fin_actuals', 'fin_recurring_expenses', 'fin_accruals', 'fin_cloud_cost_lines', 'fin_capitalisations',
+        'fin_budget_targets', 'fin_investments', 'fin_business_cases'],
     'workbook' => ['max_rows' => 2000, 'max_kb' => 4096],
     'approval_defaults' => [ // base-currency thresholds that FinancePolicySeeder maps onto each bank's bands
         'budget_md_ceo_from' => 250000000,
@@ -123,7 +124,7 @@ return [
         'gate_criteria' => [ // [key, label, auto]; auto keys are evaluated by StageGateService::criteria(); manual keys must be ticked
             'business_case' => [['sponsor_named', 'Sponsor named', true], ['manager_named', 'Manager named', true], ['cost_centre_set', 'Cost centre set', true], ['problem_agreed', 'Problem statement and options agreed with the sponsor', false]],
             'approved' => [['business_case_complete', 'Business case complete (costs, horizon, rate)', true], ['scored', 'All five criteria scored', true], ['risks_recorded', 'Risks recorded (summary or linked risk)', true], ['regulatory_reference', 'Regulatory reference (regulatory investments)', true], ['options_considered', 'Options considered and recommendation stated', false]],
-            'in_delivery' => [['funded', 'Funded: at least one baseline budget line tagged', true], ['start_date', 'Start date set', true], ['delivery_plan', 'Delivery plan and governance agreed', false]],
+            'in_delivery' => [['funded', 'Funded: tagged baseline budget lines cover the BAC', true], ['start_date', 'Start date set', true], ['delivery_plan', 'Delivery plan and governance agreed', false]],
             'delivered' => [['actual_end', 'Actual end date given', true], ['acceptance', 'User acceptance signed off', false], ['handover', 'Handed over to operations', false]],
             'benefits_tracking' => [['benefits_registered', 'At least one benefit with owner, target and due date', true], ['reviews_scheduled', 'Value reviews scheduled', true]],
             'closed' => [['reviews_done', 'No value review scheduled, due or overdue', true], ['benefits_final', 'Every benefit has a final status', true], ['lessons', 'Lessons learned recorded', false]],

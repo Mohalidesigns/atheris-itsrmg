@@ -5,6 +5,9 @@ namespace App\Services\Finance;
 use App\Events\Finance\PeriodCloseBlocked;
 use App\Models\Finance\Accrual;
 use App\Models\Finance\Actual;
+use App\Models\Finance\AllocationRun;
+use App\Models\Finance\Capitalisation;
+use App\Models\Finance\ChargebackRun;
 use App\Models\Finance\CloudAccount;
 use App\Models\Finance\CloudCostLine;
 use App\Models\Finance\FiscalYear;
@@ -103,10 +106,14 @@ class PeriodCloseService
         $notes = VarianceNote::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $p->id)->where('is_breaching', true)->where('status', 'open');
         $red = (clone $notes)->where('severity', 'red')->count();
         $amber = (clone $notes)->where('severity', 'amber')->count();
+        // P7-5: a red variance must be acknowledged (a second pair of eyes), not just explained.
+        $redUnack = VarianceNote::withoutGlobalScopes()->where('organization_id', $orgId)->where('period_id', $p->id)->where('is_breaching', true)
+            ->where('severity', 'red')->whereIn('status', ['open', 'explained'])->count();
         $amberFails = (bool) config('finance.monitoring.explain_amber_at_close');
-        $vs = $red > 0 || ($amberFails && $amber > 0) ? 'fail' : ($amber > 0 ? 'warn' : 'pass');
-        $items[] = $item('variances_explained', 'Variances are explained', $vs, $red + $amber,
-            $vs === 'pass' ? 'No unexplained variance.' : "{$red} red and {$amber} amber variance(s) await an explanation.",
+        $vs = $redUnack > 0 || ($amberFails && $amber > 0) ? 'fail' : ($amber > 0 || $red > 0 ? 'warn' : 'pass');
+        $detail = $redUnack > 0 ? "{$redUnack} red variance(s) await acknowledgement".($amber > 0 ? " and {$amber} amber variance(s) await an explanation" : '').'.' : "{$red} red and {$amber} amber variance(s) await an explanation.";
+        $items[] = $item('variances_explained', 'Variances are explained', $vs, $redUnack + $amber,
+            $vs === 'pass' ? 'No unexplained variance.' : $detail,
             route('finance.monitor.variances', ['fiscal_year_id' => $p->fiscal_year_id, 'period_id' => $p->id, 'needs_explanation' => 1], false));
 
         $accounts = CloudAccount::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_active', true)->whereNull('deleted_at')->orderBy('id')->get(['id', 'name']);
@@ -192,8 +199,12 @@ class PeriodCloseService
         $this->assertLatestNonOpen($p);
         PeriodClose::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('period_id', $p->id)->where('reopen_status', 'submitted')->exists()
             && $this->fail('This period already has a re-open request awaiting approval.');
+        // P7-6: an exported chargeback journal must be voided first, or the ledger and the journal diverge silently.
+        ChargebackRun::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('period_id', $p->id)->where('status', '!=', 'voided')->exists()
+            && $this->fail('This period has an exported chargeback journal; void it before asking for a re-open.', 'reason');
+        $capWarnings = $this->capitalisationWarnings($p);
 
-        return DB::transaction(function () use ($p, $reason, $by) {
+        return DB::transaction(function () use ($p, $reason, $by, $capWarnings) {
             $c = $this->latestClose($p);
             $c = $c && in_array($c->status, ['closed', 'locked'], true) ? $c : $this->legacyClose($p, $p->status, $by);
             $c->forceFill([
@@ -202,7 +213,7 @@ class PeriodCloseService
             ])->save();
             $request = $this->approvals->start(self::PROCESS, $c, $by);
             $request && $c->forceFill(['reopen_approval_request_id' => $request->id])->save();
-            $this->audit($c, $by, 'reopen_requested', "Re-open of {$p->name} requested", ['reason' => $reason]);
+            $this->audit($c, $by, 'reopen_requested', "Re-open of {$p->name} requested", ['reason' => $reason] + ($capWarnings ? ['warning' => 'Approved capitalisations consumed actuals of this period', 'capitalisations' => $capWarnings] : []));
 
             return $c->refresh();
         });
@@ -230,6 +241,7 @@ class PeriodCloseService
             $this->assertLatestNonOpen($p);
             FiscalYear::withoutGlobalScopes()->whereKey($p->fiscal_year_id)->value('status') === 'closed' && $this->fail('The fiscal year is closed; its periods cannot be re-opened.');
             $p->forceFill(['status' => 'open', 'closed_at' => null, 'closed_by_id' => null, 'locked_at' => null, 'locked_by_id' => null])->save();
+            AllocationRun::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('period_id', $p->id)->update(['is_frozen' => false]);
             $c->forceFill(['reopen_status' => 'approved', 'status' => 'reopened', 'reopen_decided_by_id' => $by->id, 'reopen_decided_at' => now(), 'reopened_at' => now()])->save();
             $this->approvals->finalised(self::PROCESS, $c, $by, $note);
             $this->audit($c, $by, 'reopen_approved', "{$p->name} re-opened");
@@ -266,6 +278,21 @@ class PeriodCloseService
         });
 
         return $c->refresh();
+    }
+
+    /** Codes of approved capitalisations that consumed actuals posted in the period (a warning on the re-open request, P7-6). @return list<string> */
+    public function capitalisationWarnings(Period $p): array
+    {
+        $inPeriod = Actual::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('period_id', $p->id)->pluck('id')->map(fn ($v) => (int) $v)->all();
+        if ($inPeriod === []) {
+            return [];
+        }
+        $out = [];
+        foreach (Capitalisation::withoutGlobalScopes()->where('organization_id', $p->organization_id)->where('status', 'capitalised')->whereNotNull('consumed_actual_ids')->get() as $cap) {
+            array_intersect(array_map('intval', (array) $cap->consumed_actual_ids), $inPeriod) !== [] && $out[] = (string) ($cap->capitalisation_code ?? $cap->id);
+        }
+
+        return $out;
     }
 
     /** Only the bank's latest non-open period can be re-opened: nothing later (including the next fiscal year) may be closed or locked. */

@@ -257,7 +257,7 @@ class ContractBackendSmokeTest extends TestCase
             $wf->stages()->create(['organization_id' => $this->org->id, 'sequence' => $seq, 'name' => $name, 'approver_type' => 'job_title', 'approver_ref' => $title,
                 'sla_hours' => 72, 'min_approvals' => 1, 'is_active' => true, 'condition_field' => $field, 'condition_values' => $values]);
         }
-        $head = User::factory()->create(['organization_id' => $this->org->id, 'job_title' => 'Head of IT Governance']);
+        $head = User::factory()->create(['organization_id' => $this->org->id, 'job_title' => 'Head of IT']);
         $head->assignRole('Finance Approver');
         $svc = app(RenewalService::class);
         $submit = function (string $value) use ($svc) {

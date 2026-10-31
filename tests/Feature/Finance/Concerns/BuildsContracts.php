@@ -37,7 +37,7 @@ trait BuildsContracts
         Carbon::setTestNow($now);
         $this->bootBudgets();
         $this->procurement = $this->userWith('Procurement Officer');
-        $this->head = $this->userWith('Finance Approver', ['job_title' => 'Head of IT Governance']);
+        $this->head = $this->userWith('Finance Approver', ['job_title' => 'Head of IT']);
         $this->cio = $this->userWith('Finance Approver', ['job_title' => 'Chief Information Officer']);
         $this->stranger = $this->userWith('IT Budget Owner');
         $this->vendor = Vendor::factory()->create(['organization_id' => $this->org->id, 'name' => 'Infosys Finacle']);

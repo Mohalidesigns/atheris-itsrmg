@@ -37,6 +37,7 @@ class RecurringExpenseController extends Controller
         $items = $base()->when($filters['q'], fn ($q, $v) => $q->whereRaw('lower(title) like ?', ['%'.mb_strtolower($v).'%']))
             ->when($filters['active'] !== null, fn ($q) => $q->where('is_active', $filters['active']))->when($filters['frequency'], fn ($q, $v) => $q->where('frequency', $v))
             ->when($filters['due'], fn ($q, $v) => $q->whereDate('next_due_on', '<=', $today->addDays($v)->toDateString()))->orderBy('next_due_on')->orderBy('id')->get();
+        $items->loadMissing(['contract:id,contract_code,title', 'vendor:id,name', 'budgetLine', 'costCentre:id,code,name', 'category', 'glAccount', 'taxType']); // one query per relation, not per row
         $this->primeLines($items->pluck('budget_line_id'));
         $all = $base()->get();
         $active = $all->where('is_active', true);

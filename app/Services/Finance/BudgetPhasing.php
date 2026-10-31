@@ -64,6 +64,11 @@ class BudgetPhasing
                 break;
             }
             $share = $this->round(bcdiv(bcmul($total, (string) $w, 18), $sum, 18), $dp);
+            if (bccomp($total, '0', $dp) >= 0) { // rounding up must never overshoot what is left (P1 L2)
+                $left = bcsub($total, $running, $dp);
+                bccomp($share, $left, $dp) > 0 && $share = $left;
+                bccomp($share, '0', $dp) < 0 && $share = bcadd('0', '0', $dp);
+            }
             $out[] = $share;
             $running = bcadd($running, $share, $dp);
         }

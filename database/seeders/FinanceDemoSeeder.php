@@ -351,7 +351,7 @@ class FinanceDemoSeeder extends Seeder
         $specs = [
             // No IT Steering Committee role: stage 3 would let the MD pre-empt it and then be barred from the board stage (one stage per person).
             'md' => ['Executive', 'Managing Director/CEO', ['Finance Approver']],
-            'headofit' => ['Technology', 'Head of IT Governance', ['Finance Approver']],
+            'headofit' => ['Technology', 'Head of IT', ['Finance Approver']],
         ];
         foreach ($specs as $key => [$dept, $title, $roles]) {
             $user = User::updateOrCreate(['email' => "{$key}@{$bank['domain']}"], [
@@ -531,7 +531,7 @@ class FinanceDemoSeeder extends Seeder
 
     private function line(string $ccCode, string $needle): BudgetLine
     {
-        return BudgetLine::withoutGlobalScopes()->where('budget_id', $this->baselineBudget($ccCode)->id)->where('description', 'ilike', "%{$needle}%")->orderBy('line_no')->firstOrFail();
+        return BudgetLine::withoutGlobalScopes()->where('budget_id', $this->baselineBudget($ccCode)->id)->whereRaw('lower(description) like ?', ['%'.mb_strtolower($needle).'%'])->orderBy('line_no')->firstOrFail();
     }
 
     private function openPeriods()

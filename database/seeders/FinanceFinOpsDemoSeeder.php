@@ -656,13 +656,13 @@ class FinanceFinOpsDemoSeeder extends Seeder
         $expense = ExpenseRequest::withoutGlobalScopes()->where('organization_id', $this->orgId)->where('request_code', 'EXP-0009')->where('is_capex', true)->first();
         $expense && $this->billCapexExpense($expense);
 
-        $afuJune = '2026-06-30';
+        $afuJune = $this->today->subMonthsNoOverflow(4)->endOfMonth()->toDateString(); // relative to now, never a literal year
         $afuSep = $this->today->subDays(19)->toDateString();
         $afuToday = $this->today->toDateString();
 
         // (a) a closed investment, capitalised with catch-up lines and a created asset (First Bank)
         if ($closedInv) {
-            $c = $this->prepare($closedInv, ['title' => 'Branch SD-WAN rollout: 750 branches in service', 'standard' => 'ias_16', 'available_for_use_on' => '2026-08-31', 'useful_life_months' => 84,
+            $c = $this->prepare($closedInv, ['title' => 'Branch SD-WAN rollout: 750 branches in service', 'standard' => 'ias_16', 'available_for_use_on' => $this->today->subMonthsNoOverflow(2)->endOfMonth()->toDateString(), 'useful_life_months' => 84,
                 'asset_name' => 'Branch SD-WAN estate (750 branches)', 'asset_type' => 'network', 'asset_owner_id' => $closedInv->manager_id], 0.45, 0);
             $c && $this->decideAll($c);
         }

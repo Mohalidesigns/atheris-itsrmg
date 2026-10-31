@@ -35,12 +35,13 @@ class PurchaseOrderController extends Controller
             ->orderByDesc('id')->limit(500)->get();
         $all = $visible()->get(['id', 'status', 'base_total_amount', 'fx_rate']);
         $open = $all->whereIn('status', PurchaseOrder::OPEN);
+        $this->primePoSums($orders->concat($open));
 
         return $this->renderExpenses('Finance/PurchaseOrders/Index', [
             'filters' => $filters, 'orders' => $orders->map(fn ($po) => $this->poRow($po))->values(),
             'summary' => [
                 'open' => $all->where('status', 'open')->count(), 'partially_received' => $all->where('status', 'partially_received')->count(), 'received' => $all->where('status', 'received')->count(),
-                'closed' => $all->where('status', 'closed')->count(), 'open_commitment_base' => $open->reduce(fn ($c, $po) => bcadd($c, $this->availability->remainingForPo($po), 2), '0.00'),
+                'closed' => $all->where('status', 'closed')->count(), 'open_commitment_base' => $open->reduce(fn ($c, $po) => bcadd($c, $this->availability->remainingForPo($po, $this->poSums($po)), 2), '0.00'),
             ],
             'options' => ['statuses' => collect(PurchaseOrder::STATUSES)->map(fn ($s) => ['value' => $s, 'label' => ucwords(str_replace('_', ' ', $s))])->values()],
             'vendors' => $this->vendorOptions(), 'costCentres' => $this->costCentreOptions($user),

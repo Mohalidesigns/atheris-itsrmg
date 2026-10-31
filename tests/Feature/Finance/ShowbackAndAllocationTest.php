@@ -3,7 +3,6 @@
 namespace Tests\Feature\Finance;
 
 use App\Models\Ea\BusinessService;
-use App\Models\Finance\Actual;
 use App\Models\Finance\Allocation;
 use App\Models\Finance\AllocationRun;
 use App\Models\Finance\ChargebackRun;
@@ -15,6 +14,7 @@ use App\Services\Finance\ChargebackService;
 use App\Services\Finance\FinanceSettings;
 use App\Services\Finance\ShowbackService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\Feature\Finance\Concerns\BuildsFinOps;
 use Tests\TestCase;
 
@@ -124,7 +124,7 @@ class ShowbackAndAllocationTest extends TestCase
         $this->assertSame('1000.00', array_reduce($weights, fn ($c, $v) => bcadd($c, $v, 2), '0.00'));
     }
 
-    public function test_the_statement_reconciles_to_the_it_total_and_the_ledger(): void // FIN-03.12
+    public function test_the_statement_reconciles_to_the_it_total_and_the_ledger(): void // FIN-03.12, FIN-04 (P7 WP-D, P6-M1: an independent sum, not the statement's own figures)
     {
         $p1 = $this->periodSeq(1);
         $this->makeAllocation(['name' => 'ops-ret', 'target_ref' => 'RET', 'percentage' => '40']);
@@ -132,7 +132,17 @@ class ShowbackAndAllocationTest extends TestCase
         $this->postActual($this->monLines[0], $p1, '800000.00');
         $this->postActual($this->poolLines['CP-LAB'], $p1, '200000.00');
         $this->postActual($this->monLines[1], $p1, '50000.00', ['budget_line_id' => null, 'match_status' => 'unbudgeted']); // spend the budget did not foresee is still IT spend
+        $this->makeCloudAccount();
+        $this->ingest($this->cloudRows($p1->starts_on->toDateString(), 3, ['Amazon EC2'], ['CostCentre' => $this->ccChild->code], 100.0));
+        $this->closePeriodDirectly($p1); // closed: the figures are frozen, so the comparison is against a stable ledger
         $this->alloc->run($this->org->id, $this->fy->id, [$p1->id], ['budget', 'actual'], $this->fin);
+
+        // Independent totals straight from the tables, never through the services under test.
+        $ledger = bcadd((string) DB::table('fin_actuals')->where('organization_id', $this->org->id)->where('period_id', $p1->id)->sum('base_amount'), '0', 2);
+        $cloud = bcadd((string) DB::table('fin_cloud_cost_lines')->where('organization_id', $this->org->id)->whereDate('usage_date', '>=', $p1->starts_on->toDateString())
+            ->whereDate('usage_date', '<=', $p1->ends_on->toDateString())->sum('base_cost'), '0', 2);
+        $this->assertSame('1050000.00', $ledger);
+        $this->assertSame('450000.00', $cloud); // 3 days x 100 USD x 1,500
 
         foreach (['budget', 'actual'] as $basis) {
             $s = app(ShowbackService::class)->statement($this->org->id, 'business_unit', $this->fy->id, $p1->id, $p1->id, $basis, null, $this->fin);
@@ -141,9 +151,9 @@ class ShowbackAndAllocationTest extends TestCase
             $this->assertSame(bcadd($s['totals']['total'], $s['totals']['retained'], 2), bcadd($s['totals']['it_total'], '0', 2), 'rows plus retained equal the IT total');
         }
         $actual = app(ShowbackService::class)->statement($this->org->id, 'business_unit', $this->fy->id, $p1->id, $p1->id, 'actual', null, $this->fin);
-        $ledger = bcadd((string) Actual::query()->where('period_id', $p1->id)->sum('base_amount'), '0', 2);
-        $this->assertSame('1050000.00', $ledger);
-        $this->assertSame($ledger, bcadd($actual['totals']['it_total'], '0', 2), 'the statement ties to the BvA ledger total, unbudgeted spend included');
+        $this->assertSame($ledger, bcadd($actual['totals']['it_total'], '0', 2), 'the statement ties to the independent ledger sum, unbudgeted spend included');
+        $memo = app(ShowbackService::class)->cloudMemo($this->org->id, 'cost_centre', $p1->id, $p1->id, null);
+        $this->assertSame($cloud, array_reduce($memo, fn ($c, $r) => bcadd($c, $r['cost'], 2), '0.00'), 'the cloud memo ties to the independent cloud-line sum');
     }
 
     public function test_a_closed_period_is_computed_once_and_frozen_and_the_past_is_protected(): void // FIN-02.12, P6-8

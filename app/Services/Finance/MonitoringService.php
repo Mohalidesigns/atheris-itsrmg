@@ -9,12 +9,9 @@ use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetLinePeriod;
 use App\Models\Finance\Category;
 use App\Models\Finance\CostCentre;
-use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\GlAccount;
-use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
-use App\Models\Finance\PurchaseOrder;
 use App\Models\LegalEntity;
 use App\Models\User;
 use App\Models\Vendor;
@@ -54,6 +51,11 @@ class MonitoringService
     /** The fiscal year a request means: the given one, else the bank's current, else its latest open one. */
     public function resolveFiscalYear(int $orgId, ?int $id): ?FiscalYear
     {
+        return RequestMemo::remember("fy:{$orgId}:".($id ?: 'current'), fn () => $this->lookupFiscalYear($orgId, $id));
+    }
+
+    private function lookupFiscalYear(int $orgId, ?int $id): ?FiscalYear
+    {
         $q = FiscalYear::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at');
         if ($id) {
             return (clone $q)->find($id);
@@ -67,7 +69,7 @@ class MonitoringService
     /** @return Collection<int, Period> id => period, in sequence (the adjustment period last) */
     public function periodsOf(int $orgId, int $fiscalYearId): Collection
     {
-        return Period::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fiscalYearId)->orderBy('sequence')->get()->keyBy('id');
+        return RequestMemo::remember("periodsOf:{$orgId}:{$fiscalYearId}", fn () => Period::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fiscalYearId)->orderBy('sequence')->get()->keyBy('id'));
     }
 
     /** The last regular period that ended before today (plan P4-7). */
@@ -75,8 +77,8 @@ class MonitoringService
     {
         $d = ($today ?? FinanceClock::today())->toDateString();
 
-        return Period::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fiscalYearId)->where('is_adjustment', false)
-            ->whereDate('ends_on', '<', $d)->orderByDesc('sequence')->first();
+        return RequestMemo::remember("asOf:{$orgId}:{$fiscalYearId}:{$d}", fn () => Period::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fiscalYearId)->where('is_adjustment', false)
+            ->whereDate('ends_on', '<', $d)->orderByDesc('sequence')->first());
     }
 
     /**
@@ -87,6 +89,11 @@ class MonitoringService
      * @return Collection<int, BudgetLine>
      */
     public function baselineLines(int $orgId, int $fiscalYearId, ?array $costCentreIds = null, array $filters = []): Collection
+    {
+        return RequestMemo::remember('baseline:'.md5(json_encode([$orgId, $fiscalYearId, $costCentreIds, $filters])), fn () => $this->loadBaselineLines($orgId, $fiscalYearId, $costCentreIds, $filters));
+    }
+
+    private function loadBaselineLines(int $orgId, int $fiscalYearId, ?array $costCentreIds, array $filters): Collection
     {
         $budgets = Budget::withoutGlobalScopes()->where('organization_id', $orgId)->where('fiscal_year_id', $fiscalYearId)->where('status', 'baseline')->whereNull('deleted_at')->select('id');
         $q = BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('budget_id', $budgets);
@@ -135,9 +142,7 @@ class MonitoringService
      */
     public function lineage(int $orgId, Collection $lines): array
     {
-        $sources = BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->whereNotNull('source_line_id')->pluck('source_line_id', 'id');
-        $budgetFy = Budget::withoutGlobalScopes()->where('organization_id', $orgId)->pluck('fiscal_year_id', 'id');
-        $lineFy = BudgetLine::withoutGlobalScopes()->where('organization_id', $orgId)->pluck('budget_id', 'id')->map(fn ($b) => $budgetFy[$b] ?? null);
+        ['sources' => $sources, 'lineFy' => $lineFy] = BudgetLedger::lineageMaps($orgId);
         $out = [];
         foreach ($lines as $l) {
             $ids = [(int) $l->id];
@@ -163,6 +168,12 @@ class MonitoringService
         if ($lines->isEmpty()) {
             return [];
         }
+
+        return RequestMemo::remember('figures:'.md5(json_encode([$lines->pluck('id')->all(), $fiscalYearId, $fromSeq, $toSeq])), fn () => $this->computeLineFigures($lines, $fiscalYearId, $fromSeq, $toSeq));
+    }
+
+    private function computeLineFigures(Collection $lines, int $fiscalYearId, ?int $fromSeq, ?int $toSeq): array
+    {
         $orgId = (int) $lines->first()->organization_id;
         $periods = $this->periodsOf($orgId, $fiscalYearId);
         $lineIds = $lines->pluck('id')->map(fn ($i) => (int) $i)->all();
@@ -281,6 +292,7 @@ class MonitoringService
         $toSeq = $to?->sequence ?? 99;
         $rangePeriods = $periods->filter(fn ($p) => $p->sequence >= $fromSeq && $p->sequence <= $toSeq);
         $today = FinanceClock::today()->toDateString();
+        $endedIds = $rangePeriods->filter(fn ($p) => $p->ends_on->toDateString() < $today)->keys()->map(fn ($k) => (int) $k)->all();
 
         $visible = FinancePolicy::visibleCostCentreIds($viewer);
         $dimFilters = array_filter(Arr::only($f, ['cost_centre_id', 'tower_id', 'cost_pool_id', 'category_id', 'gl_account_id', 'legal_entity_id', 'vendor_id', 'rgt', 'capex']), fn ($v) => $v !== null && $v !== '');
@@ -312,7 +324,7 @@ class MonitoringService
             }
             $rows[$key] = $row;
         }
-        $rows = array_values(array_map(fn ($r) => $this->finish($r, $thresholds), $rows));
+        $rows = array_values(array_map(fn ($r) => $this->finish($r, $thresholds, true, $endedIds), $rows));
         usort($rows, fn ($a, $b) => strcmp((string) $a['label'], (string) $b['label']));
 
         $unallocated = null;
@@ -348,7 +360,7 @@ class MonitoringService
         foreach ($rangePeriods as $pid => $p) {
             $totals['by_period'][$pid] ??= ['budget' => '0.00', 'actual' => '0.00'];
         }
-        $totals = $this->finish($totals, $thresholds);
+        $totals = $this->finish($totals, $thresholds, true, $endedIds);
 
         return [
             'filters' => $f, 'breadcrumbs' => $this->breadcrumbs($orgId, $f), 'thresholds' => $this->thresholdsOut($thresholds), 'fiscal_year' => $fy,
@@ -381,7 +393,7 @@ class MonitoringService
     }
 
     /** @param array<string,mixed> $row @param array<string,string> $thresholds */
-    private function finish(array $row, array $thresholds, bool $classify = true): array
+    private function finish(array $row, array $thresholds, bool $classify = true, ?array $endedIds = null): array
     {
         $t = $row['line_thresholds'] ?? $thresholds;
         unset($row['line_thresholds']);
@@ -389,6 +401,20 @@ class MonitoringService
         $row['variance'] = $c['variance'];
         $row['variance_pct'] = $c['pct'];
         $row['severity'] = $classify ? $c['severity'] : null;
+        if ($classify && $endedIds !== null) {
+            // P4-M1: severity weighs budget and actuals through the last ended period only; future periods show amounts without a verdict.
+            $b = '0.00';
+            $a = '0.00';
+            $any = false;
+            foreach ($row['by_period'] as $pid => $cell) {
+                if (in_array((int) $pid, $endedIds, true)) {
+                    $any = true;
+                    $b = bcadd($b, $cell['budget'], 2);
+                    $a = bcadd($a, $cell['actual'], 2);
+                }
+            }
+            $row['severity'] = $any ? VarianceService::classify($b, $a, $t['amber_pct'], $t['red_pct'], $t['abs_floor'])['severity'] : null;
+        }
         foreach ($row['by_period'] as $pid => $cell) {
             $row['by_period'][$pid] = ['budget' => $cell['budget'], 'actual' => $cell['actual'], 'variance' => bcsub($cell['actual'], $cell['budget'], 2)];
         }
@@ -543,22 +569,9 @@ class MonitoringService
 
         $commitments = [];
         $committed = '0.00';
-        $requests = ExpenseRequest::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('budget_line_id', $lineage)->where('status', 'approved')->get(['id', 'request_code', 'title', 'base_total_amount']);
-        $invoiced = $requests->isEmpty() ? collect() : Invoice::withoutGlobalScopes()->whereIn('expense_request_id', $requests->pluck('id'))->whereNull('po_id')->whereIn('status', ['approved', 'scheduled', 'paid'])
-            ->selectRaw('expense_request_id, sum(base_total_amount) as t')->groupBy('expense_request_id')->pluck('t', 'expense_request_id');
-        foreach ($requests as $r) {
-            $left = bcsub((string) $r->base_total_amount, (string) ($invoiced[$r->id] ?? '0'), 2);
-            if (bccomp($left, '0', 2) > 0) {
-                $commitments[] = ['type' => 'expense', 'code' => $r->request_code, 'title' => $r->title, 'remaining_base' => $left, 'href' => route('finance.expenses.show', $r->id, false)];
-                $committed = bcadd($committed, $left, 2);
-            }
-        }
-        foreach (PurchaseOrder::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('budget_line_id', $lineage)->whereIn('status', PurchaseOrder::OPEN)->get() as $po) {
-            $left = $this->availability->remainingForPo($po);
-            if (bccomp($left, '0', 2) > 0) {
-                $commitments[] = ['type' => 'po', 'code' => $po->po_code, 'title' => (string) ($po->expenseRequest?->title ?? $po->po_code), 'remaining_base' => $left, 'href' => route('finance.purchase-orders.show', $po->id, false)];
-                $committed = bcadd($committed, $left, 2);
-            }
+        foreach ($this->availability->commitmentItems($lineage) as $it) {
+            $commitments[] = ['type' => $it['type'], 'code' => $it['code'], 'title' => $it['title'], 'remaining_base' => $it['remaining_base'], 'href' => $it['href']];
+            $committed = bcadd($committed, $it['remaining_base'], 2);
         }
 
         return [

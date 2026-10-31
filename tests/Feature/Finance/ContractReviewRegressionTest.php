@@ -112,7 +112,7 @@ class ContractReviewRegressionTest extends TestCase
         $this->assertEqualsCanonicalizing([$this->procurement->id, $this->head->id, $this->owner->id], $ctx['sod_excluded_ids']);
         $this->refuses(fn () => $svc->approve($b, $this->head), 'approval', 'segregation');
 
-        $opener = $this->userWith('Finance Approver', ['job_title' => 'Head of IT Operations']);
+        $opener = $this->userWith('Finance Approver', ['job_title' => 'Head of IT']);
         $c = $svc->open($this->contract(['title' => 'Third']), $opener);
         $svc->recommend($c, $this->recommendation(), $this->procurement);
         $svc->submit($c, $this->procurement);

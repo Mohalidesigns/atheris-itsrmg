@@ -195,9 +195,11 @@ trait PresentsContracts
     /** @return array<int,array<string,mixed>> */
     protected function eventsPayload(Contract $c, ?array $types = null): array
     {
+        $can = request()->user()->can('view it-finance-amounts');
+
         return ContractEvent::query()->where('contract_id', $c->id)->when($types, fn ($q) => $q->whereIn('type', $types))->with('user:id,name')
             ->orderByDesc('occurred_at')->orderByDesc('id')->limit(200)->get()
-            ->map(fn (ContractEvent $e) => ['id' => $e->id, 'type' => $e->type, 'label' => $this->eventLabel($e->type), 'payload' => $e->payload ?? [],
+            ->map(fn (ContractEvent $e) => ['id' => $e->id, 'type' => $e->type, 'label' => $this->eventLabel($e->type), 'payload' => $can ? ($e->payload ?? []) : [],
                 'user' => $this->userMini($e->user), 'occurred_at' => $e->occurred_at?->toIso8601String()])->values()->all();
     }
 

@@ -10,6 +10,7 @@ use App\Models\Finance\Invoice;
 use App\Models\Finance\Period;
 use App\Models\Finance\PeriodClose;
 use App\Models\Finance\TaxType;
+use App\Models\Finance\VarianceNote;
 use App\Models\User;
 use App\Services\Finance\AccrualService;
 use App\Services\Finance\FinancePolicySeeder;
@@ -116,6 +117,13 @@ class PeriodCloseTest extends TestCase
         $this->assertSame('fail', $this->item($this->svc()->checklist($p3), 'variances_explained')['status']);
 
         $this->assertSame(1, $this->explainAll($p3));
+        // P7-5: explained is not enough for a red note; a second person must acknowledge it.
+        $item = $this->item($this->svc()->checklist($p3), 'variances_explained');
+        $this->assertSame('fail', $item['status']);
+        $this->assertStringContainsString('1 red variance(s) await acknowledgement', $item['detail']);
+        foreach (VarianceNote::withoutGlobalScopes()->where('period_id', $p3->id)->where('status', 'explained')->get() as $note) {
+            app(VarianceService::class)->acknowledge($note, $this->fin);
+        }
         $this->assertSame('pass', $this->item($this->svc()->checklist($p3), 'variances_explained')['status']);
         $this->svc()->close($p3, $this->fin);
         $this->assertSame('closed', $this->stateOf($p3));

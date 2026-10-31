@@ -272,7 +272,10 @@ class FinanceInvestmentDemoSeeder extends Seeder
             return;
         }
         $allocated = $lineIds ? (float) $fin->allocated($lineIds) : 0.0;
-        $cost = $s['cost'] ?? max(5000000, (int) (round($allocated * ($s['f'] ?? 1.2) / 1000000) * 1000000));
+        // The funded gate needs the tagged lines to cover BAC (P5-M4), so the cost never exceeds what the tagged lines hold.
+        $cost = $s['cost'] ?? ($lineIds
+            ? max(1000000, (int) (floor($allocated * min((float) ($s['f'] ?? 1.2), 0.99) / 1000000) * 1000000))
+            : max(5000000, (int) (round($allocated * ($s['f'] ?? 1.2) / 1000000) * 1000000)));
 
         if (isset($s['scores']) && ! $this->step("{$key} score", fn () => app(InvestmentScoring::class)->score($inv->refresh(), array_combine(Investment::CRITERIA, $s['scores']), $by))) {
             return;

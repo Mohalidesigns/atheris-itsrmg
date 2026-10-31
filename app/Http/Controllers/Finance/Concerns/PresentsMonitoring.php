@@ -21,7 +21,7 @@ trait PresentsMonitoring
         'budget', 'committed', 'actual', 'available', 'forecast', 'eac', 'eac_floor', 'eac_remaining_budget', 'eac_run_rate', 'baseline', 'variance', 'variance_pct', 'period_variance',
         'budget_ytd', 'actual_ytd', 'variance_ytd', 'budget_total', 'forecast_fy', 'forecast_variance_pct', 'unbudgeted_amount', 'actual_unallocated', 'burn_monthly', 'monthly', 'months_remaining',
         'exhaustion_on', 'amount', 'base_amount', 'remaining_base', 'ledger_actual', 'matrix_actual', 'difference', 'cumulative_budget', 'cumulative_actual', 'abs_floor',
-        'capex', 'opex', 'run', 'grow', 'transform', 'cloud_mtd', 'budget_amount', 'actual_amount', 'variance_amount', 'eac_total',
+        'capex', 'opex', 'run', 'grow', 'transform', 'cloud_mtd', 'bac', 'ac', 'ev', 'cv', 'vac', 'budget_amount', 'actual_amount', 'variance_amount', 'eac_total',
     ];
 
     private const MON_MONEY_LISTS = ['by_period'];

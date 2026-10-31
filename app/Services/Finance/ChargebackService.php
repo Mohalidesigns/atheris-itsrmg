@@ -132,7 +132,7 @@ class ChargebackService
             return $empty('There is nothing to charge back in this period.');
         }
 
-        return ['lines' => $lines, 'total_debit' => $dr, 'total_credit' => $cr, 'blocked_reason' => bccomp($dr, $cr, 2) === 0 ? null : "The journal does not balance (debits {$dr}, credits {$cr})."];
+        return ['lines' => $lines, 'total_debit' => $dr, 'total_credit' => $cr, 'blocked_reason' => bccomp($dr, $cr, 2) === 0 ? null : 'The journal does not balance; review the allocation results of this period.'];
     }
 
     public function export(int $orgId, int $periodId, string $targetType, User $by): ChargebackRun

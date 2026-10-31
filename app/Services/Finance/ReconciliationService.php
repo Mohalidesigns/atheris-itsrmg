@@ -124,18 +124,45 @@ class ReconciliationService
         return array_slice($out, 0, $limit);
     }
 
-    /** The invoice actual a GL reference duplicates (plan P3-12): an invoice code, vendor invoice number or PO code already posted from an invoice. */
-    public function duplicateOf(int $orgId, ?string $reference): ?Actual
+    /**
+     * The invoice actual a GL row duplicates (plan P3-12, P7-9): the key is (reference, vendor when mapped, base amount, posted date)
+     * against approved invoice postings. Without an amount and date only the reference is compared (legacy callers).
+     */
+    public function duplicateOf(int $orgId, ?string $reference, ?string $baseAmount = null, ?string $postedOn = null, ?int $vendorId = null): ?Actual
+    {
+        foreach ($this->referenceMatches($orgId, $reference) as $a) {
+            if ($baseAmount === null && $postedOn === null) {
+                return $a;
+            }
+            $sameAmount = $baseAmount === null || bccomp((string) $a->base_amount, $baseAmount, 2) === 0;
+            $sameDate = $postedOn === null || $a->posted_on->toDateString() === $postedOn;
+            $sameVendor = ! $vendorId || ! $a->vendor_id || (int) $a->vendor_id === (int) $vendorId;
+            if ($sameAmount && $sameDate && $sameVendor) {
+                return $a;
+            }
+        }
+
+        return null;
+    }
+
+    /** A reference that matches an approved invoice posting but not its amount or date: flagged, never excluded (P7-9). */
+    public function possibleDuplicateOf(int $orgId, ?string $reference): ?Actual
+    {
+        return $this->referenceMatches($orgId, $reference)->first();
+    }
+
+    /** @return Collection<int, Actual> */
+    private function referenceMatches(int $orgId, ?string $reference): Collection
     {
         $ref = trim((string) $reference);
         if ($ref === '') {
-            return null;
+            return collect();
         }
         $invoiceIds = Invoice::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('status', ['approved', 'scheduled', 'paid'])
             ->where(fn ($q) => $q->where('invoice_code', $ref)->orWhere('vendor_invoice_no', $ref)
                 ->orWhereIn('po_id', PurchaseOrder::withoutGlobalScopes()->where('organization_id', $orgId)->where('po_code', $ref)->select('id')))->pluck('id');
 
-        return $invoiceIds->isEmpty() ? null : Actual::withoutGlobalScopes()->where('organization_id', $orgId)->where('source', 'invoice')->whereIn('invoice_id', $invoiceIds)->orderBy('id')->first();
+        return $invoiceIds->isEmpty() ? collect() : Actual::withoutGlobalScopes()->where('organization_id', $orgId)->where('source', 'invoice')->whereIn('invoice_id', $invoiceIds)->orderBy('id')->get();
     }
 
     public function saveRule(array $data, User $by, ?MatchRule $rule = null): MatchRule

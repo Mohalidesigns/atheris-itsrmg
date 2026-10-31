@@ -108,17 +108,17 @@ class BusinessCaseService
         $this->audit($bc, $by, 'approved', "Business case v{$bc->version_no} approved");
     }
 
-    public function markRejected(BusinessCase $bc, string $reason): void
+    public function markRejected(BusinessCase $bc, string $reason, ?User $by = null): void
     {
         $this->move($bc, 'reject');
         $bc->forceFill(['rejection_reason' => $reason])->save();
-        $this->audit($bc, null, 'rejected', "Business case v{$bc->version_no} rejected", ['reason' => $reason]);
+        $this->audit($bc, $by, 'rejected', "Business case v{$bc->version_no} rejected", ['reason' => $reason]);
     }
 
-    public function markWithdrawn(BusinessCase $bc): void
+    public function markWithdrawn(BusinessCase $bc, ?User $by = null): void
     {
         $this->move($bc, 'withdraw');
-        $this->audit($bc, null, 'withdrawn', "Business case v{$bc->version_no} withdrawn to draft");
+        $this->audit($bc, $by, 'withdrawn', "Business case v{$bc->version_no} withdrawn to draft");
     }
 
     private function move(BusinessCase $bc, string $action): void

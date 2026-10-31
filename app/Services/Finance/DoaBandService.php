@@ -26,6 +26,12 @@ class DoaBandService
     public function active(int $orgId, ?CarbonInterface $on = null): DoaBandVersion
     {
         $on ??= now();
+
+        return RequestMemo::remember("doa:{$orgId}:{$on->toDateString()}", fn () => $this->resolveActive($orgId, $on));
+    }
+
+    private function resolveActive(int $orgId, CarbonInterface $on): DoaBandVersion
+    {
         $q = fn () => DoaBandVersion::withoutGlobalScopes()->where('organization_id', $orgId)->where('status', 'active');
         $found = $q()->whereDate('effective_from', '<=', $on->toDateString())->orderByDesc('effective_from')->orderByDesc('version_no')->first()
             ?? $q()->orderBy('effective_from')->orderBy('version_no')->first();
@@ -170,8 +176,12 @@ class DoaBandService
     {
         $n = 0;
         foreach (DoaBandVersion::withoutGlobalScopes()->where('status', 'scheduled')->whereDate('effective_from', '<=', today()->toDateString())->orderBy('id')->get() as $v) {
-            $this->activate($v);
-            $n++;
+            try {
+                $this->activate($v);
+                $n++;
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         return $n;

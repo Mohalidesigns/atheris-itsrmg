@@ -7,8 +7,8 @@ use App\Http\Controllers\Finance\Concerns\PresentsBudgets;
 use App\Models\Finance\BudgetCycle;
 use App\Models\Finance\BudgetTarget;
 use App\Models\Finance\Category;
-use App\Models\Finance\CostCentre;
 use App\Models\LegalEntity;
+use App\Policies\Finance\FinancePolicy;
 use App\Services\Finance\BudgetCycleService;
 use App\Services\Finance\FinanceSettings;
 use Illuminate\Http\Request;
@@ -29,10 +29,13 @@ class BudgetTargetController extends Controller
         $cycle = $request->integer('cycle_id') ? $all->firstWhere('id', $request->integer('cycle_id')) : ($all->firstWhere('status', 'open') ?? $all->first());
 
         $rows = [];
+        $visible = FinancePolicy::visibleCostCentreIds($user); // null = bank-wide
         if ($cycle) {
             $usage = collect($this->cycles->targetUsage($cycle))->keyBy('id');
             $rows = BudgetTarget::query()->where('cycle_id', $cycle->id)->with(['costCentre:id,code,name', 'category:id,code,name,kind', 'legalEntity:id,code,name', 'setBy:id,name'])
-                ->orderBy('id')->get()->map(function (BudgetTarget $t) use ($usage) {
+                ->orderBy('id')->get()
+                ->filter(fn (BudgetTarget $t) => $visible === null || ($t->cost_centre_id !== null && in_array((int) $t->cost_centre_id, $visible, true)))
+                ->map(function (BudgetTarget $t) use ($usage) {
                     $u = $usage[$t->id];
 
                     return [
@@ -51,7 +54,7 @@ class BudgetTargetController extends Controller
             'cycle' => $cycle ? ['id' => $cycle->id, 'cycle_code' => $cycle->cycle_code, 'name' => $cycle->name] : null,
             'cycles' => $all->map(fn ($c) => ['id' => $c->id, 'cycle_code' => $c->cycle_code, 'name' => $c->name, 'type' => $c->type, 'status' => $c->status, 'fiscal_year_id' => $c->fiscal_year_id])->values(),
             'targets' => $rows,
-            'costCentres' => CostCentre::query()->where('is_active', true)->orderBy('code')->get(['id', 'code', 'name'])->map(fn ($c) => ['id' => $c->id, 'code' => $c->code, 'name' => $c->name])->values(),
+            'costCentres' => $this->visibleCostCentres($user),
             'categories' => Category::query()->whereIn('kind', ['cost_pool', 'tower'])->where('is_active', true)->orderBy('kind')->orderBy('code')->get()
                 ->map(fn ($c) => ['id' => $c->id, 'code' => $c->code, 'name' => $c->name, 'kind' => $c->kind])->values(),
             'legalEntities' => LegalEntity::query()->orderBy('code')->get(['id', 'code', 'name'])->map(fn ($e) => ['id' => $e->id, 'code' => $e->code, 'name' => $e->name])->values(),

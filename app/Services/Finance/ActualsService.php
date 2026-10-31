@@ -118,6 +118,18 @@ class ActualsService
         ], $by);
     }
 
+    /** The base-currency value of an import row at its posting date (null when no rate exists; post() then reports it). */
+    private function rowBase(int $orgId, array $attrs): ?string
+    {
+        try {
+            $on = CarbonImmutable::parse($attrs['posted_on']);
+
+            return $this->fx->convert($orgId, (string) $attrs['amount'], strtoupper((string) $attrs['currency']), $on->gt(FinanceClock::today()) ? FinanceClock::today() : $on, 'spot')['base_amount'];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     private function currentLineId(int $lineId): ?int
     {
         $line = BudgetLine::withoutGlobalScopes()->find($lineId);
@@ -163,11 +175,24 @@ class ActualsService
                 return $batch->refresh();
             }
             $matched = $unmatched = $accepted = $dups = 0;
+            $seen = [];
             foreach ($a['valid'] as $row) {
-                $dupOf = $this->recon->duplicateOf($orgId, $row['source_ref']);
+                $base = $this->rowBase($orgId, $row['attrs']);
+                $dupOf = $this->recon->duplicateOf($orgId, $row['source_ref'], $base, $row['attrs']['posted_on'], $row['attrs']['vendor_id'] ?? null);
+                $dupReason = 'invoice_posting';
+                $key = $row['source_ref'] ? implode('|', [$row['source_ref'], $row['attrs']['vendor_id'] ?? '', $base, $row['attrs']['posted_on']]) : null;
+                if (! $dupOf && $key && isset($seen[$key])) {
+                    $dupOf = $seen[$key];
+                    $dupReason = 'file_duplicate';
+                }
+                $possible = ! $dupOf && $this->recon->possibleDuplicateOf($orgId, $row['source_ref']);
                 $actual = $this->post($row['attrs'] + [
                     'source' => 'gl_import', 'source_ref' => $row['source_ref'], 'posting_key' => "gl:{$batch->id}:{$row['row']}", 'import_batch_id' => $batch->id,
-                ] + ($dupOf ? ['match_status' => 'duplicate', 'duplicate_of_id' => $dupOf->id, 'match_reason' => 'invoice_posting'] : []), $by);
+                ] + ($dupOf ? ['match_status' => 'duplicate', 'duplicate_of_id' => $dupOf->id, 'match_reason' => $dupReason] : []), $by);
+                $key && ! $dupOf && ($seen[$key] = $actual);
+                if ($possible && $actual->match_status !== 'duplicate') {
+                    $actual->forceFill(['match_reason' => 'possible_duplicate'])->save();
+                }
                 if ($actual->match_status === 'duplicate') {
                     $dups++;
                 } else {
@@ -418,7 +443,7 @@ class ActualsService
         foreach ($valid as $v) {
             $probe = new Actual;
             $probe->forceFill($v['attrs'] + ['organization_id' => $orgId, 'fiscal_year_id' => Period::withoutGlobalScopes()->whereKey($v['attrs']['period_id'])->value('fiscal_year_id'), 'source' => 'gl_import']);
-            $this->recon->duplicateOf($orgId, $v['source_ref']) ? null : ($this->recon->autoMatch($probe)['line'] ? $matched++ : $unmatched++);
+            $this->recon->duplicateOf($orgId, $v['source_ref'], $this->rowBase($orgId, $v['attrs']), $v['attrs']['posted_on'], $v['attrs']['vendor_id'] ?? null) ? null : ($this->recon->autoMatch($probe)['line'] ? $matched++ : $unmatched++);
         }
 
         return ['report' => [

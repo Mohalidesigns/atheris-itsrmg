@@ -17,7 +17,6 @@ use App\Services\Finance\CapitalisationService;
 use App\Services\Finance\FinanceApprovals;
 use App\Services\Finance\FinanceClock;
 use Illuminate\Http\Request;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Gate;
 use Spatie\Activitylog\Models\Activity;
 
@@ -39,23 +38,25 @@ class CapitalisationController extends Controller
             'search' => ['nullable', 'string', 'max:100'], 'source' => ['nullable', 'in:'.implode(',', Capitalisation::SOURCE_TYPES)], 'id' => ['nullable', 'integer'],
         ]);
 
-        $base = Capitalisation::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->with(['lines', 'asset:id,asset_id_code,name', 'investment:id,investment_code,title', 'expenseRequest:id,request_code,title']);
-        $all = (clone $base)->orderByDesc('id')->get();
-        if ($ccIds !== null) {
-            $all = $all->filter(fn (Capitalisation $c) => Gate::forUser($user)->allows('view', $c))->values();
-        }
+        $scope = fn () => Capitalisation::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')
+            ->when($ccIds !== null, function ($q) use ($orgId, $user) { // a scoped viewer: resolve the visible ids once (the policy mixes cost centre, investment and ownership rules)
+                $ids = Capitalisation::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->get()
+                    ->filter(fn (Capitalisation $c) => Gate::forUser($user)->allows('view', $c))->pluck('id')->all();
+                $q->whereIn('id', $ids ?: [0]);
+            });
         $needle = ! empty($v['search']) ? mb_strtolower($v['search']) : null;
-        $filtered = $all->filter(fn (Capitalisation $c) => (empty($v['status']) || $c->status === $v['status']) && (empty($v['source_type']) || $c->source_type === $v['source_type'])
-            && (! $needle || str_contains(mb_strtolower($c->capitalisation_code.' '.$c->title), $needle)))->values();
-        $perPage = 25;
-        $pageNo = max(1, (int) $request->query('page', 1));
-        $page = new LengthAwarePaginator($filtered->forPage($pageNo, $perPage)->map(fn (Capitalisation $c) => $this->capRow($c, $user))->values(), $filtered->count(), $perPage, $pageNo, ['path' => $request->url(), 'query' => $request->query()]);
+        $page = $scope()->with(['lines', 'asset:id,asset_id_code,name', 'investment:id,investment_code,title', 'expenseRequest:id,request_code,title'])
+            ->when(! empty($v['status']), fn ($q) => $q->where('status', $v['status']))->when(! empty($v['source_type']), fn ($q) => $q->where('source_type', $v['source_type']))
+            ->when($needle, fn ($q) => $q->where(fn ($b) => $b->whereRaw('lower(capitalisation_code) like ?', ["%{$needle}%"])->orWhereRaw('lower(title) like ?', ["%{$needle}%"])))
+            ->orderByDesc('id')->paginate(25)->withQueryString();
+        $page->setCollection($page->getCollection()->map(fn (Capitalisation $c) => $this->capRow($c, $user))->values());
         $payload = $page->toArray();
         $payload['meta'] = ['current_page' => $page->currentPage(), 'last_page' => $page->lastPage(), 'per_page' => $page->perPage(), 'total' => $page->total(), 'links' => $payload['links'] ?? []];
+        $statusCounts = $scope()->selectRaw('status, COUNT(*) as n')->groupBy('status')->pluck('n', 'status')->map(fn ($n) => (int) $n)->all();
 
         $today = FinanceClock::today();
         $fy = FiscalYear::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_current', true)->first();
-        $done = $all->where('status', 'capitalised');
+        $done = $scope()->where('status', 'capitalised')->with('lines')->get();
         $thisFy = '0.00';
         foreach ($done as $c) {
             foreach ($c->lines as $l) {
@@ -68,7 +69,7 @@ class CapitalisationController extends Controller
             'filters' => ['status' => $v['status'] ?? '', 'source_type' => $v['source_type'] ?? '', 'search' => $v['search'] ?? '', 'source' => $v['source'] ?? '', 'id' => $v['id'] ?? ''],
             'capitalisations' => $payload,
             'summary' => [
-                'by_status' => array_merge(array_fill_keys(Capitalisation::STATUSES, 0), $all->countBy('status')->all()),
+                'by_status' => array_merge(array_fill_keys(Capitalisation::STATUSES, 0), $statusCounts),
                 'capitalised_total' => $done->reduce(fn ($c, $x) => bcadd($c, (string) $x->amount, 2), '0.00'),
                 'nbv_total' => $done->reduce(fn ($c, $x) => bcadd($c, $x->nbvOn($today), 2), '0.00'), 'amortisation_this_fy' => $thisFy,
             ],
@@ -117,7 +118,7 @@ class CapitalisationController extends Controller
                     'uploaded_by' => $this->mini($d->creator), 'uploaded_at' => $d->created_at?->toIso8601String()])->values(),
             'activity' => Activity::query()->where('subject_type', Capitalisation::class)->where('subject_id', $c->id)->with('causer:id,name')->orderByDesc('id')->limit(100)->get()
                 ->map(fn ($a) => ['id' => $a->id, 'description' => $a->description, 'causer' => $a->causer ? ['id' => $a->causer->id, 'name' => $a->causer->name] : null, 'at' => $a->created_at?->toIso8601String(),
-                    'changes' => $a->event === 'updated' ? ($a->properties['attributes'] ?? null) : null])->values(),
+                    'changes' => $a->event === 'updated' && $user->can('view it-finance-amounts') ? ($a->properties['attributes'] ?? null) : null])->values(),
             'assets' => Asset::withoutGlobalScopes()->where('organization_id', $orgId)->whereNull('deleted_at')->orderBy('asset_id_code')->limit(500)->get(['id', 'asset_id_code', 'name'])
                 ->map(fn ($a) => ['id' => $a->id, 'code' => $a->asset_id_code, 'name' => $a->name])->values(),
             'users' => $this->userList($orgId), 'options' => $this->options(),

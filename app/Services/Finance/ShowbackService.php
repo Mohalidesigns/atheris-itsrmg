@@ -42,6 +42,7 @@ class ShowbackService
         $this->allocationsOf($orgId, $targetType)->each(function (Allocation $a) use (&$ruleTarget) {
             $ruleTarget[(int) $a->id] = $a->target_type === 'business_unit' ? 'business_unit:'.$a->target_ref : $a->target_type.':'.$a->target_id;
         });
+        $ccIds === null && $this->allocations->primeOutcomes($orgId, $targetType, collect($periods)->pluck('id'), array_values($bases));
         foreach ($periods as $p) {
             foreach ($bases as $b) {
                 $o = $this->allocations->outcome($orgId, $targetType, $p, $b, $ccIds);

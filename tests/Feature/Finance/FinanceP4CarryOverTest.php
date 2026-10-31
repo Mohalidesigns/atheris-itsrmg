@@ -82,8 +82,8 @@ class FinanceP4CarryOverTest extends TestCase
 
     private function kri(string $code, string $value = '18.5000'): Kri
     {
-        $k = Kri::withoutGlobalScopes()->create([
-            'organization_id' => $this->org->id, 'code' => $code, 'name' => $code.' name', 'category' => 'financial', 'threshold_green' => 5, 'threshold_amber' => 10, 'threshold_red' => 15,
+        $k = Kri::withoutGlobalScopes()->updateOrCreate(['organization_id' => $this->org->id, 'code' => $code], [
+            'name' => $code.' name', 'category' => 'financial', 'threshold_green' => 5, 'threshold_amber' => 10, 'threshold_red' => 15,
             'direction' => 'higher_worse', 'unit' => 'pct', 'frequency' => 'monthly', 'source' => 'platform', 'owner_id' => $this->fin->id,
         ]);
         $r = KriReading::withoutGlobalScopes()->create(['kri_id' => $k->id, 'period' => '2027-04', 'value' => $value, 'status' => 'red', 'recorded_at' => now()]);
@@ -156,8 +156,8 @@ class FinanceP4CarryOverTest extends TestCase
     public function test_masked_kri_breach_notes_and_issue_carry_no_amount(): void
     {
         $svc = app(KriService::class);
-        $make = fn (string $code) => Kri::withoutGlobalScopes()->create([
-            'organization_id' => $this->org->id, 'code' => $code, 'name' => $code.' name', 'category' => 'financial', 'threshold_green' => 5, 'threshold_amber' => 10, 'threshold_red' => 15,
+        $make = fn (string $code) => Kri::withoutGlobalScopes()->updateOrCreate(['organization_id' => $this->org->id, 'code' => $code], [
+            'name' => $code.' name', 'category' => 'financial', 'threshold_green' => 5, 'threshold_amber' => 10, 'threshold_red' => 15,
             'direction' => 'higher_worse', 'unit' => 'pct', 'frequency' => 'monthly', 'source' => 'manual', 'owner_id' => $this->fin->id,
         ]);
         $masked = $make('KRI-FIN-UNB');

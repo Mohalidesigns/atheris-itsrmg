@@ -76,11 +76,11 @@ class InvestmentFinancials
         $rows = Actual::withoutGlobalScopes()->whereIn('organization_id', $orgIds)->where('match_status', '!=', 'duplicate')
             ->where(function ($q) use ($invIds, $lineOwner) {
                 $q->whereIn('investment_id', $invIds);
-                $lineOwner && $q->orWhereIn('budget_line_id', array_keys($lineOwner));
+                $lineOwner && $q->orWhere(fn ($r) => $r->whereNull('investment_id')->whereIn('budget_line_id', array_keys($lineOwner)));
             })->get(['investment_id', 'budget_line_id', 'base_amount']);
         $ac = array_fill_keys($invIds, '0.00');
         foreach ($rows as $a) {
-            $targets = array_unique(array_filter(array_merge([$a->investment_id ? (int) $a->investment_id : null], $lineOwner[(int) $a->budget_line_id] ?? [])));
+            $targets = $a->investment_id ? [(int) $a->investment_id] : array_unique($lineOwner[(int) $a->budget_line_id] ?? []);
             foreach ($targets as $t) {
                 isset($ac[$t]) && $ac[$t] = bcadd($ac[$t], (string) $a->base_amount, 2);
             }
@@ -162,17 +162,19 @@ class InvestmentFinancials
     private function measures(Investment $i, string $ac): array
     {
         $bac = $i->bac === null ? null : bcadd((string) $i->bac, '0', 2);
-        $ev = $bac === null ? null : bcadd(bcdiv(bcmul($bac, (string) $i->percent_complete, 8), '100', 8), '0.005', 2);
+        $done = in_array($i->stage, ['delivered', 'benefits_tracking', 'closed'], true);
+        $ev = $bac === null ? null : ($done ? $bac : bcadd(bcdiv(bcmul($bac, (string) $i->percent_complete, 8), '100', 8), '0.005', 2));
         $cv = $ev === null ? null : bcsub($ev, $ac, 2);
+        $zeroEv = $ev !== null && bccomp($ev, '0', 2) === 0 && bccomp($ac, '0', 2) > 0;
         $cpi = $ev !== null && bccomp($ac, '0', 2) > 0 ? bcadd(bcdiv($ev, $ac, 6), '0', 4) : null;
         $manual = $i->eac !== null;
-        $eac = $manual ? bcadd((string) $i->eac, '0', 2) : ($bac === null ? null : ($cpi !== null && bccomp($cpi, '0', 4) > 0 ? bcadd(bcdiv($bac, $cpi, 6), '0.005', 2) : $bac));
+        $eac = $manual ? bcadd((string) $i->eac, '0', 2) : ($bac === null ? null : ($zeroEv ? bcadd($ac, bcsub($bac, $ev, 2), 2) : ($cpi !== null && bccomp($cpi, '0', 4) > 0 ? bcadd(bcdiv($bac, $cpi, 6), '0.005', 2) : $bac)));
         $vac = $bac !== null && $eac !== null ? bcsub($bac, $eac, 2) : null;
         $started = in_array($i->stage, ['in_delivery', 'delivered', 'benefits_tracking'], true);
 
         return [
             'bac' => $bac, 'ev' => $ev, 'cv' => $cv, 'cpi' => $cpi, 'eac' => $eac, 'eac_method' => $manual ? 'manual' : 'computed', 'vac' => $vac,
-            'health' => $started || $cpi !== null ? self::health($cpi, $i->is_late) : null,
+            'health' => $zeroEv ? 'off_track' : ($started || $cpi !== null ? self::health($cpi, $i->is_late) : null),
         ];
     }
 
@@ -182,7 +184,7 @@ class InvestmentFinancials
         return Actual::withoutGlobalScopes()->where('organization_id', $orgId)->where('match_status', '!=', 'duplicate')
             ->where(function ($q) use ($investmentId, $lineIds) {
                 $q->where('investment_id', $investmentId);
-                $lineIds && $q->orWhereIn('budget_line_id', $lineIds);
+                $lineIds && $q->orWhere(fn ($r) => $r->whereNull('investment_id')->whereIn('budget_line_id', $lineIds));
             });
     }
 

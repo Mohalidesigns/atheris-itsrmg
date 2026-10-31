@@ -6,6 +6,7 @@ use App\Models\Approvals\ApprovalRequest;
 use App\Models\Finance\Concerns\FinanceRecord;
 use App\Models\User;
 use App\Services\Finance\DoaBandService;
+use App\Services\Finance\RequestMemo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -79,7 +80,7 @@ class StageGate extends Model
 
     private function inv(): ?Investment
     {
-        return $this->relationLoaded('investment') && $this->investment ? $this->investment : Investment::withoutGlobalScopes()->find($this->investment_id);
+        return $this->relationLoaded('investment') && $this->investment ? $this->investment : RequestMemo::remember("inv:{$this->investment_id}", fn () => Investment::withoutGlobalScopes()->find($this->investment_id));
     }
 
     public function getRgtAttribute(): string

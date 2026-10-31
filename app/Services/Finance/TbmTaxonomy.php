@@ -74,11 +74,14 @@ final class TbmTaxonomy
     public static function seed(int $orgId): void
     {
         $gl = GlAccount::withoutGlobalScopes()->where('organization_id', $orgId)->pluck('id', 'code');
-        $ids = [];
+        $ids = Category::withoutGlobalScopes()->withTrashed()->where('organization_id', $orgId)->pluck('id', 'code')->all();
         $order = 0;
 
         foreach (self::ROWS as $code => [$name, $kind, $parent, $capex, $glCode]) {
             $order++;
+            if (isset($ids[$code])) {
+                continue; // already provisioned (possibly edited or archived): never touched
+            }
             $row = Category::withoutGlobalScopes()->withTrashed()->firstOrCreate(
                 ['organization_id' => $orgId, 'code' => $code],
                 [

@@ -47,6 +47,7 @@ class FinanceSettings
         $this->ensureGlAccounts($orgId);
         TbmTaxonomy::seed($orgId);
         $this->ensureTaxTypes($orgId);
+        FinanceKriSource::ensureDefinitions($orgId);
 
         return $setting;
     }
@@ -233,8 +234,8 @@ class FinanceSettings
     {
         $this->for($orgId);
 
-        return Currency::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_base', true)->value('code')
-            ?? (Organization::query()->whereKey($orgId)->value('currency') ?: 'NGN');
+        return RequestMemo::remember("baseCurrency:{$orgId}", fn () => Currency::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_base', true)->value('code')
+            ?? (Organization::query()->whereKey($orgId)->value('currency') ?: 'NGN'));
     }
 
     /** @param array<int, array{label:string,min:mixed,max:mixed}> $bands */
@@ -304,9 +305,14 @@ class FinanceSettings
     {
         $catalogue = config('finance.currencies');
         $orgCurrency = Organization::query()->whereKey($orgId)->value('currency') ?: 'NGN';
+        $codes = array_values(array_unique(array_merge([$orgCurrency], config('finance.default_currencies'))));
+        $have = Currency::withoutGlobalScopes()->where('organization_id', $orgId)->whereIn('code', $codes)->pluck('code')->all();
+        if (count($have) === count($codes)) {
+            return;
+        }
         $hasBase = Currency::withoutGlobalScopes()->where('organization_id', $orgId)->where('is_base', true)->exists();
 
-        foreach (array_values(array_unique(array_merge([$orgCurrency], config('finance.default_currencies')))) as $code) {
+        foreach (array_diff($codes, $have) as $code) {
             [$name, $symbol, $decimals] = $catalogue[$code] ?? [$code, null, 2];
             Currency::withoutGlobalScopes()->firstOrCreate(
                 ['organization_id' => $orgId, 'code' => $code],
@@ -317,7 +323,11 @@ class FinanceSettings
 
     private function ensureGlAccounts(int $orgId): void
     {
+        $have = GlAccount::withoutGlobalScopes()->withTrashed()->where('organization_id', $orgId)->pluck('code')->all();
         foreach (config('finance.gl_accounts') as [$code, $name, $type]) {
+            if (in_array($code, $have, true)) {
+                continue;
+            }
             GlAccount::withoutGlobalScopes()->withTrashed()->firstOrCreate(
                 ['organization_id' => $orgId, 'code' => $code],
                 ['name' => $name, 'type' => $type, 'is_active' => true],
@@ -327,7 +337,11 @@ class FinanceSettings
 
     private function ensureTaxTypes(int $orgId): void
     {
+        $have = TaxType::withoutGlobalScopes()->where('organization_id', $orgId)->pluck('code')->all();
         foreach (config('finance.tax_types') as $t) {
+            if (in_array($t['code'], $have, true)) {
+                continue;
+            }
             TaxType::withoutGlobalScopes()->firstOrCreate(
                 ['organization_id' => $orgId, 'code' => $t['code']],
                 ['name' => $t['name'], 'kind' => $t['kind'], 'rate' => $t['rate'], 'is_inclusive' => $t['is_inclusive'], 'applies_to' => $t['applies_to'], 'is_active' => true],

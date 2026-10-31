@@ -7,6 +7,7 @@ use App\Models\Approvals\ApprovalRequest;
 use App\Models\Approvals\ApprovalStep;
 use App\Models\Approvals\ApprovalWorkflow;
 use App\Models\User;
+use App\Services\Finance\RequestMemo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +32,8 @@ class ApprovalEngine
     /** The bank's active configuration for a process, if it has at least one active stage. */
     public function workflow(int $orgId, string $process): ?ApprovalWorkflow
     {
-        $wf = ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $orgId)->where('process', $process)->where('is_active', true)
-            ->with(['stages' => fn ($q) => $q->where('is_active', true)])->first();
+        $wf = RequestMemo::remember("workflow:{$orgId}:{$process}", fn () => ApprovalWorkflow::withoutGlobalScopes()->where('organization_id', $orgId)->where('process', $process)->where('is_active', true)
+            ->with(['stages' => fn ($q) => $q->where('is_active', true)])->first());
 
         return $wf && $wf->stages->isNotEmpty() ? $wf : null;
     }
@@ -168,6 +169,15 @@ class ApprovalEngine
 
     public function canDecide(ApprovalStep $step, ApprovalRequest $request, ?Model $subject, User $user): bool
     {
+        // Pre-screen the conditions that need no query: the answer is the same (any failure means "no"), without 3 queries per row on lists.
+        $def = ApprovalProcesses::PROCESSES[$request->process] ?? [];
+        if ((int) $user->organization_id !== (int) $request->organization_id
+            || ($request->initiated_by && (int) $request->initiated_by === (int) $user->id)
+            || ($subject && ! empty($def['owner_cannot_approve']) && (int) $subject->{$def['owner']} === (int) $user->id && $step->approver_type !== 'owner')
+            || in_array((int) $user->id, array_map('intval', (array) ($request->context['sod_excluded_ids'] ?? [])), true)
+            || ! $this->matches($step, $user)) {
+            return false;
+        }
         try {
             $this->assertEligible($step, $request, $subject, $user);
 
@@ -220,7 +230,7 @@ class ApprovalEngine
     {
         return match ($step->approver_type) {
             'role' => "anyone with the role {$step->approver_ref}",
-            'user', 'owner' => ($step->approver_type === 'owner' ? 'the record owner, ' : '').(User::find((int) $step->approver_ref)?->name ?? 'an unassigned person'),
+            'user', 'owner' => ($step->approver_type === 'owner' ? 'the record owner, ' : '').(RequestMemo::remember("userById:{$step->approver_ref}", fn () => User::find((int) $step->approver_ref))?->name ?? 'an unassigned person'),
             'job_title' => "anyone whose job title includes \"{$step->approver_ref}\"",
             'permission' => "anyone holding \"{$step->approver_ref}\"",
             default => 'an approver',

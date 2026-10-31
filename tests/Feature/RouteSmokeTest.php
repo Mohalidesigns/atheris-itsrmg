@@ -23,6 +23,7 @@ use App\Models\Finance\BudgetLine;
 use App\Models\Finance\BudgetScenario;
 use App\Models\Finance\BudgetTarget;
 use App\Models\Finance\BudgetTransfer;
+use App\Models\Finance\BusinessCase;
 use App\Models\Finance\Capitalisation;
 use App\Models\Finance\ChargebackRun;
 use App\Models\Finance\CloudAccount;
@@ -36,6 +37,7 @@ use App\Models\Finance\ContractLink;
 use App\Models\Finance\CostCentre;
 use App\Models\Finance\DoaBandVersion;
 use App\Models\Finance\ExpenseRequest;
+use App\Models\Finance\FinanceDocument;
 use App\Models\Finance\FiscalYear;
 use App\Models\Finance\Forecast;
 use App\Models\Finance\FxRate;
@@ -51,6 +53,7 @@ use App\Models\Finance\Renewal;
 use App\Models\Finance\Setting;
 use App\Models\Finance\StageGate;
 use App\Models\Finance\SupplementaryRequest;
+use App\Models\Finance\Termination;
 use App\Models\Finance\ValueReview;
 use App\Models\Finance\VarianceNote;
 use App\Models\Issue;
@@ -881,5 +884,116 @@ class RouteSmokeTest extends TestCase
         $this->get(route('finance.monitor.showback'))->assertOk();
         $this->get(route('finance.monitor.tco'))->assertOk();
         $this->get(route('finance.capitalisations.index'))->assertOk()->assertInertia(fn (Assert $p) => $p->where('capitalisations.data', []));
+    }
+
+    /**
+     * P7 H5: the finance GET routes the per-phase estate tests do not reach (create forms, invoice edit, stage gates,
+     * business cases, value reviews, terminations, close checklist, cycles, document and chargeback downloads) render for both demo banks.
+     */
+    public function test_finance_remaining_get_routes_render_for_every_demo_tenant(): void
+    {
+        if (env('SMOKE') !== '1') {
+            $this->markTestSkipped('Set SMOKE=1 and use a seeded database to run the route smoke test.');
+        }
+
+        $visited = [];
+        $hit = function (string $name, mixed $params = [], int $expect = 200) use (&$visited) {
+            $visited[] = $name;
+            $response = $this->get(route($name, $params))->assertStatus($expect);
+            $expect === 302 && $this->get($response->headers->get('Location'))->assertOk(); // redirect-only routes land on a rendering page
+        };
+        $first = fn (string $model, int $org, array $where = []) => $model::withoutGlobalScopes()->where('organization_id', $org)->where($where)->orderBy('id')->first();
+
+        foreach (['admin@kanoheritage.ng', 'admin@firstbanknigeria.ng'] as $email) {
+            $admin = User::where('email', $email)->firstOrFail();
+            $org = (int) $admin->organization_id;
+            $this->actingAs($admin);
+
+            foreach (['finance.cycles.index', 'finance.expenses.create', 'finance.invoices.create', 'finance.investments.create', 'finance.calendar.export'] as $name) {
+                $hit($name);
+            }
+            $period = $first(Period::class, $org);
+            $this->assertNotNull($period, "{$email} period");
+            $hit('finance.periods.close-checklist', $period);
+
+            $invoice = $first(Invoice::class, $org, ['status' => 'draft']);
+            $invoice && $hit('finance.invoices.edit', $invoice);
+
+            $gate = $first(StageGate::class, $org);
+            $this->assertNotNull($gate, "{$email} stage gate");
+            $hit('finance.stage-gates.show', $gate, 302);
+
+            $case = $first(BusinessCase::class, $org);
+            $this->assertNotNull($case, "{$email} business case");
+            $hit('finance.business-cases.show', $case, 302);
+
+            $review = $first(ValueReview::class, $org);
+            $this->assertNotNull($review, "{$email} value review");
+            $hit('finance.value-reviews.show', $review, 302);
+
+            // optional records: rendered where the demo estate holds one
+            $termination = $first(Termination::class, $org);
+            $termination && $hit('finance.terminations.show', $termination, 302);
+            $doc = $first(FinanceDocument::class, $org);
+            $doc && $this->get(route('finance.documents.download', $doc))->assertStatus(200);
+            $run = $first(ChargebackRun::class, $org);
+            $run && $this->get(route('finance.chargeback.download', $run))->assertStatus(200);
+        }
+        $this->assertGreaterThanOrEqual(10, count(array_unique($visited)));
+    }
+
+    /**
+     * P7 H2/H3: on the seeded estate a user without `view it-finance-amounts` gets no currency-formatted amount in any
+     * parameterless finance page, and every such page runs at most 60 queries (H3), except the allow-listed pages below.
+     */
+    public function test_finance_amounts_masked_and_query_budget_for_view_only_user(): void
+    {
+        if (env('SMOKE') !== '1') {
+            $this->markTestSkipped('Set SMOKE=1 and use a seeded database to run the route smoke test.');
+        }
+
+        $skip = ['finance.calendar.ics', 'finance.calendar.export', 'finance.expenses.availability', 'finance.monitor.tco.detail', 'finance.monitor.showback.export', 'finance.monitor.bva.export', 'finance.reports.show'];
+        $urls = collect(Route::getRoutes()->getRoutes())
+            ->filter(fn (RouteDefinition $r) => str_starts_with((string) $r->getName(), 'finance.') && in_array('GET', $r->methods(), true) && ! str_contains($r->uri(), '{') && ! in_array($r->getName(), $skip, true))
+            ->mapWithKeys(fn (RouteDefinition $r) => [$r->getName() => route($r->getName())])->all();
+        $urls['finance.monitor.bva?fy'] = route('finance.monitor.bva', ['view' => 'fy']);
+
+        // P7 H3: the per-page query budget. A page not listed here may not exceed 60 queries; a listed page may not exceed its ceiling
+        // (the measured count on the seeded estate, worst bank). The dashboard is the one page left above 60: it is a deliberately
+        // wide aggregate (budget, forecast, commitments, investments, cloud, contracts and 11 queries of pending-approval subjects) that
+        // runs ~70 distinct, already-batched queries; every repeated or per-row query has been removed.
+        $budget = 60;
+        $allowList = ['finance.dashboard' => 80];
+
+        foreach (['admin@kanoheritage.ng', 'admin@firstbanknigeria.ng'] as $email) {
+            DB::beginTransaction();
+            try {
+                $admin = User::where('email', $email)->firstOrFail();
+                $viewer = User::factory()->create(['organization_id' => $admin->organization_id]);
+                $viewer->givePermissionTo(['view it-finance', 'close it-finance-periods']); // sees every cost centre, no amounts
+                $this->actingAs($viewer);
+                $leaks = [];
+                $heavy = [];
+                $queries = [];
+                foreach ($urls as $name => $url) {
+                    DB::flushQueryLog();
+                    DB::enableQueryLog();
+                    $response = $this->get($url);
+                    $count = count(DB::getQueryLog());
+                    DB::disableQueryLog();
+                    $this->assertLessThan(500, $response->getStatusCode(), $name);
+                    $queries[$name] = $count;
+                    $count > ($allowList[$name] ?? $budget) && $heavy[] = "{$name}={$count} (limit ".($allowList[$name] ?? $budget).')';
+                    if (preg_match('/(₦|NGN|USD|GBP)\s?[\d,]{4,}/u', html_entity_decode(json_encode(json_decode(html_entity_decode((string) $response->getContent()) ?: 'null', true) ?? (string) $response->getContent(), JSON_UNESCAPED_UNICODE)), $m)) {
+                        $leaks[] = "{$name}: {$m[0]}";
+                    }
+                }
+                fwrite(STDERR, "\n{$email} pages over their query budget (H3): ".($heavy ? implode(', ', $heavy) : 'none').'; busiest page: '.max($queries).' queries');
+                $this->assertSame([], $heavy, "{$email} pages over the query budget");
+                $this->assertSame([], $leaks, "{$email} amounts shown to a viewer without view it-finance-amounts");
+            } finally {
+                DB::rollBack();
+            }
+        }
     }
 }

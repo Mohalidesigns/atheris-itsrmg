@@ -2,6 +2,8 @@
 
 namespace App\Services\Finance;
 
+use App\Models\Asset;
+use App\Models\Finance\Category;
 use App\Models\Finance\ExpenseRequest;
 use App\Models\Finance\GoodsReceipt;
 use App\Models\Finance\GoodsReceiptLine;
@@ -66,8 +68,12 @@ class ProcurementService
                 $unit = $this->money($l['unit_cost'] ?? null, "lines.{$i}.unit_cost", true, 'The unit cost');
                 $amount = $this->phasing->round(bcmul($qty, $unit, 8), 2);
                 $subtotal = bcadd($subtotal, $amount, 2);
+                $catId = $l['category_id'] ?? $e->category_id;
+                $assetId = $l['asset_id'] ?? $e->asset_id;
+                $catId && $this->inBank(Category::class, $orgId, $catId, "lines.{$i}.category_id");
+                $assetId && $this->inBank(Asset::class, $orgId, $assetId, "lines.{$i}.asset_id");
                 $rows[] = ['line_no' => $i + 1, 'description' => $desc, 'quantity' => $qty, 'unit_cost' => $unit, 'amount' => $amount,
-                    'category_id' => $l['category_id'] ?? $e->category_id, 'asset_id' => $l['asset_id'] ?? $e->asset_id];
+                    'category_id' => $catId, 'asset_id' => $assetId];
             }
             $vat = ($data['tax_type_id'] ?? $e->tax_type_id) ? $this->inBank(TaxType::class, $orgId, $data['tax_type_id'] ?? $e->tax_type_id, 'tax_type_id') : null;
             $totals = $this->tax->compute($subtotal, $e->currency, $vat, null);
