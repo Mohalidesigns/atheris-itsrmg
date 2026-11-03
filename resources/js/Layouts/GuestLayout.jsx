@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { ShieldCheckIcon } from '@/Components/Material/Symbols';
+import ApplicationLogo from '@/Components/ApplicationLogo';
 
 export default function GuestLayout({ children }) {
     return (
@@ -7,14 +7,9 @@ export default function GuestLayout({ children }) {
             {/* Left Panel - Branding */}
             <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#1A365D] to-[#0F2440] flex-col justify-between p-12">
                 <div>
-                    <div className="flex items-center gap-3">
-                        <div className="bg-[#D4AF37] p-2 rounded-xl">
-                            <ShieldCheckIcon className="w-8 h-8 text-[#1A365D]" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold text-white">Atheris Govern</h1>
-                            <span className="text-[#D4AF37] text-sm font-medium">GRC Suite</span>
-                        </div>
+                    <div>
+                        <ApplicationLogo variant="white" className="h-12 w-auto" />
+                        <span className="text-[#D4AF37] text-sm font-medium">GRC Suite</span>
                     </div>
                 </div>
 
@@ -49,14 +44,9 @@ export default function GuestLayout({ children }) {
             {/* Right Panel - Form */}
             <div className="w-full lg:w-1/2 flex flex-col items-center justify-center bg-[#F7FAFC] p-6 sm:p-12">
                 {/* Mobile Logo */}
-                <div className="lg:hidden mb-8 flex items-center gap-3">
-                    <div className="bg-[#D4AF37] p-2 rounded-xl">
-                        <ShieldCheckIcon className="w-7 h-7 text-[#1A365D]" />
-                    </div>
-                    <div>
-                        <h1 className="text-xl font-bold text-[#1A365D]">Atheris Govern</h1>
-                        <span className="text-[#D4AF37] text-xs font-medium">GRC Suite</span>
-                    </div>
+                <div className="lg:hidden mb-8 flex flex-col items-center">
+                    <ApplicationLogo variant="dark" className="h-10 w-auto" />
+                    <span className="text-[#D4AF37] text-xs font-medium">GRC Suite</span>
                 </div>
 
                 <div className="w-full max-w-md">

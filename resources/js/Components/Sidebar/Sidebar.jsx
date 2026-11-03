@@ -3,8 +3,8 @@ import { useState } from 'react';
 import {
     ChevronDoubleLeftIcon,
     ChevronDoubleRightIcon,
-    ShieldCheckIcon,
 } from '@/Components/Material/Symbols';
+import ApplicationLogo from '@/Components/ApplicationLogo';
 import SidebarNavItem from './SidebarNavItem';
 import navigation from '@/Config/navigation';
 
@@ -40,14 +40,11 @@ export default function Sidebar() {
         >
             {/* Logo */}
             <div className="flex items-center gap-3 px-4 py-4 border-b border-white/10">
-                <div className="bg-[#D4AF37] p-1.5 rounded-lg shrink-0">
-                    <ShieldCheckIcon className="w-6 h-6 text-[#1A365D]" />
-                </div>
-                {!collapsed && (
+                {collapsed ? (
+                    <img src="/Govern/Govern-favicon.svg" alt="Govern" className="w-8 h-8 shrink-0" />
+                ) : (
                     <div className="overflow-hidden">
-                        <h1 className="text-white font-bold text-base leading-tight tracking-tight">
-                            Atheris Govern
-                        </h1>
+                        <ApplicationLogo variant="white" className="h-9 w-auto" />
                         <span className="text-[#D4AF37] text-xs font-medium">
                             GRC Suite
                         </span>
